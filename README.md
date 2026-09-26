@@ -20,17 +20,19 @@ Phone ──link──▶ PrintShare (Docker on Unraid) ──▶ Printables / T
 
 ## 1. Install on Unraid
 
-On the Unraid console (or `ssh unraid`):
+On the Unraid console as root (`ssh unraid`). When pasting several lines into the web terminal, press **Enter** afterwards.
 
 ```bash
-# 1. Put the code on the server (from the Mac: scp -r 3dprintinghandy unraid:/mnt/user/AI/Projects/printshare)
-cd /mnt/user/AI/Projects/printshare
+# 1. Get the code (skip if you already have the project share /mnt/user/AI/Projects/3dprintinghandy)
+mkdir -p /mnt/user/appdata/printshare/src /mnt/user/appdata/printshare/data
+cd /mnt/user/appdata/printshare/src
+curl -fL -o printshare.tar.gz https://github.com/halvar20000/printshare/archive/refs/heads/main.tar.gz
+tar xzf printshare.tar.gz --strip-components=1 && rm printshare.tar.gz
 
 # 2. Build the image (~5 min the first time; downloads OrcaSlicer 2.4.2)
 docker build -t printshare:0.1 .
 
 # 3. Configuration
-mkdir -p /mnt/user/appdata/printshare/data
 cp config.example.yaml /mnt/user/appdata/printshare/config.yaml
 openssl rand -hex 24          # -> use as api_token
 nano /mnt/user/appdata/printshare/config.yaml
@@ -45,7 +47,7 @@ docker run -d --name printshare --restart unless-stopped \
 
 Then open `http://<unraid-ip>:8484`, enter the token under **Settings**, paste a link and press **Print**.
 
-If you run the Docker Compose Manager plugin, `docker compose up -d --build` does the same using `docker-compose.yml`.
+Update later: fetch the code again (step 1, `curl` + `tar`), rebuild, `docker rm -f printshare`, run step 4 again. The configuration in `/mnt/user/appdata/printshare` stays.
 
 ## 2. Configure your printer
 
