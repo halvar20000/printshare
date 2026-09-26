@@ -12,8 +12,7 @@ cd "$SRC"
 echo "== Building $IMAGE from $SRC"
 docker build -t "$IMAGE" .
 
-echo "== Checking OrcaSlicer inside the image"
-docker run --rm --entrypoint /opt/orca/AppRun "$IMAGE" --help | head -3
+# OrcaSlicer's shared libraries are checked during the build (see Dockerfile).
 
 mkdir -p "$APPDATA/data"
 if [ ! -f "$APPDATA/config.yaml" ]; then

@@ -73,28 +73,25 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - API end-to-end against fake Moonraker; web server stays responsive while slicing.
 - **NOT yet verified:** `docker build` on real Docker, real printers (neither SDCP nor COSMOS).
 
-## Current state of the Unraid install (where we stopped)
-- Thomas is installing the container by hand. Earlier attempt used
-  `/mnt/user/AI/Projects/printshare` (did not exist). Plan now: source in this folder,
-  config/data in `/mnt/user/appdata/printshare/`.
-- Pitfall seen: pasting several lines into the Unraid web terminal only inserts them
-  (bracketed paste) — press Enter.
-- Build/run (as root on the Unraid host — the claude-agent container probably has no Docker socket):
-```
-cd /mnt/user/AI/Projects/3dprintinghandy
-docker build -t printshare:0.1 .
-mkdir -p /mnt/user/appdata/printshare/data
-cp config.example.yaml /mnt/user/appdata/printshare/config.yaml   # set api_token + printer IP, delete other printer block
-docker run -d --name printshare --restart unless-stopped -p 8484:8484 \
-  -v /mnt/user/appdata/printshare:/config -v /mnt/user/appdata/printshare/data:/data printshare:0.1
-docker exec printshare printshare status -p cc-thomas
-docker exec printshare printshare print "https://www.printables.com/model/3161-3d-benchy" -p cc-thomas --no-start
-```
+## Current state of the Unraid install (2026-09-26 evening)
+- `docker build` is GREEN on Unraid (image `printshare:0.1`, Orca 2.4.2 `--help` runs). Needed extra
+  libs (libSM/ICE/secret/wayland…) — Dockerfile now fails the build listing all missing libs (ldd check).
+- Install = `bash scripts/unraid-install.sh cc-thomas` (as root on the host). Copies the gitignored
+  `config.yaml` from the project folder (token, printer 192.168.86.144, mainboard_id) to
+  `/mnt/user/appdata/printshare/` on first run. `APPDATA` in the script is the config location.
+- Container NOT running yet: the script hung at `mkdir -p /mnt/user/appdata/...` because Unraid's
+  `shfs` (/mnt/user) had been deadlocked since 2026-09-21 (smbd + `find /mnt/user/.thumbnails -delete`;
+  every create at /mnt/user top level hangs in D state; hetzner-cls backups hung too).
+  Logs saved to `/boot/logs/shfs-hang-2026-09-26/`. Thomas is rebooting the server.
+- Array itself is fine (all disks DISK_OK; slot 29 DISK_NP_DSBL = empty parity2 slot, normal).
+- This claude-agent container has no Docker socket and only sees `/mnt/user/AI`; it CAN reach the
+  LAN (printer 192.168.86.144, host 192.168.86.230).
 
 ## Next steps (in order)
 1. Commit this handover (`CLAUDE.md`, `docs/`, requirements spec) and push to GitHub.
-2. Get `docker build` green on Unraid; first real test with `--no-start`, then a real print —
-   for both printers (Thomas: SDCP; Dominique: COSMOS).
+2. After the reboot: rerun `scripts/unraid-install.sh cc-thomas`; check that the parity check and the
+   hetzner-cls backup ran; then `printshare print <benchy> -p cc-thomas --no-start`, then a real
+   print — for both printers (Thomas: SDCP; Dominique: COSMOS).
 3. Then work down `docs/ROADMAP.md` (Phase 1 gaps from the spec first).
 
 ## Conventions
