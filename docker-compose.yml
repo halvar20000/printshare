@@ -1,0 +1,11 @@
+services:
+  printshare:
+    build: .
+    image: printshare:0.1
+    container_name: printshare
+    restart: unless-stopped
+    ports:
+      - "8484:8484"             # web UI + API; printers are reached outbound on the LAN
+    volumes:
+      - /mnt/user/appdata/printshare:/config
+      - /mnt/user/appdata/printshare/data:/data

@@ -1,0 +1,34 @@
+# PrintShare configuration — copy to /mnt/user/appdata/printshare/config.yaml
+# Generate a token with:  openssl rand -hex 24
+api_token: "CHANGE-ME"
+
+# Optional: needed only for Thingiverse links (https://www.thingiverse.com/developers → Create App → App Token)
+thingiverse_token: ""
+
+printers:
+  # Thomas — Centauri Carbon with stock Elegoo firmware (SDCP, port 3030)
+  - id: cc-thomas
+    name: Centauri Carbon (Thomas)
+    type: elegoo_sdcp
+    host: 192.168.86.XX          # printer IP (give it a fixed DHCP lease)
+    auto_leveling: true
+    slicing:
+      machine: Elegoo Centauri Carbon 0.4 nozzle
+      process: 0.20mm Standard @Elegoo CC 0.4 nozzle
+      filament: Elegoo PLA @ECC
+      bed_type: Textured PEI Plate
+
+  # Dominique — Centauri Carbon with OpenCentauri COSMOS (Klipper + Moonraker + Mainsail)
+  # Delete this block on Thomas' server and the cc-thomas block on Dominique's server.
+  - id: cc-dominique
+    name: Centauri Carbon COSMOS (Dominique)
+    type: moonraker
+    url: http://192.168.1.XX      # same address as Mainsail; :7125 is tried automatically
+    slicing:
+      machine: Elegoo Centauri Carbon 0.4 nozzle
+      machine_preset: cosmos      # replaces Elegoo start/end G-code with PRINT_START / PRINT_END
+      # Better, once available: the official COSMOS machine preset exported from OrcaSlicer
+      # machine_file: /config/profiles/cosmos-machine.json
+      process: 0.20mm Standard @Elegoo CC 0.4 nozzle
+      filament: Elegoo PLA @ECC
+      bed_type: Textured PEI Plate
