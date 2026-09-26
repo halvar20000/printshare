@@ -71,7 +71,9 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - 6/6 tests green (`ORCA_ROOT=/path/to/squashfs-root pytest -q`).
 - Live Printables download + slice: Benchy → 34m52s / 11.4 g (COSMOS), 3MF input works.
 - API end-to-end against fake Moonraker; web server stays responsive while slicing.
-- **NOT yet verified:** `docker build` on real Docker, real printers (neither SDCP nor COSMOS).
+- 2026-09-26 on Unraid (after reboot): container runs; API job Benchy `start:false` → 35m32s / 11.49 g,
+  `3dbenchy.gcode` (2.6 MB, 240 layers) arrived on Thomas' CC via SDCP. **NOT yet verified:** a real
+  started print (SDCP), anything on COSMOS.
 
 ## Current state of the Unraid install (2026-09-26 evening)
 - `docker build` is GREEN on Unraid (image `printshare:0.1`, Orca 2.4.2 `--help` runs). Needed extra
@@ -79,10 +81,10 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - Install = `bash scripts/unraid-install.sh cc-thomas` (as root on the host). Copies the gitignored
   `config.yaml` from the project folder (token, printer 192.168.86.144, mainboard_id) to
   `/mnt/user/appdata/printshare/` on first run. `APPDATA` in the script is the config location.
-- Container NOT running yet: the script hung at `mkdir -p /mnt/user/appdata/...` because Unraid's
+- Container RUNNING since the reboot (config in /mnt/user/appdata/printshare). Earlier the script hung at `mkdir -p /mnt/user/appdata/...` because Unraid's
   `shfs` (/mnt/user) had been deadlocked since 2026-09-21 (smbd + `find /mnt/user/.thumbnails -delete`;
   every create at /mnt/user top level hangs in D state; hetzner-cls backups hung too).
-  Logs saved to `/boot/logs/shfs-hang-2026-09-26/`. Thomas is rebooting the server.
+  Logs saved to `/boot/logs/shfs-hang-2026-09-26/`. Fixed by reboot 2026-09-26 19:36 UTC.
 - Array itself is fine (all disks DISK_OK; slot 29 DISK_NP_DSBL = empty parity2 slot, normal).
 - This claude-agent container has no Docker socket and only sees `/mnt/user/AI`; it CAN reach the
   LAN (printer 192.168.86.144, host 192.168.86.230).
