@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from pycentauri import Printer
+from pycentauri.discovery import discover
 from pycentauri.models import PrintStatus
 
 from ..config import PrinterConfig
@@ -25,9 +26,22 @@ class ElegooSDCP:
         if not cfg.host:
             raise ValueError(f"Printer {cfg.id}: 'host' (IP address) is required for elegoo_sdcp")
         self.cfg = cfg
+        self._mainboard_id = cfg.mainboard_id
+
+    async def _connect(self, enable_control: bool = False) -> Printer:
+        # The printer only pushes its MainboardID over the WebSocket in some states
+        # (live CC1 V0.3.0: not even when idle), so ask for it via unicast UDP discovery.
+        if not self._mainboard_id:
+            try:
+                found = await discover(broadcast_address=self.cfg.host, timeout=2.0, retries=2)
+            except OSError:
+                found = []
+            self._mainboard_id = next((f.mainboard_id for f in found if f.host == self.cfg.host), None)
+        return await Printer.connect(self.cfg.host, enable_control=enable_control,
+                                     mainboard_id=self._mainboard_id)
 
     async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]:
-        async with await Printer.connect(self.cfg.host, enable_control=True) as p:
+        async with await self._connect(enable_control=True) as p:
             remote = await p.upload_file(gcode)
             result: dict[str, Any] = {"uploaded": remote, "started": False}
             if start:
@@ -36,7 +50,7 @@ class ElegooSDCP:
             return result
 
     async def status(self) -> dict[str, Any]:
-        async with await Printer.connect(self.cfg.host) as p:
+        async with await self._connect() as p:
             st = await p.status()
         pi = st.print_info
         out: dict[str, Any] = {

@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "trimesh>=4"]
+dev = ["pytest>=8", "trimesh>=4", "aiohttp>=3.9"]
 
 [project.scripts]
 printshare = "printshare.cli:main"

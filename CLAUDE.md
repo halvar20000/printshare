@@ -60,8 +60,9 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
    Preferred long-term: official COSMOS Orca profile (https://cloud.orcaslicer.com/b/3fad3c38f25f)
    exported as JSON → `machine_file:`.
 8. Stock CC upload port is **80**, not 3030 as some docs claim (pycentauri verified live).
-   The printer only pushes Attributes (MainboardID) when idle/active — paused/error states
-   need `mainboard_id` from discovery (not yet implemented).
+   Thomas' CC (192.168.86.144, FW V0.3.0-o) did NOT push Attributes (MainboardID) even when
+   idle → adapter now gets it via unicast UDP discovery (`M99999` to host:3000) unless
+   `mainboard_id` is set in config. Broadcast discovery doesn't work from bridged containers.
 9. Running slicing on the event loop froze the web server → fixed with `asyncio.to_thread`.
 10. Relevant Orca preset names: machine `Elegoo Centauri Carbon 0.4 nozzle`,
     process `0.20mm Standard @Elegoo CC 0.4 nozzle`, filament `Elegoo PLA @ECC`.

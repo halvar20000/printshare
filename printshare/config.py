@@ -56,6 +56,7 @@ class PrinterConfig:
     url: str | None = None        # moonraker, e.g. http://192.168.1.60 or http://host:7125
     api_key: str | None = None    # moonraker (optional)
     auto_leveling: bool = True    # elegoo_sdcp
+    mainboard_id: str | None = None  # elegoo_sdcp; looked up via UDP discovery if not set
     slicing: SlicingConfig = field(default_factory=SlicingConfig)
 
 

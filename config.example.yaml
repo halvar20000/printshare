@@ -12,6 +12,7 @@ printers:
     type: elegoo_sdcp
     host: 192.168.86.XX          # printer IP (give it a fixed DHCP lease)
     auto_leveling: true
+    # mainboard_id: ""           # optional; found automatically via UDP discovery (port 3000)
     slicing:
       machine: Elegoo Centauri Carbon 0.4 nozzle
       process: 0.20mm Standard @Elegoo CC 0.4 nozzle
