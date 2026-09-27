@@ -1,15 +1,17 @@
 """HTTP API + the PrintShare web app (PWA) on port 8484.
 
 App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token=`):
+  GET  /api/info            server name/version (the app uses it to test the connection)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
-  GET  /api/files?link=...
+  POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
+  GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
   POST /api/jobs            {"link", "printer", "file", "options": {...}}  -> download + slice only
   GET  /api/jobs            recent jobs, newest first
   GET  /api/jobs/{id}
   POST /api/jobs/{id}/send  {"start": true, "confirm": true}  -> upload (and start) after review
   DELETE /api/jobs/{id}
-  GET  /api/printers/{id}/status
+  GET  /api/printers/{id}/status   (+ "kind": idle|active|paused|done|stopped|error|unknown)
   POST /api/printers/{id}/control  {"action": "pause"|"resume"|"cancel", "confirm": true}
 One-shot (CLI / iOS Shortcut):
   POST /api/print   {"link": "...", "printer": "cc-thomas", "file": 1, "start": true}
@@ -17,6 +19,7 @@ One-shot (CLI / iOS Shortcut):
 from __future__ import annotations
 
 import asyncio
+import re
 import secrets
 import shutil
 import time
@@ -30,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_settings
-from .fetch import FetchError, Fetcher
+from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, get_adapter
 from .profiles import ProfileError, ProfileLibrary
@@ -38,6 +41,8 @@ from .profiles import ProfileError, ProfileLibrary
 WEB = Path(__file__).parent / "web"
 PLATES = ["Textured PEI Plate", "High Temp Plate", "Cool Plate", "Engineering Plate", "Supertack Plate"]
 MAX_JOBS = 50
+MAX_UPLOAD = 300 * 1024 * 1024
+UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
 app = FastAPI(title="PrintShare", version="0.2")
@@ -83,7 +88,30 @@ def _new_job(kind: str, state: str, request: dict[str, Any]) -> dict[str, Any]:
     return job
 
 
+@app.get("/api/info", dependencies=[Depends(auth)])
+def info() -> dict[str, Any]:
+    return {"name": "PrintShare", "version": app.version, "printers": len(settings.printers)}
+
+
 # ---------- printers ----------
+def printer_kind(state: str | None) -> str:
+    """Normalise Moonraker/SDCP states for the app (same buckets for every adapter)."""
+    s = (state or "").lower()
+    if not s:
+        return "unknown"
+    if s in ("paused", "unloading_paused"):
+        return "paused"
+    if s in ("idle", "standby", "ready"):
+        return "idle"
+    if s in ("completed", "complete"):
+        return "done"
+    if s in ("stopped", "cancelled"):
+        return "stopped"
+    if s == "error":
+        return "error"
+    return "active"
+
+
 @app.get("/api/printers", dependencies=[Depends(auth)])
 def printers() -> list[dict[str, Any]]:
     return [{"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine}
@@ -135,9 +163,10 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
 async def status(printer_id: str) -> dict[str, Any]:
     printer = _printer(printer_id)
     try:
-        return await get_adapter(printer).status()
+        st = await get_adapter(printer).status()
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
+    return {**st, "kind": printer_kind(st.get("state"))}
 
 
 class ControlRequest(BaseModel):
@@ -160,10 +189,54 @@ async def control(printer_id: str, req: ControlRequest) -> dict[str, Any]:
 
 
 # ---------- models ----------
+def _uploads() -> Path:
+    return Path(settings.work_dir) / "uploads"
+
+
+def _resolve_link(link: str) -> str:
+    """Only http(s) links and files uploaded through /api/uploads; never arbitrary server paths."""
+    if link.startswith(UPLOAD_PREFIX):
+        uid = link[len(UPLOAD_PREFIX):]
+        d = _uploads() / uid
+        found = [f for f in d.iterdir() if f.is_file()] if re.fullmatch(r"[0-9a-f]{12}", uid) and d.is_dir() else []
+        if not found:
+            raise HTTPException(404, "uploaded file not found - please choose it again")
+        return str(found[0])
+    if not link.startswith(("http://", "https://")):
+        raise HTTPException(400, "link must be an http(s) URL")
+    return link
+
+
+@app.post("/api/uploads", dependencies=[Depends(auth)])
+async def upload(request: Request, name: str) -> dict[str, Any]:
+    """Model file from the phone (Files app, share menu); body = raw file content."""
+    safe = re.sub(r"[^\w.\- ]+", "_", Path(name).name).strip()
+    if not safe.lower().endswith(SLICEABLE):
+        raise HTTPException(400, f"unsupported file type - use {', '.join(SLICEABLE)}")
+    uid = uuid.uuid4().hex[:12]
+    d = _uploads() / uid
+    d.mkdir(parents=True)
+    size = 0
+    try:
+        with open(d / safe, "wb") as fh:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    raise HTTPException(413, f"file too large (max {MAX_UPLOAD // 1048576} MB)")
+                fh.write(chunk)
+        if size == 0:
+            raise HTTPException(400, "empty file")
+    except BaseException:
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    return {"id": uid, "link": UPLOAD_PREFIX + uid, "name": safe, "size": size}
+
+
 @app.get("/api/files", dependencies=[Depends(auth)])
 async def files(link: str) -> list[dict[str, Any]]:
+    local = _resolve_link(link)
     try:
-        listed = await asyncio.to_thread(Fetcher(settings.thingiverse_token).list_files, link)
+        listed = await asyncio.to_thread(Fetcher(settings.thingiverse_token).list_files, local)
         fl = [f for f in listed if f.sliceable]
     except FetchError as e:
         raise HTTPException(400, str(e))
@@ -188,11 +261,6 @@ class JobRequest(BaseModel):
     options: OptionsModel = Field(default_factory=OptionsModel)
 
 
-def _check_link(link: str) -> None:
-    if not link.startswith(("http://", "https://")):
-        raise HTTPException(400, "link must be an http(s) URL")
-
-
 def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     opts = JobOptions(**o.model_dump())
     try:
@@ -213,7 +281,7 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
 
 @app.post("/api/jobs", dependencies=[Depends(auth)])
 async def create_job(req: JobRequest) -> dict[str, Any]:
-    _check_link(req.link)
+    source = _resolve_link(req.link)
     printer = _printer(req.printer)
     opts = await asyncio.to_thread(_validate_options, printer, req.options)
     job = _new_job("prepare", "slicing", req.model_dump())
@@ -221,7 +289,7 @@ async def create_job(req: JobRequest) -> dict[str, Any]:
 
     async def worker() -> None:
         try:
-            res = await prepare_job(settings, req.link, printer.id, req.file, opts, out_name=job["id"],
+            res = await prepare_job(settings, source, printer.id, req.file, opts, out_name=job["id"],
                                     progress=lambda m: job["log"].append(m))
             job.update(state="sliced", result=res.as_dict())
         except Exception as e:  # noqa: BLE001 - report every failure to the phone
@@ -264,6 +332,14 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     if job["state"] not in ("sliced", "uploaded"):
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
     result = JobResult(**job["result"])
+    if req.start:
+        # DR-03: never start on a printer that is still busy (an unreachable printer fails in send_job)
+        try:
+            state = (await get_adapter(_printer(result.printer)).status()).get("state")
+        except Exception:  # noqa: BLE001
+            state = None
+        if printer_kind(state) in ("active", "paused"):
+            raise HTTPException(409, "printer is busy - wait until the current print has finished")
     job.update(state="sending", error=None)
 
     async def worker() -> None:
@@ -301,12 +377,12 @@ class PrintRequest(BaseModel):
 
 @app.post("/api/print", dependencies=[Depends(auth)])
 async def print_(req: PrintRequest) -> dict[str, Any]:
-    _check_link(req.link)
+    source = _resolve_link(req.link)
     job = _new_job("oneshot", "running", req.model_dump())
 
     async def worker() -> None:
         try:
-            res = await run_job(settings, req.link, req.printer, req.file, send=True, start=req.start,
+            res = await run_job(settings, source, req.printer, req.file, send=True, start=req.start,
                                 progress=lambda m: job["log"].append(m))
             job.update(state="done", result=res.as_dict())
         except Exception as e:  # noqa: BLE001 - report every failure to the phone

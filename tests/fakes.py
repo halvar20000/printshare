@@ -81,6 +81,7 @@ class FakeMoonraker:
         self.port = port
         self.uploads: list[dict] = []
         self.actions: list[str] = []
+        self.state = "printing"
         self.runner: web.AppRunner | None = None
 
     async def info(self, request: web.Request) -> web.Response:
@@ -98,7 +99,7 @@ class FakeMoonraker:
 
     async def query(self, request: web.Request) -> web.Response:
         return web.json_response({"result": {"status": {
-            "print_stats": {"state": "printing", "filename": "cube.gcode", "print_duration": 60,
+            "print_stats": {"state": self.state, "filename": "cube.gcode", "print_duration": 60,
                             "info": {"current_layer": 3, "total_layer": 100}},
             "display_status": {"progress": 0.031},
             "extruder": {"temperature": 210.1, "target": 210},

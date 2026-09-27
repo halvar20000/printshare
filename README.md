@@ -78,7 +78,15 @@ docker exec printshare printshare print "https://www.printables.com/model/3161-3
 
 ## 4. The app on your phone
 
-PrintShare is a web app (PWA) served by the container: iPhone and Android, no app store.
+**Native app (iOS + Android):** see [`mobile/README.md`](mobile/README.md). Connect it by scanning the pairing code:
+
+```bash
+docker exec printshare printshare pair --url http://<server-ip>:8484
+```
+
+**Web app (PWA)** — works in any browser without installing from a store:
+
+PrintShare is also a web app (PWA) served by the container: iPhone and Android, no app store.
 Flow: share or paste a link → choose material, quality, plate, supports, brim, infill, walls →
 **Slice** → check time, filament, layers and the changed values → tick "the build plate is empty" →
 **Print** (or *Upload only*). Nothing starts without that confirmation. The *Printer* tab shows
@@ -106,8 +114,10 @@ Plain `http://<server>:8484` also works in the browser, but without install and 
 API (header `Authorization: Bearer <token>`):
 
 ```
+GET    /api/info
 GET    /api/printers
 GET    /api/printers/<id>/options[?process=...]   materials, qualities, plates, defaults
+POST   /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>"} (use as link below)
 GET    /api/files?link=...
 POST   /api/jobs   {"link", "printer", "file", "options": {"filament", "process", "bed_type",
                     "supports": "off|normal|tree", "brim": "auto|off|outer", "infill": 20, "walls": 3}}

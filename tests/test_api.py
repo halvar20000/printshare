@@ -131,6 +131,10 @@ def test_slice_review_confirm_send(api, client, monkeypatch, tmp_path):
     assert r.status_code == 400
 
     with BackgroundFake(FakeMoonraker()) as fake:
+        # DR-03: a busy printer refuses the start, the job stays ready
+        r = client.post(f"/api/jobs/{job_id}/send", headers=H, json={"start": True, "confirm": True})
+        assert r.status_code == 409 and "busy" in r.json()["detail"]
+        fake.state = "standby"
         client.post(f"/api/jobs/{job_id}/send", headers=H, json={"start": True, "confirm": True})
         j = _wait(client, job_id, "started", "sliced")
     assert j["state"] == "started", j
@@ -203,3 +207,27 @@ def test_incompatible_material_rejected(client):
     r = client.post("/api/jobs", headers=H, json={
         "link": "https://x.y/a.stl", "printer": "dom", "options": {"filament": "Bambu PLA Basic @BBL X1C"}})
     assert r.status_code == 400 and "does not fit" in r.json()["detail"]
+
+
+def test_info_and_printer_kind(api, client):
+    assert client.get("/api/info", headers=H).json()["name"] == "PrintShare"
+    with BackgroundFake(FakeMoonraker()):
+        st = client.get("/api/printers/dom/status", headers=H).json()
+    assert st["state"] == "printing" and st["kind"] == "active"
+    assert [api.printer_kind(s) for s in ("standby", "paused", "complete", None, "preheating")] == \
+        ["idle", "paused", "done", "unknown", "active"]
+
+
+def test_upload_then_slice(api, client, monkeypatch, tmp_path):
+    seen = _fake_prepare(api, monkeypatch, tmp_path)
+    assert client.post("/api/uploads", headers=H, params={"name": "evil.sh"}, content=b"x").status_code == 400
+    assert client.post("/api/uploads", headers=H, params={"name": "a.stl"}, content=b"").status_code == 400
+    up = client.post("/api/uploads", headers=H, params={"name": "../My Part.stl"}, content=b"solid x\n").json()
+    assert up["name"] == "My Part.stl" and up["size"] == 8 and up["link"].startswith("upload:")
+    assert client.get("/api/files", headers=H, params={"link": up["link"]}).json()[0]["name"] == "My Part.stl"
+    job_id = client.post("/api/jobs", headers=H, json={"link": up["link"], "printer": "dom"}).json()["job"]
+    _wait(client, job_id, "sliced")
+    assert seen["link"].endswith("My Part.stl") and Path(seen["link"]).read_bytes() == b"solid x\n"
+    # only ids of real uploads are accepted, never paths
+    for bad in ("upload:../../etc", "upload:000000000000", "/etc/passwd"):
+        assert client.post("/api/jobs", headers=H, json={"link": bad}).status_code in (400, 404), bad

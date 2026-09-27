@@ -90,8 +90,22 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - This claude-agent container has no Docker socket and only sees `/mnt/user/AI`; it CAN reach the
   LAN (printer 192.168.86.144, host 192.168.86.230).
 
-## Smartphone app (decided 2026-09-26: PWA)
-- Thomas chose a PWA over SwiftUI/Expo: iPhone + Android, no Apple account, deployable from here.
+## Smartphone app — native (decided 2026-09-27)
+- Thomas wants a **native app for iOS + Android for public use** (user-friendly). Dominique has the Apple
+  developer account. Built with **Expo SDK 57 / React Native** in `mobile/` (expo-router, `src/app/`),
+  see `mobile/README.md`. Builds via EAS (`eas build`, `eas submit` → TestFlight); no Mac needed.
+  Bundle id `io.github.halvar20000.printshare`, URL scheme `printshare://`.
+- Share menu via `expo-share-intent` (iOS share extension + Android intent filters; needs a dev build, not Expo Go).
+- Pairing: `docker exec printshare printshare pair --url http://<ip>:8484` shows a QR code
+  (`printshare://connect?url=…&token=…`); the app scans it (expo-camera) and stores it in SecureStore.
+- Server additions for the app: `GET /api/info`, `POST /api/uploads?name=` (raw body, links as `upload:<id>`,
+  never raw paths), status `kind`, start refused with 409 while the printer is busy (DR-03).
+- Verified here: tsc, expo lint, expo-doctor, `expo export` for ios/android/web; web build clicked through
+  with puppeteer against a mock API. NOT yet run on a real device (needs an EAS dev build).
+- Always check the SDK-versioned Expo docs before touching Expo APIs (see `mobile/AGENTS.md`).
+
+## PWA (2026-09-26, kept as browser fallback)
+- Thomas first chose a PWA: iPhone + Android, no Apple account, deployable from here.
   App-MVP (spec phase 2) implemented: share/paste link → options → slice → review (time, g, layers,
   changed values) → "plate empty" checkbox → Print / Upload only; jobs list; printer tab with
   pause/resume/cancel. UI checked with headless Chromium (puppeteer-core) at 390×844, light + dark.
@@ -100,8 +114,9 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   claude-agent container: its glibc is too old → test slicing only inside the Docker image).
 
 ## Next steps (in order)
-1. Deploy the PWA (rerun `scripts/unraid-install.sh cc-thomas`), set up Tailscale Serve, install on
-   both phones, test share → slice → upload-only; then a real print with Thomas at the printer.
+1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
+   installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),
+   pair via QR, test share → slice → upload-only; then a real print with Thomas at the printer.
 2. After the reboot: rerun `scripts/unraid-install.sh cc-thomas`; check that the parity check and the
    hetzner-cls backup ran; then `printshare print <benchy> -p cc-thomas --no-start`, then a real
    print — for both printers (Thomas: SDCP; Dominique: COSMOS).

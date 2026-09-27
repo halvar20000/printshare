@@ -6,7 +6,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 ## Open decisions (need Thomas/Dominique)
 | Topic | Options | Notes |
 |---|---|---|
-| App technology | **Decided 2026-09-26: PWA** served by the container (iPhone + Android, no Apple account). Native shell (SwiftUI/Expo) can come later on the same API. | Android share via Web Share Target (needs HTTPS → Tailscale Serve); iPhone share via Shortcut. |
+| App technology | **Decided 2026-09-27: native app with Expo/React Native** (`mobile/`, iOS + Android, for public use), built with EAS on Dominique's Apple developer account. The PWA stays as a browser fallback. | Share extension (iOS) + share intent (Android) via `expo-share-intent`. |
 | Slice service | keep own `slicer.py` vs. base on AFKFelix/orca-slicer-api or escalopa/orcaslicer-api (spec) | Own implementation already works incl. preset flattening + COSMOS preset; switching only pays off if those projects handle arrange/thumbnails/multi-plate better. |
 | Profile source | Orca desktop user presets (PR-01) vs. bundled system presets (current) | Current P0 uses bundled system presets + overrides; PR-01/02/03 needs user-preset import with `inherits` resolution (`profiles.load_user_preset` exists). |
 | App name | "PrintShare" is the working name | — |
@@ -16,10 +16,10 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 |---|---|---|
 | MQ-01 | Printables link → server downloads files | ✅ (GraphQL; share sheet via iOS Shortcut + web page) |
 | MQ-02 | Choose among several files | 🟡 app asks which file (3MF preselected); no previews, no "all files" |
-| MQ-03 | Local files STL/3MF/OBJ/STEP | 🟡 CLI local path + direct URL; no upload endpoint yet |
+| MQ-03 | Local files STL/3MF/OBJ/STEP | ✅ `POST /api/uploads` + native app (Files app, share menu) |
 | MQ-04 | Print prepared 3MF / ready G-code | 🟡 3MF slices (own profile); pre-sliced G-code passthrough ⬜ |
 | MQ-09 | Thingiverse | ✅ (needs app token) |
-| DV-01 | Several printers | ✅ config list; online status ⬜ |
+| DV-01 | Several printers | ✅ config list; online status in the app (status `kind`) |
 | DV-02 | Nozzle per printer/job | 🟡 via preset names in config; per-job ⬜ |
 | DV-03 | Build plate | ✅ per printer + per job (app) |
 | MA-01 | Filament profile | ✅ per job from compatible Orca presets (app) |
@@ -29,7 +29,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | PL-04 | Arrange / copies | 🟡 `--arrange 1` always on; copies ⬜ |
 | SL-01 | Async slicing + progress | 🟡 async job + step log in the app; cancel ⬜ |
 | SL-02 | Summary time/filament | 🟡 time + g + m + layers; per-lane, thumbnail ⬜ |
-| SL-04 | Understandable slice errors | 🟡 last 25 Orca log lines |
+| SL-04 | Understandable slice errors | 🟡 app maps server errors to plain German/English + technical details; Orca-specific causes (out of build volume …) ⬜ |
 | DR-01 | Printer setup | ✅ config.yaml |
 | DR-02 | Moonraker upload + start | ✅ (tested against fake) ; WebSocket status ⬜ (polling) |
 | DR-04 | Live status | 🟡 snapshot status endpoint |
@@ -41,12 +41,15 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | NF-03/04 | VPN only, token | 🟡 single global token; per-device tokens ⬜ |
 | NF-05 | No start without confirmation | ✅ review screen + "plate empty" checkbox; API requires `confirm` |
 
-## Phase 2 – App MVP (PWA, 2026-09-26)
+## Phase 2 – App MVP (native app `mobile/`, 2026-09-27; PWA 2026-09-26)
 | ID | Item | Status |
 |---|---|---|
 | SL-03 | Show profiles used + changed values | ✅ review screen |
 | SL-05 | Change settings and re-slice | ✅ "Change settings" keeps link + choices |
-| DR-03 | Check before start (plate empty, material) | 🟡 checkbox; printer-ready check ⬜ |
+| DR-03 | Check before start (plate empty, material) | ✅ switch + confirm dialog; server refuses start on a busy printer (409); lane material check ⬜ (needs AFC) |
+| DV-04 | Warn on odd combinations | 🟡 app: PLA/Engineering, PETG/smooth PEI, Cool Plate non-PLA, CF/GF nozzle hint; build-volume check ⬜ |
+| NF-04 | Token in Keychain | ✅ SecureStore (Keychain/Keystore); pairing QR via `printshare pair` |
+| NF-10 | Distribution | EAS build → TestFlight (iOS, Dominique's account) / APK (Android) |
 | NF-11 | German first, English prepared | ✅ app texts (server error texts still English) |
 | NF-12 | Link → print in ≤ 5 steps | ✅ share → Slice → tick → Print |
 

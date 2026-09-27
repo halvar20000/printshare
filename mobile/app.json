@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "PrintShare",
+    "slug": "printshare",
+    "scheme": "printshare",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "io.github.halvar20000.printshare",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true, "NSAllowsLocalNetworking": true },
+        "NSLocalNetworkUsageDescription": "PrintShare connects to your own PrintShare server in your home network.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "io.github.halvar20000.printshare",
+      "adaptiveIcon": {
+        "backgroundColor": "#1D1D1B",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        { "image": "./assets/splash-icon.png", "imageWidth": 160, "backgroundColor": "#1D1D1B" }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PrintShare uses the camera only to scan the pairing QR code of your server.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsFileWithMaxCount": 1
+          },
+          "androidIntentFilters": [
+            "text/*",
+            "model/*",
+            "application/sla",
+            "application/vnd.ms-pki.stl",
+            "application/vnd.ms-3mfdocument",
+            "application/octet-stream"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        { "android": { "usesCleartextTraffic": true } }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
