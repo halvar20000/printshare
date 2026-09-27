@@ -49,6 +49,17 @@ class ElegooSDCP:
                 result["started"] = True
             return result
 
+    async def control(self, action: str) -> None:
+        async with await self._connect(enable_control=True) as p:
+            if action == "pause":
+                await p.pause()
+            elif action == "resume":
+                await p.resume()
+            elif action == "cancel":
+                await p.stop()
+            else:
+                raise ValueError(f"unknown action {action!r}")
+
     async def status(self) -> dict[str, Any]:
         async with await self._connect() as p:
             st = await p.status()

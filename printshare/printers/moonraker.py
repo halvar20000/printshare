@@ -63,6 +63,15 @@ class Moonraker:
             return {"uploaded": item.get("path", gcode.name),
                     "started": bool((body.get("result") or body).get("print_started", start))}
 
+    async def control(self, action: str) -> None:
+        if action not in ("pause", "resume", "cancel"):
+            raise ValueError(f"unknown action {action!r}")
+        async with httpx.AsyncClient(timeout=15) as client:
+            base = await self._resolve_base(client)
+            r = await client.post(f"{base}/printer/print/{action}", headers=self.headers)
+            if r.status_code != 200:
+                raise MoonrakerError(f"{action} failed: HTTP {r.status_code} {r.text[:200]}")
+
     async def status(self) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=15) as client:
             base = await self._resolve_base(client)

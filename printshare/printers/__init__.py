@@ -1,4 +1,5 @@
-"""Printer adapters. Each adapter uploads G-code, optionally starts it, and reports status."""
+"""Printer adapters. Each adapter uploads G-code, optionally starts it, reports status and
+pauses/resumes/cancels the current print."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +11,10 @@ from ..config import PrinterConfig
 class PrinterAdapter(Protocol):
     async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]: ...
     async def status(self) -> dict[str, Any]: ...
+    async def control(self, action: str) -> None: ...  # "pause" | "resume" | "cancel"
+
+
+CONTROL_ACTIONS = ("pause", "resume", "cancel")
 
 
 def get_adapter(cfg: PrinterConfig) -> PrinterAdapter:

@@ -34,15 +34,16 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 | File | Purpose |
 |---|---|
 | `printshare/fetch.py` | parse links, list model files, download (Printables GraphQL `ModelFiles` + `GetDownloadLink`, Thingiverse API w/ token, direct URL, local path for CLI) |
-| `printshare/profiles.py` | index OrcaSlicer system presets, flatten `inherits` chains |
+| `printshare/profiles.py` | index OrcaSlicer system presets (shared `ProfileLibrary.cached`), flatten `inherits`, `compatible()` presets per machine |
 | `printshare/slicer.py` | build machine/process/filament JSON, run Orca CLI, extract G-code + estimates |
-| `printshare/config.py` | `config.yaml` model, `cosmos` machine preset, bed type |
+| `printshare/config.py` | `config.yaml` model, `cosmos` machine preset, bed type, `JobOptions` (per-job material/quality/plate/supports/brim/infill/walls) |
 | `printshare/printers/elegoo.py` | stock CC via pycentauri (upload HTTP :80 `/uploadFile/upload` 1 MB chunks, WS :3030 start/status) |
 | `printshare/printers/moonraker.py` | Klipper/COSMOS: tries configured URL, then :7125 |
-| `printshare/pipeline.py` | link → download → slice → send (blocking steps in `asyncio.to_thread`) |
-| `printshare/api.py` + `web/index.html` | FastAPI + phone web page, Bearer token, in-memory jobs |
+| `printshare/pipeline.py` | `prepare_job` (download + slice, queue via `max_parallel_slices`) → `send_job`; `run_job` = both |
+| `printshare/api.py` | FastAPI: app flow `/api/jobs` → review → `/send` (confirm required), options, printer control, PWA files |
+| `printshare/web/` | PWA: `index.html`, `app.js` (plain JS, DE/EN texts), `app.css`, `manifest.webmanifest` (share target), `sw.js`, `icons/` (`scripts/make_icons.py`) |
 | `printshare/cli.py` | `printshare print|files|status|presets|printers|serve` |
-| `tests/` | fake SDCP printer + fake Moonraker (aiohttp), real Orca slicing if `ORCA_ROOT` set |
+| `tests/` | fake SDCP printer + fake Moonraker (aiohttp); `test_api.py` app flow; preset tests need `ORCA_PROFILES`; real slicing needs `ORCA_ROOT` |
 
 ## Hard-won findings (do not re-learn these)
 1. Orca CLI rejects flattened presets unless `"from": "system"` → otherwise
@@ -89,8 +90,18 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - This claude-agent container has no Docker socket and only sees `/mnt/user/AI`; it CAN reach the
   LAN (printer 192.168.86.144, host 192.168.86.230).
 
+## Smartphone app (decided 2026-09-26: PWA)
+- Thomas chose a PWA over SwiftUI/Expo: iPhone + Android, no Apple account, deployable from here.
+  App-MVP (spec phase 2) implemented: share/paste link → options → slice → review (time, g, layers,
+  changed values) → "plate empty" checkbox → Print / Upload only; jobs list; printer tab with
+  pause/resume/cancel. UI checked with headless Chromium (puppeteer-core) at 390×844, light + dark.
+- Install/share need HTTPS: `tailscale serve --bg --https=8443 http://127.0.0.1:8484` on the host.
+- NOT yet verified on real phones or with real slicing through the new flow (Orca can't run in the
+  claude-agent container: its glibc is too old → test slicing only inside the Docker image).
+
 ## Next steps (in order)
-1. Commit this handover (`CLAUDE.md`, `docs/`, requirements spec) and push to GitHub.
+1. Deploy the PWA (rerun `scripts/unraid-install.sh cc-thomas`), set up Tailscale Serve, install on
+   both phones, test share → slice → upload-only; then a real print with Thomas at the printer.
 2. After the reboot: rerun `scripts/unraid-install.sh cc-thomas`; check that the parity check and the
    hetzner-cls backup ran; then `printshare print <benchy> -p cc-thomas --no-start`, then a real
    print — for both printers (Thomas: SDCP; Dominique: COSMOS).

@@ -80,6 +80,7 @@ class FakeMoonraker:
     def __init__(self, port: int = 7125) -> None:
         self.port = port
         self.uploads: list[dict] = []
+        self.actions: list[str] = []
         self.runner: web.AppRunner | None = None
 
     async def info(self, request: web.Request) -> web.Response:
@@ -103,8 +104,13 @@ class FakeMoonraker:
             "extruder": {"temperature": 210.1, "target": 210},
             "heater_bed": {"temperature": 60.0, "target": 60}}}})
 
+    async def control(self, request: web.Request) -> web.Response:
+        self.actions.append(request.match_info["action"])
+        return web.json_response({"result": "ok"})
+
     async def start(self) -> None:
         app = web.Application(client_max_size=64 * 1024 * 1024)
+        app.router.add_post("/printer/print/{action}", self.control)
         app.router.add_get("/server/info", self.info)
         app.router.add_post("/server/files/upload", self.upload)
         app.router.add_get("/printer/objects/query", self.query)

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "printshare"
-version = "0.1.0"
+version = "0.2.0"
 description = "Print Printables/Thingiverse models from your phone on non-Bambu printers (self-hosted)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -27,4 +27,4 @@ printshare = "printshare.cli:main"
 include = ["printshare*"]
 
 [tool.setuptools.package-data]
-printshare = ["web/*.html"]
+printshare = ["web/*.html", "web/*.js", "web/*.css", "web/*.webmanifest", "web/icons/*.png"]

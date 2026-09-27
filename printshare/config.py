@@ -1,6 +1,7 @@
 """Configuration (config.yaml) for PrintShare."""
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,54 @@ class SlicingConfig:
             self.machine_overrides = base
 
 
+SUPPORT_TYPES = {"normal": "normal(auto)", "tree": "tree(auto)"}
+BRIM_TYPES = {"auto": "auto_brim", "off": "no_brim", "outer": "outer_only"}
+
+
+@dataclass
+class JobOptions:
+    """Per-job choices from the app; None keeps the printer's configured value."""
+    filament: str | None = None
+    process: str | None = None
+    bed_type: str | None = None
+    supports: str | None = None   # "off" | "normal" | "tree"
+    brim: str | None = None       # "auto" | "off" | "outer"
+    infill: int | None = None     # sparse infill density in percent
+    walls: int | None = None      # wall loops
+
+    def process_overrides(self) -> dict[str, Any]:
+        o: dict[str, Any] = {}
+        if self.supports == "off":
+            o["enable_support"] = "0"
+        elif self.supports is not None:
+            if self.supports not in SUPPORT_TYPES:
+                raise ValueError(f"supports must be off, {', '.join(SUPPORT_TYPES)}")
+            o.update(enable_support="1", support_type=SUPPORT_TYPES[self.supports])
+        if self.brim is not None:
+            if self.brim not in BRIM_TYPES:
+                raise ValueError(f"brim must be one of {', '.join(BRIM_TYPES)}")
+            o["brim_type"] = BRIM_TYPES[self.brim]
+        if self.infill is not None:
+            if not 0 <= self.infill <= 100:
+                raise ValueError("infill must be 0-100 %")
+            o["sparse_infill_density"] = f"{self.infill}%"
+        if self.walls is not None:
+            if not 1 <= self.walls <= 20:
+                raise ValueError("walls must be 1-20")
+            o["wall_loops"] = str(self.walls)
+        return o
+
+    def apply(self, base: SlicingConfig) -> SlicingConfig:
+        """Return a copy of `base` with these options applied (base stays untouched)."""
+        s = copy.copy(base)  # no __post_init__: overrides are already merged in `base`
+        s.filament = self.filament or base.filament
+        s.process = self.process or base.process
+        s.bed_type = self.bed_type or base.bed_type
+        s.process_overrides = {**base.process_overrides, "curr_bed_type": s.bed_type,
+                               **self.process_overrides()}
+        return s
+
+
 @dataclass
 class PrinterConfig:
     id: str
@@ -69,6 +118,7 @@ class Settings:
     gcode_dir: str = "/data/gcode"
     thingiverse_token: str = ""
     slice_timeout_s: int = 900
+    max_parallel_slices: int = 1   # BE-01: further slice jobs wait in a queue
     keep_work_files: bool = False
     printers: list[PrinterConfig] = field(default_factory=list)
 

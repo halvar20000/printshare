@@ -76,34 +76,62 @@ docker exec printshare printshare print "https://www.printables.com/model/3161-3
 
 `--no-start` only uploads the file, so you can check it on the printer screen before the first real print. `--slice-only` doesn't contact the printer at all; the G-code ends up in `/mnt/user/appdata/printshare/data/gcode/`.
 
-## 4. From the phone
+## 4. The app on your phone
 
-* **Web page:** `http://<server>:8484`. From outside your home, use Tailscale (e.g. `http://tower:8484`). Don't expose it to the internet without authentication in front of it.
-* **iPhone Shortcut (share menu):** New Shortcut → *Receive URLs from Share Sheet* → *Open URLs* `http://tower:8484/?link=` + *Shortcut Input*. In the Printables app or Safari: Share → *PrintShare*.
-* **Android:** share the link to Chrome with the same `?link=` URL, or use the *HTTP Shortcuts* app to `POST /api/print`.
+PrintShare is a web app (PWA) served by the container: iPhone and Android, no app store.
+Flow: share or paste a link → choose material, quality, plate, supports, brim, infill, walls →
+**Slice** → check time, filament, layers and the changed values → tick "the build plate is empty" →
+**Print** (or *Upload only*). Nothing starts without that confirmation. The *Printer* tab shows
+live status with Pause / Resume / Cancel.
+
+**Open it once with the token** (the phone stores it, and the token is removed from the address bar):
+`https://<server>/?token=<api_token>` — or enter the token under *Settings*.
+
+**HTTPS via Tailscale (recommended).** Installing the app and the Android share menu need HTTPS.
+On the Unraid host (Tailscale plugin, *MagicDNS* and *HTTPS certificates* enabled in the Tailscale admin console):
+
+```bash
+tailscale serve --bg --https=8443 http://127.0.0.1:8484
+tailscale serve status            # shows the address, e.g. https://tower.<tailnet>.ts.net:8443
+```
+
+Works from home and on the go (phone with Tailscale on); nothing is exposed to the internet.
+Plain `http://<server>:8484` also works in the browser, but without install and share menu.
+
+* **Install:** iPhone (Safari): Share → *Add to Home Screen*. Android (Chrome): menu ⋮ → *Install app*.
+* **Android share menu:** once installed, *PrintShare* appears when you share a link from the Printables app or Chrome.
+* **iPhone share menu:** Shortcuts app → new Shortcut → *Show in Share Sheet* (URLs) → action *Open URLs*
+  with `https://<server>/?link=` + *Shortcut Input*. In Printables or Safari: Share → *PrintShare*.
 
 API (header `Authorization: Bearer <token>`):
 
 ```
-POST /api/print  {"link": "...", "printer": "cc-thomas", "file": 1, "start": true}  -> {"job": "…"}
-GET  /api/jobs/<id>
-GET  /api/printers/<id>/status
-GET  /api/files?link=...
+GET    /api/printers
+GET    /api/printers/<id>/options[?process=...]   materials, qualities, plates, defaults
+GET    /api/files?link=...
+POST   /api/jobs   {"link", "printer", "file", "options": {"filament", "process", "bed_type",
+                    "supports": "off|normal|tree", "brim": "auto|off|outer", "infill": 20, "walls": 3}}
+GET    /api/jobs   |   GET /api/jobs/<id>   |   DELETE /api/jobs/<id>
+POST   /api/jobs/<id>/send   {"start": true, "confirm": true}      # confirm is required to start
+GET    /api/printers/<id>/status
+POST   /api/printers/<id>/control   {"action": "pause|resume|cancel", "confirm": true}
+POST   /api/print  {"link", "printer", "file", "start"}   # one-shot slice + send (CLI, shortcuts)
 ```
 
 ## Notes and limits (P0)
 
 * **Printables** has no official API. PrintShare uses the website's own endpoint, one model at a time and only on the user's behalf; files are never stored for others. **Thingiverse** needs an app token from thingiverse.com/developers.
-* Models with several files: pick the file with **Check files** in the web page, or `--file N` on the command line. A single 3MF is preferred automatically.
+* Models with several files: the app asks which file to use; on the command line use `--file N`. A single 3MF is preferred automatically.
 * 3MF project files from Bambu Studio are sliced with *your* printer profile. Their plate layout is kept, but print settings saved inside the 3MF are not used.
 * Plate thumbnails are empty, because the server has no graphics output.
-* Jobs are kept in memory only and are lost when the container restarts.
+* Jobs are kept in memory only (last 50) and are lost when the container restarts. Slicing runs one job at a time (`max_parallel_slices`).
 
 ## Development
 
 ```bash
-pip install -e ".[dev]" aiohttp
+pip install -e ".[dev]"
 ORCA_ROOT=/path/to/extracted/OrcaSlicer pytest -q     # fake SDCP + Moonraker printers, real OrcaSlicer
+python3 scripts/make_icons.py                          # regenerate the app icons (Pillow)
 ```
 
 Credits: the Centauri Carbon connection uses [pycentauri](https://github.com/bjan/pycentauri) (Apache-2.0).
