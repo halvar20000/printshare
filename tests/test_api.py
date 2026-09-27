@@ -231,3 +231,19 @@ def test_upload_then_slice(api, client, monkeypatch, tmp_path):
     # only ids of real uploads are accepted, never paths
     for bad in ("upload:../../etc", "upload:000000000000", "/etc/passwd"):
         assert client.post("/api/jobs", headers=H, json={"link": bad}).status_code in (400, 404), bad
+
+
+def test_search_endpoints(api, client, monkeypatch):
+    import httpx
+
+    from printshare.search import Search
+
+    from .test_search import router
+    monkeypatch.setattr(api, "_SEARCH", Search("", http=httpx.Client(transport=httpx.MockTransport(router))))
+    assert client.get("/api/sources").status_code == 401
+    assert [s["available"] for s in client.get("/api/sources", headers=H).json()] == [True, False]
+    r = client.get("/api/search", headers=H, params={"q": "benchy", "sort": "popular"}).json()
+    assert r["results"][0]["id"] == "3161"
+    assert client.get("/api/models/printables/3161", headers=H).json()["recommended"]["material"] == "PLA"
+    assert client.get("/api/models/printables/404", headers=H).status_code == 404
+    assert client.get("/api/search", headers=H, params={"q": "x", "source": "thingiverse"}).status_code == 400

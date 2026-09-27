@@ -128,6 +128,18 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `config-example.yaml`; `tests/test_bootstrap.py` guards against stray ones.
 - Empty env vars never clear the token (Unraid passes unused fields as empty strings).
 
+## Model search (2026-09-27, spec MQ-05/06)
+- `printshare/search.py` (adapters `PrintablesSource`, `ThingiverseSource`), API `/api/sources`, `/api/search`,
+  `/api/models/{source}/{id}`; app tab `discover.tsx` + `model/[source]/[id].tsx`.
+- Printables GraphQL (introspection disabled, found by probing): `searchPrints2(query, limit, offset,
+  ordering: best_match|popular|makes_count|rating|latest)` → `totalCount`, `items{…premium price…}`;
+  `latest` ignores the query. `print(id)` has `summary description images nozzleDiameters layerHeights
+  materials weight printDuration stls`. Paid (`price`) / `premium` models are filtered out.
+- Printables images: original can be 6+ MB; thumbnails at
+  `<dir>/thumbs/{cover|inside}/{WxH}/<orig ext>/<stem>.jpg` (list 320x240 cover, detail 1280x960 inside).
+- Thingiverse search/detail parsing is based on the documented REST shape and tested only with mocks —
+  verify live once a `thingiverse_token` is configured (none in Thomas' config yet).
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

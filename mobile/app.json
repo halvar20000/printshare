@@ -11,7 +11,10 @@
       "bundleIdentifier": "io.github.halvar20000.printshare",
       "supportsTablet": true,
       "infoPlist": {
-        "NSAppTransportSecurity": { "NSAllowsArbitraryLoads": true, "NSAllowsLocalNetworking": true },
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
         "NSLocalNetworkUsageDescription": "PrintShare connects to your own PrintShare server in your home network.",
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -36,7 +39,11 @@
       "expo-font",
       [
         "expo-splash-screen",
-        { "image": "./assets/splash-icon.png", "imageWidth": 160, "backgroundColor": "#1D1D1B" }
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#1D1D1B"
+        }
       ],
       [
         "expo-camera",
@@ -66,8 +73,13 @@
       ],
       [
         "expo-build-properties",
-        { "android": { "usesCleartextTraffic": true } }
-      ]
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true

@@ -6,6 +6,8 @@ Android. The app only talks to your own PrintShare server; the server downloads,
 ## What it does (spec phase 2 – App MVP)
 - **Share → print:** share a Printables/Thingiverse link from Safari/Chrome, or an STL/3MF/OBJ/STEP file
   from Files, to PrintShare (MQ-01, MQ-03). Paste a link or pick a file in the app as well.
+- **Discover:** search Printables (and Thingiverse with a server token) in the app, sorted by relevance, popularity
+  or most made; model page with images, author, license, the author's recommended settings → *Prepare print* (MQ-05/06).
 - **Prepare:** printer with online status, material, quality, build plate, supports, brim, infill, walls;
   last choices are remembered per printer; warnings for odd combinations, e.g. PETG on smooth PEI (DV-01, DV-03/04, MA-01, QU-01/03/04, SU-01/02/05).
 - **Review:** print time, filament (g/m), layers, profiles and changed values (SL-02/03); readable error messages (SL-04);

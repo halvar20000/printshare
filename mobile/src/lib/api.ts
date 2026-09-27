@@ -44,6 +44,18 @@ export type JobSummary = {
   link: string; file: string | null; print_time: string | null; filament_g: number | null;
 };
 export type Upload = { id: string; link: string; name: string; size: number };
+export type Source = { id: "printables" | "thingiverse"; name: string; available: boolean };
+export type SortKey = "relevant" | "popular" | "makes";
+export type ModelHit = {
+  source: Source["id"]; id: string; name: string; url: string; author: string | null; thumbnail: string | null;
+  likes: number | null; downloads: number | null; makes: number | null; license: string | null;
+};
+export type ModelDetail = ModelHit & {
+  images: string[]; summary: string; description: string; category: string | null;
+  recommended: Partial<{ nozzle: string; layer_height: string; material: string; weight_g: number; print_hours: number }>;
+  files: { name: string; size: number | null; sliceable: boolean }[];
+};
+export type SearchPage = { results: ModelHit[]; total: number | null; page: number; has_more: boolean };
 
 /** Error with a friendly, translated message; `detail` keeps the server's original text. */
 export class ApiError extends Error {
@@ -75,6 +87,7 @@ export function friendlyError(t: T, status: number, detail: string): string {
     [d.includes("orcaslicer produced no g-code") || d.includes("slice"), "errSlice"],
     [d.includes("preset") && d.includes("not found"), "errProfile"],
     [d.includes("thingiverse needs"), "errThingiverse"],
+    [d.includes("not found") && !d.includes("uploaded"), "errNotFound"],
     [d.includes("download failed") || d.includes("printables api error") ||
       d.includes("refused the download"), "errDownload"],
   ];
@@ -128,6 +141,12 @@ export class Api {
   send = (id: string, start: boolean) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`, { method: "POST", body: { start, confirm: start } });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
+  sources = () => this.request<Source[]>("/api/sources");
+  search = (q: string, source: string, page: number, sort: SortKey) =>
+    this.request<SearchPage>(`/api/search?q=${encodeURIComponent(q)}&source=${source}&page=${page}&sort=${sort}`,
+      { timeout: 30000 });
+  model = (source: string, id: string) =>
+    this.request<ModelDetail>(`/api/models/${source}/${encodeURIComponent(id)}`, { timeout: 30000 });
 
   /** Upload a local model file (document picker or share menu) as raw body. */
   async upload(uri: string, name: string): Promise<Upload> {

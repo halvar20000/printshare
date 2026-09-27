@@ -3,7 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Badge, Banner, Button, Card, Divider, Empty, Row, tap } from "@/components/ui";
@@ -78,8 +78,7 @@ export default function Home() {
         <Card style={{ marginTop: 16 }}>
           <Row icon="folder-open-outline" label={t("pickFile")} sub={t("pickFileSub")} onPress={pick} />
           <Divider />
-          <Row icon="compass-outline" label={t("browsePrintables")} sub={t("browsePrintablesSub")}
-            onPress={() => Linking.openURL("https://www.printables.com/model")} />
+          <Row icon="search" label={t("searchModels")} sub={t("searchModelsSub")} onPress={() => router.navigate("/discover")} />
         </Card>
 
         {recent.length ? (

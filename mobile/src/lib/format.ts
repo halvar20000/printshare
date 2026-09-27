@@ -51,6 +51,14 @@ export function printTime(v?: string | null): string {
   return hh ? `${hh} h ${mm} min` : `${mm} min`;
 }
 
+/** 12345 -> "12.3k" (Hermes' Intl has no compact notation everywhere) */
+export function compact(n?: number | null): string {
+  if (n == null) return "–";
+  if (n < 1000) return String(n);
+  if (n < 1e6) return `${(n / 1000).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, "")}k`;
+  return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
 export const temp = (v?: number | null, target?: number | null) =>
   v == null ? "–" : `${Math.round(v)}${target ? ` / ${Math.round(target)}` : ""} °C`;
 

@@ -156,6 +156,7 @@ GET    /api/printers
 GET    /api/printers/<id>/options[?process=...]   materials, qualities, plates, defaults
 POST   /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>"} (use as link below)
 GET    /api/files?link=...
+GET    /api/sources | /api/search?q=&source=printables|thingiverse&sort=relevant|popular|makes | /api/models/<source>/<id>
 POST   /api/jobs   {"link", "printer", "file", "options": {"filament", "process", "bed_type",
                     "supports": "off|normal|tree", "brim": "auto|off|outer", "infill": 20, "walls": 3}}
 GET    /api/jobs   |   GET /api/jobs/<id>   |   DELETE /api/jobs/<id>
@@ -167,7 +168,8 @@ POST   /api/print  {"link", "printer", "file", "start"}   # one-shot slice + sen
 
 ## Notes and limits (P0)
 
-* **Printables** has no official API. PrintShare uses the website's own endpoint, one model at a time and only on the user's behalf; files are never stored for others. **Thingiverse** needs an app token from thingiverse.com/developers.
+* **Printables** has no official API. PrintShare uses the website's own endpoint (search, model details, download), only on the user's behalf; files are never stored for others. Paid and premium models are not shown.
+* **Thingiverse** (links and search in the app) needs an app token: thingiverse.com/developers → *Create an App* → copy the *App Token* into the Unraid field *Thingiverse app token*, the Home Assistant option `thingiverse_token` or `thingiverse_token:` in `config.yaml`, then restart.
 * Models with several files: the app asks which file to use; on the command line use `--file N`. A single 3MF is preferred automatically.
 * 3MF project files from Bambu Studio are sliced with *your* printer profile. Their plate layout is kept, but print settings saved inside the 3MF are not used.
 * Plate thumbnails are empty, because the server has no graphics output.

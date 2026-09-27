@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+- Model search for the app: Printables (and Thingiverse with an app token), model details with images,
+  license and the author's recommended settings.
+
 ## 0.2.0
 - First Home Assistant add-on release: printers configured in the add-on options, pairing QR code in the log.
 - Native iOS/Android app support: file uploads, pairing, printer-busy check before starting a print.

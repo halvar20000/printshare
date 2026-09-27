@@ -6,6 +6,9 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
   POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
   GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
+  GET  /api/sources         model sources for search (Thingiverse only with a token)
+  GET  /api/search?q=...&source=printables|thingiverse&page=1&sort=relevant|popular|makes
+  GET  /api/models/{source}/{id}   details: images, description, license, author's settings, files
   POST /api/jobs            {"link", "printer", "file", "options": {...}}  -> download + slice only
   GET  /api/jobs            recent jobs, newest first
   GET  /api/jobs/{id}
@@ -37,6 +40,7 @@ from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, get_adapter
 from .profiles import ProfileError, ProfileLibrary
+from .search import Search
 
 WEB = Path(__file__).parent / "web"
 PLATES = ["Textured PEI Plate", "High Temp Plate", "Cool Plate", "Engineering Plate", "Supertack Plate"]
@@ -45,9 +49,10 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.2")
+app = FastAPI(title="PrintShare", version="0.3.0")
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
+_SEARCH: Search | None = None
 _TASKS: set[asyncio.Task] = set()  # keep references so tasks are not garbage-collected
 
 
@@ -241,6 +246,40 @@ async def files(link: str) -> list[dict[str, Any]]:
     except FetchError as e:
         raise HTTPException(400, str(e))
     return [{"index": i, "name": f.name, "size": f.size} for i, f in enumerate(fl, 1)]
+
+
+# ---------- search (MQ-05/06) ----------
+def _search() -> Search:
+    global _SEARCH
+    if _SEARCH is None:
+        _SEARCH = Search(settings.thingiverse_token)
+    return _SEARCH
+
+
+def _search_error(e: FetchError) -> HTTPException:
+    msg = str(e)
+    return HTTPException(404 if "not found" in msg else 502 if "API error" in msg else 400, msg)
+
+
+@app.get("/api/sources", dependencies=[Depends(auth)])
+def sources() -> list[dict[str, Any]]:
+    return _search().list_sources()
+
+
+@app.get("/api/search", dependencies=[Depends(auth)])
+async def search(q: str, source: str = "printables", page: int = 1, sort: str = "relevant") -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(_search().search, source, q, page, sort)
+    except FetchError as e:
+        raise _search_error(e)
+
+
+@app.get("/api/models/{source}/{model_id}", dependencies=[Depends(auth)])
+async def model_detail(source: str, model_id: str) -> dict[str, Any]:
+    try:
+        return await asyncio.to_thread(_search().detail, source, model_id)
+    except FetchError as e:
+        raise _search_error(e)
 
 
 # ---------- app flow: slice, review, send ----------
