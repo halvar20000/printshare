@@ -1,11 +1,17 @@
+# docker compose up -d   ->   docker compose logs printshare   (access token + QR code for the app)
 services:
   printshare:
-    build: .
-    image: printshare:0.1
+    image: ghcr.io/halvar20000/printshare:latest
+    # build: .                  # instead of `image`, to build from this checkout
     container_name: printshare
     restart: unless-stopped
     ports:
-      - "8484:8484"             # web UI + API; printers are reached outbound on the LAN
+      - "8484:8484"             # web app + API; printers are reached outbound on the LAN
+    environment:
+      PRINTER_NAME: Centauri Carbon
+      PRINTER_TYPE: elegoo_sdcp          # or moonraker (Klipper / COSMOS)
+      PRINTER_ADDRESS: 192.168.1.50      # empty = configure printers in config.yaml instead
+      PRINTSHARE_URL: http://192.168.1.10:8484   # address the phone uses (for the QR code)
     volumes:
       - /mnt/user/appdata/printshare:/config
       - /mnt/user/appdata/printshare/data:/data

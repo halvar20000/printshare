@@ -1,0 +1,20 @@
+configuration:
+  printers:
+    name: Printers
+    description: >-
+      One entry per printer. type: elegoo_sdcp (Elegoo stock firmware) or moonraker (Klipper,
+      e.g. OpenCentauri COSMOS). address: IP of the printer. cosmos: use PRINT_START/PRINT_END
+      (Klipper only, default on). Profiles are OrcaSlicer preset names (default: Centauri Carbon, PLA).
+  server_url:
+    name: Server address for the app
+    description: >-
+      Address the phone uses, e.g. http://192.168.1.5:8484. Empty = detected automatically.
+      Shown as QR code in the log.
+  api_token:
+    name: Access token
+    description: Empty = generated once and shown in the log.
+  thingiverse_token:
+    name: Thingiverse app token
+    description: Only needed for Thingiverse links (thingiverse.com/developers).
+network:
+  8484/tcp: Web app and API for the PrintShare app

@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
 
 from .config import load_settings
@@ -46,6 +47,17 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    if a.cmd == "serve":
+        # Unraid template / Home Assistant add-on: create or refresh config.yaml from the form
+        from . import bootstrap
+        cfg_path = a.config or os.environ.get("PRINTSHARE_CONFIG", "/config/config.yaml")
+        os.environ["PRINTSHARE_CONFIG"] = cfg_path
+        try:
+            info = bootstrap.ensure_config(cfg_path)
+        except ValueError as e:
+            print(f"Error in the printer settings: {e}", file=sys.stderr)
+            return 1
+        print(bootstrap.banner(info, bootstrap.server_url()), flush=True)
     settings = load_settings(a.config)
 
     try:

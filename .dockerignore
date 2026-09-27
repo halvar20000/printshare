@@ -1,0 +1,12 @@
+.git
+.github
+mobile
+homeassistant
+unraid
+tests
+docs
+data
+config.yaml
+**/__pycache__
+*.egg-info
+.fuse_hidden*

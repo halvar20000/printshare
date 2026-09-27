@@ -1,0 +1,5 @@
+# Home Assistant add-on repository: Settings > Add-ons > Add-on Store > ⋮ > Repositories
+# add https://github.com/halvar20000/printshare
+name: PrintShare
+url: https://github.com/halvar20000/printshare
+maintainer: halvar20000

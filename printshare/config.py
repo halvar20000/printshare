@@ -141,8 +141,9 @@ def load_settings(path: str | Path | None = None) -> Settings:
         slicing = SlicingConfig(**(p.pop("slicing", {}) or {}))
         printers.append(PrinterConfig(slicing=slicing, **p))
     s = Settings(printers=printers, **raw)
-    s.api_token = os.environ.get("PRINTSHARE_API_TOKEN", s.api_token)
-    s.thingiverse_token = os.environ.get("THINGIVERSE_TOKEN", s.thingiverse_token)
+    # empty variables (e.g. unused fields of the Unraid template) must not clear the token
+    s.api_token = os.environ.get("PRINTSHARE_API_TOKEN") or s.api_token
+    s.thingiverse_token = os.environ.get("THINGIVERSE_TOKEN") or s.thingiverse_token
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

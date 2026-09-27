@@ -1,6 +1,8 @@
 FROM ubuntu:24.04
 
 ARG ORCA_VERSION=2.4.2
+# set by buildx (amd64 | arm64); OrcaSlicer publishes AppImages for both
+ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PRINTSHARE_CONFIG=/config/config.yaml \
@@ -16,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # OrcaSlicer (AppImage extracted, no FUSE needed)
-RUN curl -fsSL -o /tmp/orca.AppImage \
-      "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v${ORCA_VERSION}/OrcaSlicer_Linux_AppImage_Ubuntu2404_V${ORCA_VERSION}.AppImage" \
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) f="OrcaSlicer_Linux_AppImage_Ubuntu2404_V${ORCA_VERSION}.AppImage" ;; \
+      arm64) f="OrcaSlicer_Linux_AppImage_Ubuntu2404_aarch64_V${ORCA_VERSION}.AppImage" ;; \
+      *) echo "Unsupported architecture ${TARGETARCH}"; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /tmp/orca.AppImage "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v${ORCA_VERSION}/$f" \
     && chmod +x /tmp/orca.AppImage && cd /opt && /tmp/orca.AppImage --appimage-extract >/dev/null \
     && mv /opt/squashfs-root /opt/orca && rm /tmp/orca.AppImage
 
@@ -35,6 +41,19 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY printshare ./printshare
 RUN python3 -m venv /opt/venv && pip install --no-cache-dir .
+
+# Labels: OCI metadata + what Home Assistant expects from a pre-built add-on image
+ARG VERSION=dev
+ARG HASS_ARCH=amd64
+LABEL org.opencontainers.image.title="PrintShare" \
+      org.opencontainers.image.description="Print Printables/Thingiverse models from your phone - self-hosted slicing with OrcaSlicer" \
+      org.opencontainers.image.source="https://github.com/halvar20000/printshare" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      io.hass.name="PrintShare" \
+      io.hass.type="addon" \
+      io.hass.version="${VERSION}" \
+      io.hass.arch="${HASS_ARCH}"
 
 VOLUME ["/config", "/data"]
 EXPOSE 8484

@@ -37,7 +37,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DR-11 | SDCP adapter | ✅ (tested against fake) |
 | PR-03 | Resolve `inherits` | ✅ for system presets |
 | BE-01 | Queue, 1 slice at a time | ✅ `max_parallel_slices` (default 1) |
-| BE-07 | Docker image + Unraid template | 🟡 Dockerfile + compose; CA template ⬜ |
+| BE-07 | Docker image + Unraid template | 🟡 GHCR multi-arch image (GitHub Actions), Unraid template `unraid/printshare.xml`, Home Assistant add-on `homeassistant/printshare`; listing in Community Applications ⬜ (needs a separate templates repo) |
 | NF-03/04 | VPN only, token | 🟡 single global token; per-device tokens ⬜ |
 | NF-05 | No start without confirmation | ✅ review screen + "plate empty" checkbox; API requires `confirm` |
 

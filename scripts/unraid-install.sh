@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build and (re)start the PrintShare container on an Unraid host. Run as root:
 #   bash /mnt/user/AI/Projects/3dprintinghandy/scripts/unraid-install.sh [printer-id]
-# The first run copies ./config.yaml (or config.example.yaml) to appdata; later runs keep it.
+# The first run copies ./config.yaml (or config-example.yaml) to appdata; later runs keep it.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,7 +17,7 @@ docker build -t "$IMAGE" .
 mkdir -p "$APPDATA/data"
 if [ ! -f "$APPDATA/config.yaml" ]; then
   if [ -f config.yaml ]; then cp config.yaml "$APPDATA/config.yaml"
-  else cp config.example.yaml "$APPDATA/config.yaml"; echo "!! Edit $APPDATA/config.yaml (api_token, printer IP) and run again"; exit 1
+  else cp config-example.yaml "$APPDATA/config.yaml"; echo "!! Edit $APPDATA/config.yaml (api_token, printer IP) and run again"; exit 1
   fi
   chmod 600 "$APPDATA/config.yaml"
 fi

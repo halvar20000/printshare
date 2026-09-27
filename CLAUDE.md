@@ -113,6 +113,21 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - NOT yet verified on real phones or with real slicing through the new flow (Orca can't run in the
   claude-agent container: its glibc is too old → test slicing only inside the Docker image).
 
+## Distribution (2026-09-27)
+- Image `ghcr.io/halvar20000/printshare` (:latest + :<pyproject version>), amd64 + arm64, built by
+  `.github/workflows/docker.yml` on native runners (tests first). Dockerfile picks the Orca AppImage by
+  `TARGETARCH` and carries `io.hass.*` labels. The GHCR package must be set to **public** once.
+- First start (`printshare serve` → `printshare/bootstrap.py`): printer from Unraid env (`PRINTER_*`) or
+  HA `/data/options.json` → config.yaml regenerated each start ("managed"); no printer in the form →
+  hand-written config.yaml untouched. Token kept/generated; log shows token + pairing QR
+  (`PRINTSHARE_URL` / HA `server_url`, HA falls back to the supervisor network info).
+- Unraid: `unraid/printshare.xml` (install via templates-user curl). HA: `repository.yaml` +
+  `homeassistant/printshare/` (addon_config → /config, /data = add-on data). HA version must equal the
+  pyproject version (test enforces it) and bump both for HA to offer an update.
+- The HA supervisor reads every `config.{yaml,json}` in the repo as an add-on → example config is
+  `config-example.yaml`; `tests/test_bootstrap.py` guards against stray ones.
+- Empty env vars never clear the token (Unraid passes unused fields as empty strings).
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

@@ -1,4 +1,4 @@
-# PrintShare (P0 prototype)
+# PrintShare
 
 Send a **Printables** or **Thingiverse** link from your phone. PrintShare downloads the model, slices it with **OrcaSlicer** on your own server, uploads the G-code to your printer and starts the print. It's a self-hosted "Bambu Handy" for everyone else.
 
@@ -18,40 +18,77 @@ Phone ──link──▶ PrintShare (Docker on Unraid) ──▶ Printables / T
 
 ---
 
-## 1. Install on Unraid
+## 1. Install
 
-On the Unraid console as root (`ssh unraid`). When pasting several lines into the web terminal, press **Enter** afterwards.
+Pre-built image for amd64 and arm64: `ghcr.io/halvar20000/printshare`. You only enter the printer's IP
+address; on first start the container log shows the **access token** and a **QR code** for the app.
+
+### Unraid
+
+On the Unraid console (as root), load the template once:
 
 ```bash
-# 1. Get the code (skip if you already have the project share /mnt/user/AI/Projects/3dprintinghandy)
-mkdir -p /mnt/user/appdata/printshare/src /mnt/user/appdata/printshare/data
-cd /mnt/user/appdata/printshare/src
-curl -fL -o printshare.tar.gz https://github.com/halvar20000/printshare/archive/refs/heads/main.tar.gz
-tar xzf printshare.tar.gz --strip-components=1 && rm printshare.tar.gz
-
-# 2. Build the image (~5 min the first time; downloads OrcaSlicer 2.4.2)
-docker build -t printshare:0.1 .
-
-# 3. Configuration
-cp config.example.yaml /mnt/user/appdata/printshare/config.yaml
-openssl rand -hex 24          # -> use as api_token
-nano /mnt/user/appdata/printshare/config.yaml
-
-# 4. Run
-docker run -d --name printshare --restart unless-stopped \
-  -p 8484:8484 \
-  -v /mnt/user/appdata/printshare:/config \
-  -v /mnt/user/appdata/printshare/data:/data \
-  printshare:0.1
+curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-PrintShare.xml \
+  https://raw.githubusercontent.com/halvar20000/printshare/main/unraid/printshare.xml
 ```
 
-Then open `http://<unraid-ip>:8484`, enter the token under **Settings**, paste a link and press **Print**.
+Then **Docker → Add Container → Template: PrintShare**, fill in *Printer type*, *Printer IP address* and
+*Server address for the app* (e.g. `http://192.168.1.10:8484`), **Apply**. Open the container log
+(Docker tab → PrintShare icon → Logs) and scan the QR code in the app.
 
-Update later: fetch the code again (step 1, `curl` + `tar`), rebuild, `docker rm -f printshare`, run step 4 again. The configuration in `/mnt/user/appdata/printshare` stays.
+Updates: Docker tab → *Check for Updates* → *Apply update*. The configuration in `/mnt/user/appdata/printshare` stays.
 
-## 2. Configure your printer
+### Home Assistant
 
-Edit `config.yaml`. Keep only your own printer block:
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add `https://github.com/halvar20000/printshare`.
+2. Install **PrintShare**, then under **Configuration** add your printer:
+   ```yaml
+   - name: Centauri Carbon
+     type: elegoo_sdcp        # or moonraker (Klipper / COSMOS)
+     address: 192.168.1.50
+   ```
+3. Start the add-on, open the **Log** tab and scan the QR code in the app.
+
+Details: [homeassistant/printshare/DOCS.md](homeassistant/printshare/DOCS.md).
+
+### Docker (any Linux server)
+
+```bash
+docker run -d --name printshare --restart unless-stopped -p 8484:8484 \
+  -e PRINTER_TYPE=elegoo_sdcp -e PRINTER_ADDRESS=192.168.1.50 \
+  -e PRINTSHARE_URL=http://192.168.1.10:8484 \
+  -v /opt/printshare:/config -v /opt/printshare/data:/data \
+  ghcr.io/halvar20000/printshare:latest
+docker logs printshare        # token + QR code
+```
+
+Or with `docker compose up -d` using [docker-compose.yml](docker-compose.yml).
+
+### Printer settings (all install methods)
+
+| Setting (Unraid variable / HA option) | Meaning |
+|---|---|
+| `PRINTER_TYPE` / `type` | `elegoo_sdcp` = Centauri Carbon stock firmware, `moonraker` = Klipper (e.g. COSMOS) |
+| `PRINTER_ADDRESS` / `address` | printer IP (give it a fixed DHCP lease) |
+| `PRINTER_COSMOS` / `cosmos` | Klipper only: `PRINT_START`/`PRINT_END` start code for COSMOS (default on) |
+| `BUILD_PLATE` / `build_plate` | default plate, changeable per print |
+| `PRINTSHARE_URL` / `server_url` | address the phone uses; needed for the QR code (HA detects it) |
+| `PRINTSHARE_API_TOKEN` / `api_token` | empty = generated once |
+
+When a printer is set in the form, `config.yaml` is regenerated on every start. Leave the printer address
+empty to edit `config.yaml` by hand instead (several printers, overrides, exported OrcaSlicer presets) –
+start from [`config-example.yaml`](config-example.yaml).
+
+### Build it yourself (developers)
+
+```bash
+docker build -t printshare:dev .          # ~5 min; downloads OrcaSlicer 2.4.2 for your CPU
+bash scripts/unraid-install.sh             # Unraid: build + run from a source checkout
+```
+
+## 2. Configure your printer by hand (optional)
+
+Only needed without the form fields above. Edit `config.yaml`, keep only your own printer block:
 
 * **Thomas (stock firmware):** `type: elegoo_sdcp` with `host:` set to the printer's IP. Give the printer a fixed DHCP lease.
 * **Dominique (COSMOS):** `type: moonraker` with `url:` set to the same address you use for Mainsail, plus `machine_preset: cosmos`.

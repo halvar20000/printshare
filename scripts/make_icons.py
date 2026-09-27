@@ -1,4 +1,4 @@
-"""Generate the PWA icons (printshare/web/icons) and the native app icons (mobile/assets).
+"""Generate the PWA icons (printshare/web/icons), native app icons (mobile/assets) and the HA add-on icon.
 
 Run: python3 scripts/make_icons.py (needs Pillow).
 """
@@ -56,6 +56,9 @@ def main() -> None:
     Image.new("RGB", (1024, 1024), BG).save(MOBILE / "android-icon-background.png")
     draw(512, True, glyph=0.9, bg=False).save(MOBILE / "splash-icon.png")
     draw(64, False).save(MOBILE / "favicon.png")
+
+    # Home Assistant add-on store
+    draw(128, False).save(ROOT / "homeassistant" / "printshare" / "icon.png")
 
 
 if __name__ == "__main__":

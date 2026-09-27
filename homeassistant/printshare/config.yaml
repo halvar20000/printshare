@@ -1,0 +1,38 @@
+name: PrintShare
+version: "0.2.0"
+slug: printshare
+description: >-
+  Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
+  job to Elegoo Centauri Carbon (stock firmware) or Klipper/Moonraker printers.
+url: https://github.com/halvar20000/printshare
+arch:
+  - amd64
+  - aarch64
+image: ghcr.io/halvar20000/printshare
+startup: application
+boot: auto
+ports:
+  8484/tcp: 8484
+webui: http://[HOST]:[PORT:8484]/
+hassio_api: true
+map:
+  - addon_config:rw
+options:
+  printers: []
+  server_url: ""
+  api_token: ""
+  thingiverse_token: ""
+schema:
+  printers:
+    - name: str
+      type: list(elegoo_sdcp|moonraker)
+      address: str
+      cosmos: bool?
+      api_key: password?
+      printer_profile: str?
+      quality_profile: str?
+      filament_profile: str?
+      build_plate: list(Textured PEI Plate|High Temp Plate|Cool Plate|Engineering Plate|Supertack Plate)?
+  server_url: str?
+  api_token: password?
+  thingiverse_token: password?
