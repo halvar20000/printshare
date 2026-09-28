@@ -76,6 +76,10 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `3dbenchy.gcode` (2.6 MB, 240 layers) arrived on Thomas' CC via SDCP. **NOT yet verified:** a real
   started print (SDCP), anything on COSMOS.
 
+## First real print (reported by Thomas 2026-09-28)
+- Thomas printed something on 2026-09-27 and it worked (Centauri Carbon, stock firmware / SDCP).
+  Details of the path used (app / web / CLI) not recorded yet. COSMOS (Dominique) still untested.
+
 ## Current state of the Unraid install (2026-09-26 evening)
 - `docker build` is GREEN on Unraid (image `printshare:0.1`, Orca 2.4.2 `--help` runs). Needed extra
   libs (libSM/ICE/secret/wayland…) — Dockerfile now fails the build listing all missing libs (ldd check).
@@ -137,8 +141,11 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   materials weight printDuration stls`. Paid (`price`) / `premium` models are filtered out.
 - Printables images: original can be 6+ MB; thumbnails at
   `<dir>/thumbs/{cover|inside}/{WxH}/<orig ext>/<stem>.jpg` (list 320x240 cover, detail 1280x960 inside).
-- Thingiverse search/detail parsing is based on the documented REST shape and tested only with mocks —
-  verify live once a `thingiverse_token` is configured (none in Thomas' config yet).
+- Thingiverse verified live 2026-09-28 on Tower (0.3.0, token set, app type "Web App", app URL = GitHub
+  repo): search, details (33 images, license, stats), file list, download + slice of a thing file.
+  Search hits carry no download count (only the detail call does).
+- Tower now runs the Unraid-template container (0.3.0, printer id `centauri-carbon`); its API token is
+  in /mnt/user/appdata/printshare/config.yaml, the project-folder config.yaml is stale.
 
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),

@@ -19,7 +19,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | MQ-03 | Local files STL/3MF/OBJ/STEP | ✅ `POST /api/uploads` + native app (Files app, share menu) |
 | MQ-04 | Print prepared 3MF / ready G-code | 🟡 3MF slices (own profile); pre-sliced G-code passthrough ⬜ |
 | MQ-09 | Thingiverse | ✅ (needs app token) |
-| MQ-05 | Search in the app | ✅ Printables (`searchPrints2`, live-tested) + Thingiverse (REST `/search`, needs token; parsing tested only against mocks) — app tab *Entdecken*, sort relevance/popular/most made; paid/premium Printables models hidden |
+| MQ-05 | Search in the app | ✅ Printables (`searchPrints2`, live-tested) + Thingiverse (REST `/search`, needs token; live-tested 2026-09-28) — app tab *Entdecken*, sort relevance/popular/most made; paid/premium Printables models hidden |
 | MQ-06 | Model details | ✅ images, author, license, stats, description, author's recommended settings (Printables), printable file count → *Drucken vorbereiten* |
 | MQ-10 | Store license/author with the job | 🟡 shown on the detail page; not yet stored in the job history |
 | DV-01 | Several printers | ✅ config list; online status in the app (status `kind`) |
