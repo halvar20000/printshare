@@ -170,6 +170,21 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   HA option `remote_url`, CLI `printshare pair --remote-url`. Tested in the web build with an
   unreachable home IP (10.255.255.1): connects via away address in ~2 s.
 
+## PrusaLink + OctoPrint adapters (2026-09-28, 0.4.0)
+- `printers/prusalink.py`: PrusaLink v1 (spec: prusa3d/Prusa-Link-Web spec/openapi.yaml). Digest auth user
+  `maker` + password from the printer screen (or X-Api-Key on old firmware). Upload `PUT
+  /api/v1/files/<storage>/<name>` with `Print-After-Upload: ?1`, `Overwrite: ?1`; storage from
+  `/api/v1/storage` (MK4: usb); status `/api/v1/status` + `/api/v1/job`; pause/resume `PUT
+  /api/v1/job/<id>/pause|resume`, stop `DELETE /api/v1/job/<id>`. Orca 2.4.2 Prusa presets write plain
+  G-code (no binary_gcode) and declare `host_type: prusalink`.
+- `printers/octoprint.py`: API key; `POST /api/files/local` multipart select/print; `effectivePrint`
+  false → error; `GET /api/job` + `/api/printer` (409 = printer not connected → state offline).
+- Adapters normalise states (standby/printing/paused/complete/cancelled/error/attention/offline) for
+  `api.printer_kind`. Only tested against fakes (`tests/fakes.py`) – no real Prusa/OctoPrint yet.
+- Safety: prusalink/octoprint require an explicit Orca `printer_profile` (never the CC default); missing
+  process/filament come from the machine preset's `default_print_profile` / `default_filament_profile`
+  (`config._machine_defaults`). Unraid template profile fields now default to empty.
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

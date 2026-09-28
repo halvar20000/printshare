@@ -43,20 +43,30 @@ def _slug(name: str, taken: set[str]) -> str:
 
 
 def simple_printer(p: Mapping[str, Any], taken: set[str]) -> dict[str, Any]:
-    """Form fields (name, type, address, cosmos, profiles, plate) -> config.yaml printer entry."""
+    """Form fields (name, type, address, login, profiles, plate) -> config.yaml printer entry."""
+    from .printers import PRINTER_TYPES
     name = str(p.get("name") or "Printer").strip()
     kind = str(p.get("type") or "elegoo_sdcp").strip()
     address = str(p.get("address") or "").strip().rstrip("/")
-    if kind not in ("elegoo_sdcp", "moonraker"):
-        raise ValueError(f"printer type must be elegoo_sdcp or moonraker, not {kind!r}")
+    if kind not in PRINTER_TYPES:
+        raise ValueError(f"printer type must be one of {', '.join(PRINTER_TYPES)}, not {kind!r}")
     if not address:
         raise ValueError(f"printer {name!r}: address (IP) is missing")
-    slicing: dict[str, Any] = {
-        "machine": p.get("printer_profile") or DEFAULT_MACHINE,
-        "process": p.get("quality_profile") or DEFAULT_PROCESS,
-        "filament": p.get("filament_profile") or DEFAULT_FILAMENT,
-        "bed_type": p.get("build_plate") or PLATES[0],
-    }
+    machine = str(p.get("printer_profile") or "").strip()
+    if kind in ("prusalink", "octoprint") and (not machine or machine == DEFAULT_MACHINE):
+        # never fall back to the Centauri profile for another printer
+        raise ValueError(f"printer {name!r}: printer_profile is required for {kind} - the OrcaSlicer printer "
+                         "name, e.g. 'Prusa MK4S 0.4 nozzle' or 'Creality Ender-3 V2 0.4 nozzle'")
+    machine = machine or DEFAULT_MACHINE
+    slicing: dict[str, Any] = {"machine": machine, "bed_type": p.get("build_plate") or PLATES[0]}
+    for key, field_name, default in (("process", "quality_profile", DEFAULT_PROCESS),
+                                     ("filament", "filament_profile", DEFAULT_FILAMENT)):
+        value = str(p.get(field_name) or "").strip()
+        if value:
+            slicing[key] = value
+        elif machine == DEFAULT_MACHINE:
+            slicing[key] = default
+        # other printers: config.load_settings takes the machine preset's own defaults
     if slicing["bed_type"] not in PLATES:
         raise ValueError(f"build plate must be one of {', '.join(PLATES)}")
     entry: dict[str, Any] = {"id": _slug(name, taken), "name": name, "type": kind}
@@ -64,10 +74,20 @@ def simple_printer(p: Mapping[str, Any], taken: set[str]) -> dict[str, Any]:
         entry["host"] = re.sub(r"^https?://", "", address).split("/")[0]
     else:
         entry["url"] = address if re.match(r"^https?://", address) else f"http://{address}"
-        if str(p.get("cosmos", True)).lower() in TRUE:
-            slicing["machine_preset"] = "cosmos"
-        if p.get("api_key"):
-            entry["api_key"] = p["api_key"]
+    if kind == "moonraker" and str(p.get("cosmos", True)).lower() in TRUE:
+        slicing["machine_preset"] = "cosmos"
+    if p.get("api_key"):
+        entry["api_key"] = p["api_key"]
+    if kind == "prusalink":
+        if p.get("password"):
+            entry["password"] = p["password"]
+        if p.get("username"):
+            entry["username"] = p["username"]
+        if not (entry.get("password") or entry.get("api_key")):
+            raise ValueError(f"printer {name!r}: PrusaLink needs the password shown on the printer "
+                             "(Settings > Network > PrusaLink)")
+    if kind == "octoprint" and not entry.get("api_key"):
+        raise ValueError(f"printer {name!r}: OctoPrint needs an API key (OctoPrint Settings > Application keys)")
     entry["slicing"] = slicing
     return entry
 
@@ -85,6 +105,8 @@ def env_form(env: Mapping[str, str]) -> dict[str, Any] | None:
             "type": env.get("PRINTER_TYPE", "") or "elegoo_sdcp",
             "address": env["PRINTER_ADDRESS"],
             "cosmos": env.get("PRINTER_COSMOS", "true"),
+            "api_key": env.get("PRINTER_API_KEY", ""),
+            "password": env.get("PRINTER_PASSWORD", ""),
             "printer_profile": env.get("PRINTER_PROFILE", ""),
             "quality_profile": env.get("QUALITY_PROFILE", ""),
             "filament_profile": env.get("FILAMENT_PROFILE", ""),

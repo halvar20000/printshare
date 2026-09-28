@@ -49,7 +49,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.3.1")
+app = FastAPI(title="PrintShare", version="0.4.0")
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 _SEARCH: Search | None = None
@@ -104,7 +104,7 @@ def printer_kind(state: str | None) -> str:
     s = (state or "").lower()
     if not s:
         return "unknown"
-    if s in ("paused", "unloading_paused"):
+    if s in ("paused", "unloading_paused", "attention"):  # attention: Prusa waits for the user
         return "paused"
     if s in ("idle", "standby", "ready"):
         return "idle"
@@ -112,7 +112,7 @@ def printer_kind(state: str | None) -> str:
         return "done"
     if s in ("stopped", "cancelled"):
         return "stopped"
-    if s == "error":
+    if s in ("error", "offline"):
         return "error"
     return "active"
 

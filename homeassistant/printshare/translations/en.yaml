@@ -2,9 +2,10 @@ configuration:
   printers:
     name: Printers
     description: >-
-      One entry per printer. type: elegoo_sdcp (Elegoo stock firmware) or moonraker (Klipper,
-      e.g. OpenCentauri COSMOS). address: IP of the printer. cosmos: use PRINT_START/PRINT_END
-      (Klipper only, default on). Profiles are OrcaSlicer preset names (default: Centauri Carbon, PLA).
+      One entry per printer. type: elegoo_sdcp (Elegoo stock firmware), moonraker (Klipper, e.g.
+      OpenCentauri COSMOS), prusalink (Prusa MK4/CORE One/MINI/XL; password from the printer screen)
+      or octoprint (api_key). address: IP of the printer. printer_profile: OrcaSlicer printer name,
+      required for prusalink/octoprint (e.g. Prusa MK4S 0.4 nozzle); default Centauri Carbon.
   server_url:
     name: Server address for the app
     description: >-

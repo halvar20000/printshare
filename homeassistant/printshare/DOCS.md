@@ -4,8 +4,9 @@ Send a Printables or Thingiverse link from your phone – PrintShare downloads t
 OrcaSlicer on your Home Assistant machine and sends it to your printer. Nothing starts without your
 confirmation in the app.
 
-Supported printers: Elegoo Centauri Carbon with stock firmware (`elegoo_sdcp`) and Klipper printers with
-Moonraker (`moonraker`, e.g. OpenCentauri COSMOS).
+Supported printers: Elegoo Centauri Carbon with stock firmware (`elegoo_sdcp`), Klipper printers with
+Moonraker (`moonraker`, e.g. OpenCentauri COSMOS, Voron, Sovol, Qidi), Prusa printers with PrusaLink
+(`prusalink`: MK4/MK4S, MK3.9, CORE One, MINI, XL) and printers driven by OctoPrint (`octoprint`).
 
 ## Setup
 1. Add your printer under **Configuration → Printers**, for example:
@@ -21,7 +22,24 @@ Moonraker (`moonraker`, e.g. OpenCentauri COSMOS).
      address: 192.168.1.60
      cosmos: true
    ```
-   Give the printer a fixed IP address in your router.
+   Prusa (PrusaLink) – the password is shown on the printer under Settings → Network → PrusaLink:
+   ```yaml
+   - name: Prusa MK4S
+     type: prusalink
+     address: 192.168.1.70
+     password: abcd1234
+     printer_profile: Prusa MK4S 0.4 nozzle
+   ```
+   OctoPrint – API key from OctoPrint Settings → Application keys:
+   ```yaml
+   - name: Ender 3
+     type: octoprint
+     address: 192.168.1.80
+     api_key: 0123456789ABCDEF
+     printer_profile: Creality Ender-3 V2 0.4 nozzle
+   ```
+   Give the printer a fixed IP address in your router. `printer_profile` is the printer name as shown in
+   OrcaSlicer; quality and filament default to that printer's own OrcaSlicer defaults.
 2. Start the add-on and open the **Log** tab. It shows the access token and a QR code.
 3. In the PrintShare app: **Settings → Connect server → Scan QR code**. Without the app, open the
    web app via **Open Web UI** and enter the token.

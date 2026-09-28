@@ -37,7 +37,8 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DR-02 | Moonraker upload + start | ✅ (tested against fake) ; WebSocket status ⬜ (polling) |
 | DR-04 | Live status | 🟡 snapshot status endpoint |
 | DR-05 | Pause/resume/cancel | ✅ API + app (cancel asks); untested on real printers |
-| DR-11 | SDCP adapter | ✅ (tested against fake) |
+| DR-11 | SDCP adapter | ✅ (tested against fake + real CC1) |
+| NF-08 | More printers | 🟡 PrusaLink + OctoPrint adapters (tested against fakes from the official APIs, 2026-09-28); quality/filament default from the Orca machine preset; Bambu LAN, Flashforge, Creality stock ⬜ |
 | PR-03 | Resolve `inherits` | ✅ for system presets |
 | BE-01 | Queue, 1 slice at a time | ✅ `max_parallel_slices` (default 1) |
 | BE-07 | Docker image + Unraid template | 🟡 GHCR multi-arch image (GitHub Actions), Unraid template `unraid/printshare.xml`, Home Assistant add-on `homeassistant/printshare`; listing in Community Applications ⬜ (needs a separate templates repo) |

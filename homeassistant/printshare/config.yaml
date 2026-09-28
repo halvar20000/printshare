@@ -1,9 +1,9 @@
 name: PrintShare
-version: "0.3.1"
+version: "0.4.0"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
-  job to Elegoo Centauri Carbon (stock firmware) or Klipper/Moonraker printers.
+  job to Elegoo Centauri Carbon, Klipper/Moonraker, Prusa (PrusaLink) or OctoPrint printers.
 url: https://github.com/halvar20000/printshare
 arch:
   - amd64
@@ -26,10 +26,11 @@ options:
 schema:
   printers:
     - name: str
-      type: list(elegoo_sdcp|moonraker)
+      type: list(elegoo_sdcp|moonraker|prusalink|octoprint)
       address: str
       cosmos: bool?
       api_key: password?
+      password: password?
       printer_profile: str?
       quality_profile: str?
       filament_profile: str?

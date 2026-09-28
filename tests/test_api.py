@@ -216,6 +216,9 @@ def test_info_and_printer_kind(api, client):
     assert st["state"] == "printing" and st["kind"] == "active"
     assert [api.printer_kind(s) for s in ("standby", "paused", "complete", None, "preheating")] == \
         ["idle", "paused", "done", "unknown", "active"]
+    # PrusaLink / OctoPrint adapter states
+    assert [api.printer_kind(s) for s in ("printing", "attention", "cancelled", "offline", "busy")] == \
+        ["active", "paused", "stopped", "error", "active"]
 
 
 def test_upload_then_slice(api, client, monkeypatch, tmp_path):

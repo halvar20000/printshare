@@ -2,13 +2,19 @@
 
 Send a **Printables** or **Thingiverse** link from your phone. PrintShare downloads the model, slices it with **OrcaSlicer** on your own server, uploads the G-code to your printer and starts the print. It's a self-hosted "Bambu Handy" for everyone else.
 
-Supported in P0:
+Supported printers:
 
-| Printer | Firmware | Type in config |
-|---|---|---|
-| Elegoo Centauri Carbon | stock Elegoo (SDCP) | `elegoo_sdcp` |
-| Elegoo Centauri Carbon | OpenCentauri **COSMOS** (Klipper) | `moonraker` + `machine_preset: cosmos` |
-| Any Klipper printer | Moonraker | `moonraker` |
+| Printer | Interface | Type in config | Tested |
+|---|---|---|---|
+| Elegoo Centauri Carbon | stock Elegoo (SDCP) | `elegoo_sdcp` | real printer |
+| Elegoo Centauri Carbon | OpenCentauri **COSMOS** (Klipper) | `moonraker` + `machine_preset: cosmos` | simulated |
+| Any Klipper printer (Voron, Sovol, Qidi, Neptune 4 …) | Moonraker | `moonraker` | simulated |
+| Prusa MK4/MK4S, MK3.9, CORE One, MINI, XL | **PrusaLink** (password from the printer screen) | `prusalink` | simulated |
+| Printers driven by **OctoPrint** (Ender, MK3S …) | OctoPrint API key | `octoprint` | simulated |
+
+For Prusa and OctoPrint printers set `printer_profile` to the printer's name in OrcaSlicer (e.g.
+`Prusa MK4S 0.4 nozzle`); quality and filament then default to that printer's own OrcaSlicer defaults.
+*Simulated* = tested against a fake printer built from the official API – reports from real printers welcome.
 
 ```
 Phone ──link──▶ PrintShare (Docker on Unraid) ──▶ Printables / Thingiverse

@@ -99,11 +99,13 @@ class JobOptions:
 @dataclass
 class PrinterConfig:
     id: str
-    type: str                     # "elegoo_sdcp" | "moonraker"
+    type: str                     # "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint"
     name: str = ""
     host: str | None = None       # elegoo_sdcp
-    url: str | None = None        # moonraker, e.g. http://192.168.1.60 or http://host:7125
-    api_key: str | None = None    # moonraker (optional)
+    url: str | None = None        # moonraker / prusalink / octoprint, e.g. http://192.168.1.60
+    api_key: str | None = None    # moonraker (optional), octoprint (required), prusalink (older firmware)
+    username: str = "maker"       # prusalink (HTTP digest), shown on the printer's screen
+    password: str | None = None   # prusalink
     auto_leveling: bool = True    # elegoo_sdcp
     mainboard_id: str | None = None  # elegoo_sdcp; looked up via UDP discovery if not set
     slicing: SlicingConfig = field(default_factory=SlicingConfig)
@@ -133,13 +135,42 @@ class Settings:
         raise KeyError(f"Unknown printer {printer_id!r}. Known: {[p.id for p in self.printers]}")
 
 
+def _machine_defaults(sl: dict[str, Any], profiles_dir: str, printer_id: str) -> None:
+    """Printers other than the Centauri Carbon: take quality and filament from the machine preset's own
+    defaults (default_print_profile / default_filament_profile) unless they are set explicitly, so a
+    Prusa never gets the Centauri presets by accident."""
+    machine = sl.get("machine")
+    if not machine or machine == SlicingConfig.machine or sl.get("machine_file"):
+        return
+    missing = [k for k in ("process", "filament") if not sl.get(k)]
+    if not missing:
+        return
+    from .profiles import ProfileError, ProfileLibrary
+    try:
+        preset = ProfileLibrary.cached(profiles_dir).resolve("machine", machine)
+    except ProfileError as e:
+        raise ValueError(f"Printer {printer_id}: {e}") from e
+    for key, field_name in (("process", "default_print_profile"), ("filament", "default_filament_profile")):
+        if key in missing:
+            value = preset.get(field_name)
+            if isinstance(value, list):
+                value = value[0] if value else None
+            if isinstance(value, str):
+                value = value.split(";")[0].strip()
+            if not value:
+                raise ValueError(f"Printer {printer_id}: set slicing.{key} - OrcaSlicer's {machine!r} has no default")
+            sl[key] = value
+
+
 def load_settings(path: str | Path | None = None) -> Settings:
     path = Path(path or os.environ.get("PRINTSHARE_CONFIG", "/config/config.yaml"))
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     printers = []
+    profiles_dir = raw.get("orca_profiles_dir", Settings.orca_profiles_dir)
     for p in raw.pop("printers", []) or []:
-        slicing = SlicingConfig(**(p.pop("slicing", {}) or {}))
-        printers.append(PrinterConfig(slicing=slicing, **p))
+        sl = dict(p.pop("slicing", {}) or {})
+        _machine_defaults(sl, profiles_dir, p.get("id", "?"))
+        printers.append(PrinterConfig(slicing=SlicingConfig(**sl), **p))
     s = Settings(printers=printers, **raw)
     # empty variables (e.g. unused fields of the Unraid template) must not clear the token
     s.api_token = os.environ.get("PRINTSHARE_API_TOKEN") or s.api_token

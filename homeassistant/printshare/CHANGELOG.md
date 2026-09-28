@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+- New printers: Prusa via PrusaLink (MK4/MK4S, MK3.9, CORE One, MINI, XL) and any printer driven by OctoPrint.
+  Set `printer_profile` to the OrcaSlicer printer name; quality and filament use that printer's defaults.
+
 ## 0.3.1
 - Elegoo Centauri Carbon (stock firmware): prints now really start. The printer acknowledged a start sent
   right after the upload but ignored it; PrintShare now waits for the file, checks that the print runs and retries.

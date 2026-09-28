@@ -33,3 +33,22 @@ printers:
       process: 0.20mm Standard @Elegoo CC 0.4 nozzle
       filament: Elegoo PLA @ECC
       bed_type: Textured PEI Plate
+
+  # Prusa with PrusaLink (MK4/MK4S, MK3.9, CORE One, MINI, XL). Password: printer screen >
+  # Settings > Network > PrusaLink (user "maker"). Quality/filament default to the preset's defaults.
+  # - id: mk4s
+  #   name: Prusa MK4S
+  #   type: prusalink
+  #   url: http://192.168.1.70
+  #   password: abcd1234
+  #   slicing:
+  #     machine: Prusa MK4S 0.4 nozzle
+
+  # Any printer driven by OctoPrint. API key: OctoPrint Settings > Application keys.
+  # - id: ender
+  #   name: Ender 3 V2
+  #   type: octoprint
+  #   url: http://octopi.local
+  #   api_key: 0123456789ABCDEF
+  #   slicing:
+  #     machine: Creality Ender-3 V2 0.4 nozzle

@@ -15,6 +15,7 @@ class PrinterAdapter(Protocol):
 
 
 CONTROL_ACTIONS = ("pause", "resume", "cancel")
+PRINTER_TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint")
 
 
 def get_adapter(cfg: PrinterConfig) -> PrinterAdapter:
@@ -24,4 +25,10 @@ def get_adapter(cfg: PrinterConfig) -> PrinterAdapter:
     if cfg.type == "moonraker":
         from .moonraker import Moonraker
         return Moonraker(cfg)
-    raise ValueError(f"Unknown printer type {cfg.type!r} (use elegoo_sdcp or moonraker)")
+    if cfg.type == "prusalink":
+        from .prusalink import PrusaLink
+        return PrusaLink(cfg)
+    if cfg.type == "octoprint":
+        from .octoprint import OctoPrint
+        return OctoPrint(cfg)
+    raise ValueError(f"Unknown printer type {cfg.type!r} (use {', '.join(PRINTER_TYPES)})")

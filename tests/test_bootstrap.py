@@ -122,6 +122,8 @@ def test_packaging_versions_match():
     assert addon["image"] == "ghcr.io/halvar20000/printshare"
     assert set(addon["arch"]) == {"amd64", "aarch64"}
     assert set(addon["options"]) <= set(addon["schema"])
+    from printshare.printers import PRINTER_TYPES
+    assert addon["schema"]["printers"][0]["type"] == f"list({'|'.join(PRINTER_TYPES)})"
     assert yaml.safe_load((ROOT / "repository.yaml").read_text())["name"]
 
 
@@ -131,7 +133,11 @@ def test_unraid_template():
     targets = {c.get("Target") for c in root.findall("Config")}
     assert {"8484", "/config", "/data", "PRINTER_ADDRESS", "PRINTER_TYPE", "PRINTSHARE_URL", "PRINTSHARE_REMOTE_URL"} <= targets
     types = next(c for c in root.findall("Config") if c.get("Target") == "PRINTER_TYPE").get("Default")
-    assert set(types.split("|")) == {"elegoo_sdcp", "moonraker"}
+    from printshare.printers import PRINTER_TYPES
+    assert set(types.split("|")) == set(PRINTER_TYPES)
+    # no Centauri preset pre-filled: other printer types must never inherit it silently
+    profile = next(c for c in root.findall("Config") if c.get("Target") == "PRINTER_PROFILE")
+    assert profile.get("Default") == "" and not (profile.text or "").strip()
 
 
 def test_no_stray_addon_configs():

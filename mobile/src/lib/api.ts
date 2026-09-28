@@ -13,7 +13,7 @@ export type Printer = { id: string; name: string; type: string; machine: string 
 export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "error" | "unknown";
 export type PrinterStatus = {
   state: string | null; kind: PrinterKind; file?: string | null; progress?: number;
-  layer?: number | null; layers?: number | null; print_duration_s?: number | null;
+  layer?: number | null; layers?: number | null; print_duration_s?: number | null; time_remaining_s?: number | null;
   nozzle?: number | null; nozzle_target?: number | null; bed?: number | null; bed_target?: number | null;
   camera?: string | null;
 };

@@ -71,7 +71,9 @@ export default function Printers() {
         if (kind === "active" && raw && raw !== "printing") label += ` · ${t.table.rawStates[raw] ?? raw}`;
         const badge = kind === "offline" || kind === "error" ? "error" : kind === "paused" ? "warn" : busy ? "accent" : "ok";
         const pct = s?.progress ?? 0;
-        const left = busy && s?.print_duration_s && pct > 1 ? (s.print_duration_s * (100 - pct)) / pct : null;
+        // printers that report it (PrusaLink, OctoPrint) know better than the estimate from progress
+        const left = !busy ? null : s?.time_remaining_s != null ? s.time_remaining_s
+          : s?.print_duration_s && pct > 1 ? (s.print_duration_s * (100 - pct)) / pct : null;
         return (
           <Card key={p.id} style={{ padding: space, marginBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
