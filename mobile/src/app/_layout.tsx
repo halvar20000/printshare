@@ -54,6 +54,7 @@ function Root() {
         <Stack.Screen name="prepare" options={{ title: t("prepareTitle") }} />
         <Stack.Screen name="job/[id]" options={{ title: "" }} />
         <Stack.Screen name="model/[source]/[id]" options={{ title: "" }} />
+        <Stack.Screen name="preview/[id]" options={{ title: t("previewTitle") }} />
         <Stack.Screen name="connect" options={{ title: t("connectTitle"), presentation: "modal" }} />
         <Stack.Screen name="scan" options={{ title: t("scanTitle"), presentation: "fullScreenModal", headerShown: false }} />
       </Stack>

@@ -38,6 +38,9 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DR-04 | Live status | 🟡 snapshot status endpoint |
 | DR-05 | Pause/resume/cancel | ✅ API + app (cancel asks); untested on real printers |
 | DR-11 | SDCP adapter | ✅ (tested against fake + real CC1) |
+| DO-01 | Bed leveling on/off per print | 🟡 Centauri Carbon stock (SDCP `Calibration_switch`), remembered per printer in the app; COSMOS/Klipper, Prusa, OctoPrint do it in their start G-code ⬜ |
+| SL-06/07 | G-code layer viewer | ✅ server turns G-code into compact layer data (`/api/jobs/<id>/preview`, cached, gzip); app: top view per layer, line-type colours + legend toggles, previous layer faint, slider, model/plate view. 3D view ⬜ |
+| SL-10 | Export G-code | 🟡 `/api/jobs/<id>/gcode`; share button in the app ⬜ |
 | NF-08 | More printers | 🟡 PrusaLink + OctoPrint adapters (tested against fakes from the official APIs, 2026-09-28); quality/filament default from the Orca machine preset; Bambu LAN, Flashforge, Creality stock ⬜ |
 | PR-03 | Resolve `inherits` | ✅ for system presets |
 | BE-01 | Queue, 1 slice at a time | ✅ `max_parallel_slices` (default 1) |

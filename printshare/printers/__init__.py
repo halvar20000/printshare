@@ -9,13 +9,17 @@ from ..config import PrinterConfig
 
 
 class PrinterAdapter(Protocol):
-    async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]: ...
+    # leveling: bed leveling before this print (None = printer default); see LEVELING_TYPES
+    async def send(self, gcode: Path, start: bool = True, leveling: bool | None = None) -> dict[str, Any]: ...
     async def status(self) -> dict[str, Any]: ...
     async def control(self, action: str) -> None: ...  # "pause" | "resume" | "cancel"
 
 
 CONTROL_ACTIONS = ("pause", "resume", "cancel")
 PRINTER_TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint")
+# printer types that can switch bed leveling per print (DO-01). Klipper/Prusa/OctoPrint do it in their
+# start G-code; COSMOS' PRINT_START parameter for it is still an open question.
+LEVELING_TYPES = ("elegoo_sdcp",)
 
 
 def get_adapter(cfg: PrinterConfig) -> PrinterAdapter:

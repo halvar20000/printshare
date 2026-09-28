@@ -46,7 +46,8 @@ class Moonraker:
                 errors.append(f"{base}: {e.__class__.__name__}")
         raise MoonrakerError("Moonraker not reachable: " + "; ".join(errors))
 
-    async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]:
+    async def send(self, gcode: Path, start: bool = True, leveling: bool | None = None) -> dict[str, Any]:
+        # leveling is part of this printer's start G-code; it can't be switched per print here
         async with httpx.AsyncClient(timeout=300) as client:
             base = await self._resolve_base(client)
             with gcode.open("rb") as fh:

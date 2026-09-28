@@ -22,6 +22,7 @@ One-shot (CLI / iOS Shortcut):
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import secrets
 import shutil
@@ -31,14 +32,16 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_settings
+from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, prepare_job, run_job, send_job
-from .printers import CONTROL_ACTIONS, get_adapter
+from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
 from .profiles import ProfileError, ProfileLibrary
 from .search import Search
 
@@ -49,7 +52,8 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.4.0")
+app = FastAPI(title="PrintShare", version="0.5.0")
+app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
 _SEARCH: Search | None = None
@@ -119,7 +123,9 @@ def printer_kind(state: str | None) -> str:
 
 @app.get("/api/printers", dependencies=[Depends(auth)])
 def printers() -> list[dict[str, Any]]:
-    return [{"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine}
+    return [{"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine,
+             # DO-01: the app shows the leveling switch only where it works per print
+             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None}
             for p in settings.printers]
 
 
@@ -359,6 +365,7 @@ def job(job_id: str) -> dict[str, Any]:
 class SendRequest(BaseModel):
     start: bool = True
     confirm: bool = False
+    leveling: bool | None = None  # bed leveling before the print; None = printer default
 
 
 @app.post("/api/jobs/{job_id}/send", dependencies=[Depends(auth)])
@@ -383,7 +390,9 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
 
     async def worker() -> None:
         try:
-            await send_job(settings, result, req.start, progress=lambda m: job["log"].append(m))
+            await send_job(settings, result, req.start, progress=lambda m: job["log"].append(m),
+                           leveling=req.leveling)
+            job["leveling"] = req.leveling
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
         except Exception as e:  # noqa: BLE001
             # the sliced G-code is still valid: allow another attempt
@@ -391,6 +400,42 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
 
     _spawn(worker())
     return {"job": job_id}
+
+
+def _job_gcode(job_id: str) -> tuple[dict[str, Any], Path]:
+    job = JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(404, "unknown job")
+    gcode = Path((job.get("result") or {}).get("gcode") or "")
+    if not gcode.name or not gcode.is_file():
+        raise HTTPException(404, "no G-code for this job (yet)")
+    return job, gcode
+
+
+def _bed(printer_id: str) -> tuple[float, float] | None:
+    try:
+        s = settings.printer(printer_id).slicing
+        area = (json.loads(Path(s.machine_file).read_text()) if s.machine_file
+                else _library().resolve("machine", s.machine)).get("printable_area")
+        return gcode_preview.bed_size(area)
+    except Exception:  # noqa: BLE001 - the preview works without the bed outline
+        return None
+
+
+@app.get("/api/jobs/{job_id}/preview", dependencies=[Depends(auth)])
+async def preview(job_id: str) -> dict[str, Any]:
+    """Layer data for the G-code viewer (SL-06/07)."""
+    job, gcode = _job_gcode(job_id)
+    bed = await asyncio.to_thread(_bed, job["result"]["printer"])
+    return await asyncio.to_thread(gcode_preview.build, gcode, bed)
+
+
+@app.get("/api/jobs/{job_id}/gcode", dependencies=[Depends(auth)])
+def download_gcode(job_id: str) -> FileResponse:
+    """The sliced G-code itself (SL-10)."""
+    job, gcode = _job_gcode(job_id)
+    name = Path((job.get("result") or {}).get("source_file") or gcode.stem).stem + ".gcode"
+    return FileResponse(gcode, media_type="text/x.gcode", filename=name)
 
 
 @app.delete("/api/jobs/{job_id}", dependencies=[Depends(auth)])

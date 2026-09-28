@@ -57,22 +57,22 @@ class ElegooSDCP:
         return await Printer.connect(self.cfg.host, enable_control=enable_control,
                                      mainboard_id=self._mainboard_id)
 
-    async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]:
+    async def send(self, gcode: Path, start: bool = True, leveling: bool | None = None) -> dict[str, Any]:
         async with await self._connect(enable_control=True) as p:
             remote = await p.upload_file(gcode)
             result: dict[str, Any] = {"uploaded": remote, "started": False}
             if start:
-                await self._start(p, remote)
+                await self._start(p, remote, self.cfg.auto_leveling if leveling is None else leveling)
                 result["started"] = True
             return result
 
-    async def _start(self, p: Printer, remote: str) -> None:
+    async def _start(self, p: Printer, remote: str, leveling: bool) -> None:
         # Live CC1 V0.3.0-o: a start sent right after the upload is answered with Ack 0 but
         # silently dropped while the printer still processes the new file. So wait for the file
         # to be listed, then check that the printer really leaves idle, and retry once.
         await _wait_for_file(p, remote)
         for attempt in (1, 2):
-            resp = await p.start_print(remote, auto_leveling=self.cfg.auto_leveling)
+            resp = await p.start_print(remote, auto_leveling=leveling)
             ack = ((resp.inner or {}).get("Data") or {}).get("Ack")
             if ack not in (0, None):
                 raise PrinterStartError(f"The printer refused to start {remote}: "

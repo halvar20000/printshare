@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+- G-code preview in the app: every layer from above, coloured by line type, with a layer slider.
+- Bed leveling on/off per print (Elegoo Centauri Carbon stock firmware).
+- Download the sliced G-code (`/api/jobs/<id>/gcode`).
+
 ## 0.4.0
 - New printers: Prusa via PrusaLink (MK4/MK4S, MK3.9, CORE One, MINI, XL) and any printer driven by OctoPrint.
   Set `printer_profile` to the OrcaSlicer printer name; quality and filament use that printer's defaults.

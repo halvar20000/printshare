@@ -9,7 +9,13 @@ import type { T } from "./i18n";
 export type Server = { url: string; token: string; remoteUrl?: string };
 export type Route = "home" | "remote";
 
-export type Printer = { id: string; name: string; type: string; machine: string };
+/** leveling: null = this printer can't switch bed leveling per print; else its default. */
+export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null };
+/** Layer data for the G-code viewer; paths are [typeIndex, x0, y0, x1, y1, ...] in 1/unit mm. */
+export type Preview = {
+  version: number; unit: number; types: string[]; bounds: [number, number, number, number] | null;
+  bed: [number, number] | null; layers: { z: number; paths: number[][] }[];
+};
 export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "error" | "unknown";
 export type PrinterStatus = {
   state: string | null; kind: PrinterKind; file?: string | null; progress?: number;
@@ -211,8 +217,9 @@ export class Api {
     this.request<{ job: string }>("/api/jobs", { method: "POST", body: { link, printer, file, options }, timeout: 30000 });
   jobs = () => this.request<JobSummary[]>("/api/jobs");
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
-  send = (id: string, start: boolean) =>
-    this.request<{ job: string }>(`/api/jobs/${id}/send`, { method: "POST", body: { start, confirm: start } });
+  send = (id: string, start: boolean, leveling?: boolean) =>
+    this.request<{ job: string }>(`/api/jobs/${id}/send`, { method: "POST", body: { start, confirm: start, leveling } });
+  preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
   sources = () => this.request<Source[]>("/api/sources");
   search = (q: string, source: string, page: number, sort: SortKey) =>

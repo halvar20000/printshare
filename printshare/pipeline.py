@@ -98,10 +98,10 @@ async def prepare_job(settings: Settings, link: str, printer_id: str | None = No
 
 
 async def send_job(settings: Settings, result: JobResult, start: bool,
-                   progress: Callable[[str], None] | None = None) -> dict[str, Any]:
+                   progress: Callable[[str], None] | None = None, leveling: bool | None = None) -> dict[str, Any]:
     say = progress or (lambda msg: log.info(msg))
     say("Sending to printer" + (" and starting" if start else ""))
-    sent = await get_adapter(settings.printer(result.printer)).send(Path(result.gcode), start=start)
+    sent = await get_adapter(settings.printer(result.printer)).send(Path(result.gcode), start=start, leveling=leveling)
     result.sent = sent
     say("Done")
     return sent
@@ -110,8 +110,8 @@ async def send_job(settings: Settings, result: JobResult, start: bool,
 async def run_job(settings: Settings, link: str, printer_id: str | None = None,
                   file_choice: str | int | None = None, send: bool = True, start: bool = True,
                   progress: Callable[[str], None] | None = None,
-                  options: JobOptions | None = None) -> JobResult:
+                  options: JobOptions | None = None, leveling: bool | None = None) -> JobResult:
     result = await prepare_job(settings, link, printer_id, file_choice, options, progress=progress)
     if send:
-        await send_job(settings, result, start, progress)
+        await send_job(settings, result, start, progress, leveling=leveling)
     return result

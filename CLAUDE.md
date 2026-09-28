@@ -185,6 +185,16 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   process/filament come from the machine preset's `default_print_profile` / `default_filament_profile`
   (`config._machine_defaults`). Unraid template profile fields now default to empty.
 
+## Leveling switch + G-code preview (2026-09-28, 0.5.0)
+- Leveling: `adapter.send(..., leveling=None|bool)`; only `LEVELING_TYPES = ("elegoo_sdcp",)` honour it
+  (pycentauri `start_print(auto_leveling=…)` → SDCP `Calibration_switch`). `/api/printers` returns
+  `leveling` (default, or null = no switch in the app); `/send` takes `leveling`; CLI `--no-leveling`.
+- Preview: `printshare/gcode_preview.py` parses G0-G3 (arcs linearised), G90/91, M82/83, G92, Orca
+  `;LAYER_CHANGE`/`;Z:`/`;TYPE:`; output ints in 1/20 mm, collinear points merged (no distance filter –
+  it ate corners), prime line attached to layer 1, bounds without `Custom` (start code). Cached as
+  `<gcode>.preview.json`; GZip middleware. Synthetic 300-layer 4.5 MB G-code → 0.95 MB JSON in 0.4 s.
+  Not yet checked against a real Orca G-code from the CC — do that on Tower after the update.
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

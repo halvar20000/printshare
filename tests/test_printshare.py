@@ -180,3 +180,22 @@ def test_pipeline_stock_elegoo(tmp_path):
     assert ";printer_model:Elegoo Centauri Carbon" in gcode
     assert "M190 S60" in gcode
     assert any(c["Cmd"] == 128 for c in fake.commands)
+
+
+@pytest.mark.parametrize("leveling,expected", [(None, 1), (True, 1), (False, 0)])
+def test_elegoo_leveling_per_print(tmp_path, leveling, expected):
+    async def go():
+        fake = FakeCentauri()
+        await fake.start()
+        try:
+            g = tmp_path / "part.gcode"
+            g.write_text("G1 X1\n")
+            ad = get_adapter(PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1",
+                                           mainboard_id="FAKECC0001"))
+            await ad.send(g, start=True, leveling=leveling)
+            return fake
+        finally:
+            await fake.stop()
+    fake = asyncio.run(go())
+    start = [c for c in fake.commands if c["Cmd"] == 128][0]
+    assert start["Data"]["Calibration_switch"] == expected

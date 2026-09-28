@@ -58,7 +58,8 @@ class OctoPrint:
         if r.status_code >= 400:
             raise OctoPrintError(f"{what} failed: HTTP {r.status_code} {r.text[:200]}")
 
-    async def send(self, gcode: Path, start: bool = True) -> dict[str, Any]:
+    async def send(self, gcode: Path, start: bool = True, leveling: bool | None = None) -> dict[str, Any]:
+        # leveling is part of this printer's start G-code; it can't be switched per print here
         async with self._client(timeout=600) as client:
             with gcode.open("rb") as fh:
                 r = await client.post(

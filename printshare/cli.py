@@ -26,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--file", "-f", help="file index (1-based) or part of the file name")
     p.add_argument("--no-start", action="store_true", help="upload only, do not start")
     p.add_argument("--slice-only", action="store_true", help="do not send to the printer")
+    p.add_argument("--no-leveling", action="store_true", help="skip bed leveling (Centauri Carbon stock firmware)")
 
     f = sub.add_parser("files", help="list the files of a model")
     f.add_argument("link")
@@ -66,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd == "print":
             res = asyncio.run(run_job(settings, a.link, a.printer, a.file,
                                       send=not a.slice_only, start=not a.no_start,
-                                      progress=lambda m: print(f"• {m}", flush=True)))
+                                      progress=lambda m: print(f"• {m}", flush=True),
+                                      leveling=False if a.no_leveling else None))
             print(json.dumps(res.as_dict(), indent=2))
         elif a.cmd == "files":
             files = Fetcher(settings.thingiverse_token).list_files(a.link)

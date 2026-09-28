@@ -9,6 +9,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } fro
 import { Banner, Button, Card, Divider, Empty, Row, Screen, Section, Stat, tap } from "@/components/ui";
 import { friendlyError, type Job, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
+import { getItem, setItem } from "@/lib/storage";
 import { jobName, plateName, printTime, shortName } from "@/lib/format";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -45,6 +46,8 @@ export default function JobScreen() {
   const [plateOk, setPlateOk] = useState(false);
   const [sending, setSending] = useState<"print" | "upload" | null>(null);
   const [printerNames, setPrinterNames] = useState<Record<string, string>>({});
+  const [levelingDefault, setLevelingDefault] = useState<Record<string, boolean | null>>({});
+  const [leveling, setLeveling] = useState<boolean | null>(null);
   const [pstatus, setPstatus] = useState<PrinterStatus | "offline" | null>(null);
   const [showLog, setShowLog] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -85,11 +88,27 @@ export default function JobScreen() {
   }, [working, startedAt]);
 
   useEffect(() => {
-    api?.printers().then(ps => setPrinterNames(Object.fromEntries(ps.map(p => [p.id, p.name])))).catch(() => {});
+    api?.printers().then(ps => {
+      setPrinterNames(Object.fromEntries(ps.map(p => [p.id, p.name])));
+      setLevelingDefault(Object.fromEntries(ps.map(p => [p.id, p.leveling ?? null])));
+    }).catch(() => {});
   }, [api]);
 
   // DR-03: is the printer free?
   const printerId = job?.result?.printer ?? job?.printer;
+
+  // DO-01: bed leveling per print, only for printers that can switch it; last choice per printer
+  const canLevel = printerId != null && levelingDefault[printerId] != null;
+  useEffect(() => {
+    if (!printerId || !canLevel) return;
+    getItem(`ps_level_${printerId}`).then(v => setLeveling(v === "1" ? true : v === "0" ? false : null));
+  }, [printerId, canLevel]);
+  const levelingOn = canLevel ? (leveling ?? levelingDefault[printerId!] ?? true) : null;
+  const changeLeveling = (v: boolean) => {
+    tap();
+    setLeveling(v);
+    if (printerId) setItem(`ps_level_${printerId}`, v ? "1" : "0");
+  };
   const refreshPrinter = useCallback(() => {
     if (!api || !printerId) return;
     api.status(printerId).then(setPstatus).catch(() => setPstatus("offline"));
@@ -108,7 +127,7 @@ export default function JobScreen() {
     setActionError("");
     setSending(start ? "print" : "upload");
     try {
-      await api.send(job.id, start);
+      await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined);
       let j: Job | null = null;
       for (let i = 0; i < 600; i++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -253,6 +272,9 @@ export default function JobScreen() {
         <Stat label={t("layers")} value={r?.layers != null ? String(r.layers) : "–"} />
       </View>
 
+      <Button kind="secondary" title={t("showPreview")} icon="layers-outline" style={{ marginBottom: 22 }}
+        onPress={() => router.push({ pathname: "/preview/[id]", params: { id: job.id } })} />
+
       <Section title={t("details")}>
         <Row label={t("printer")} value={pname} />
         <Divider />
@@ -276,6 +298,16 @@ export default function JobScreen() {
             <Switch value={plateOk} onValueChange={v => { tap(); setPlateOk(v); }} trackColor={{ true: c.accent, false: c.track }}
               accessibilityLabel={t("confirmPlate", { material: shortName(p.filament) })} />
           </Card>
+          {levelingOn != null ? (
+            <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", marginTop: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontSize: 16, lineHeight: 22 }}>{t("leveling")}</Text>
+                <Text style={{ color: c.sub, fontSize: 13, marginTop: 2 }}>{t("levelingSub")}</Text>
+              </View>
+              <Switch value={levelingOn} onValueChange={changeLeveling} trackColor={{ true: c.accent, false: c.track }}
+                accessibilityLabel={t("leveling")} />
+            </Card>
+          ) : null}
           <Button kind="plain" title={t("editSettings")} icon="options-outline" onPress={editSettings} style={{ marginTop: 12 }} />
         </>
       ) : null}
