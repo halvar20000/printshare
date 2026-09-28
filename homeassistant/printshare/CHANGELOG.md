@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+- Elegoo Centauri Carbon (stock firmware): prints now really start. The printer acknowledged a start sent
+  right after the upload but ignored it; PrintShare now waits for the file, checks that the print runs and retries.
+
 ## 0.3.0
 - Model search for the app: Printables (and Thingiverse with an app token), model details with images,
   license and the author's recommended settings.

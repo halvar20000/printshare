@@ -75,6 +75,8 @@ export function friendlyError(t: T, status: number, detail: string): string {
   const d = detail.toLowerCase();
   const rules: [boolean, Parameters<T>[0]][] = [
     [status === 401, "errToken"],
+    [d.includes("did not start"), "errNotStarted"],
+    [d.includes("refused to start"), "errRefused"],
     [d.includes("busy"), "errBusy"],
     [d.includes("printer not reachable") || d.includes("moonraker not reachable") ||
       d.includes("sending failed"), "errPrinterOffline"],

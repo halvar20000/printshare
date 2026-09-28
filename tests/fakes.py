@@ -12,40 +12,58 @@ MAINBOARD = "FAKECC0001"
 class FakeCentauri:
     """WebSocket on :3030/websocket + chunked upload on :80/uploadFile/upload."""
 
-    def __init__(self) -> None:
+    def __init__(self, drop_starts: int = 0, rest_status: int = 0) -> None:
         self.chunks: dict[str, bytearray] = {}
         self.md5: dict[str, str] = {}
         self.files: dict[str, bytes] = {}
         self.commands: list[dict] = []
         self.runners: list[web.AppRunner] = []
+        # like the real CC1 right after an upload: acknowledge a start (Ack 0) but stay idle
+        self.drop_starts = drop_starts
+        self.rest_status = rest_status  # 0 idle, 8 stopped, 9 completed (after the previous print)
+        self.printing: str | None = None
+
+    def _status(self) -> str:
+        if self.printing:
+            st = {"CurrentStatus": [1], "PrintInfo": {"Status": 13, "Filename": self.printing,
+                  "Progress": 42, "CurrentLayer": 5, "TotalLayer": 100}}
+        else:
+            st = {"CurrentStatus": [0], "TempOfNozzle": 25.0, "TempTargetNozzle": 0, "TempOfHotbed": 24.0,
+                  "TempTargetHotbed": 0, "PrintInfo": {"Status": self.rest_status, "Filename": ""}}
+        return json.dumps({"Status": st, "MainboardID": MAINBOARD, "Topic": f"sdcp/status/{MAINBOARD}"})
 
     async def ws(self, request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         await ws.send_str(json.dumps({"Attributes": {"MainboardID": MAINBOARD, "Name": "Fake CC"},
                                       "MainboardID": MAINBOARD, "Topic": f"sdcp/attributes/{MAINBOARD}"}))
-        await ws.send_str(json.dumps({"Status": {"CurrentStatus": [0], "TempOfNozzle": 25.0,
-                                                 "TempTargetNozzle": 0, "TempOfHotbed": 24.0,
-                                                 "TempTargetHotbed": 0,
-                                                 "PrintInfo": {"Status": 0, "Filename": ""}},
-                                      "MainboardID": MAINBOARD, "Topic": f"sdcp/status/{MAINBOARD}"}))
+        await ws.send_str(self._status())
         async for msg in ws:
             if msg.type != WSMsgType.TEXT:
                 continue
             req = json.loads(msg.data)
             inner = req["Data"]
             self.commands.append(inner)
-            ack = 0
-            if inner["Cmd"] == 128 and inner["Data"]["Filename"] not in self.files:
-                ack = 1
+            data: dict = {"Ack": 0}
+            started = False
+            if inner["Cmd"] == 128:
+                if inner["Data"]["Filename"] not in self.files:
+                    data["Ack"] = 2
+                elif self.drop_starts:
+                    self.drop_starts -= 1
+                else:
+                    started = True
+            elif inner["Cmd"] == 258:
+                data["FileList"] = [{"name": f"/local/{n}", "FileSize": len(b), "TotalLayers": 100,
+                                     "CreateTime": 0} for n, b in self.files.items()]
             await ws.send_str(json.dumps({
                 "Id": req["Id"], "Topic": f"sdcp/response/{MAINBOARD}",
-                "Data": {"Cmd": inner["Cmd"], "Data": {"Ack": ack}, "RequestID": inner["RequestID"],
+                "Data": {"Cmd": inner["Cmd"], "Data": data, "RequestID": inner["RequestID"],
                          "MainboardID": MAINBOARD, "TimeStamp": 0}}))
-            if inner["Cmd"] == 0:
-                await ws.send_str(json.dumps({"Status": {"CurrentStatus": [1], "PrintInfo": {
-                    "Status": 13, "Filename": "x.gcode", "Progress": 42, "CurrentLayer": 5, "TotalLayer": 100}},
-                    "MainboardID": MAINBOARD, "Topic": f"sdcp/status/{MAINBOARD}"}))
+            if started:
+                self.printing = inner["Data"]["Filename"]
+            if started or inner["Cmd"] in (0, 512):
+                await ws.send_str(self._status())
         return ws
 
     async def upload(self, request: web.Request) -> web.Response:

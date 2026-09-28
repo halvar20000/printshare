@@ -67,6 +67,10 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 9. Running slicing on the event loop froze the web server → fixed with `asyncio.to_thread`.
 10. Relevant Orca preset names: machine `Elegoo Centauri Carbon 0.4 nozzle`,
     process `0.20mm Standard @Elegoo CC 0.4 nozzle`, filament `Elegoo PLA @ECC`.
+11. CC1 FW V0.3.0-o acknowledges an SDCP start (Cmd 128, Ack 0) sent right after the upload but
+    silently drops it. `elegoo.py` waits until the file is listed (Cmd 258), then checks that the
+    printer leaves its resting state and retries once. Resting = IDLE 0, STOPPED 8, COMPLETED 9 — after a
+    print the CC stays in COMPLETED, so "not idle" is no proof of a new start (bug seen live 2026-09-28).
 
 ## Verified so far (sandbox, 2026-09-26)
 - 6/6 tests green (`ORCA_ROOT=/path/to/squashfs-root pytest -q`).

@@ -79,6 +79,51 @@ def test_elegoo_adapter(tmp_path):
     start = [c for c in fake.commands if c["Cmd"] == 128][0]
     assert start["Data"]["Filename"] == "big.gcode"
     assert "nozzle" in st
+    assert st["state"] == "printing" and st["file"] == "big.gcode"
+
+
+def _send_with_dropped_starts(tmp_path, dropped, rest_status=0):
+    async def go():
+        fake = FakeCentauri(drop_starts=dropped, rest_status=rest_status)
+        await fake.start()
+        try:
+            g = tmp_path / "part.gcode"
+            g.write_text("G1 X1\n")
+            ad = get_adapter(PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1",
+                                           mainboard_id="FAKECC0001"))
+            try:
+                return fake, await ad.send(g, start=True)
+            except Exception as e:  # noqa: BLE001
+                return fake, e
+        finally:
+            await fake.stop()
+    return asyncio.run(go())
+
+
+def test_elegoo_start_retried_when_silently_dropped(tmp_path, monkeypatch):
+    # live CC1: a start right after the upload is acknowledged but ignored
+    monkeypatch.setattr("printshare.printers.elegoo.START_TIMEOUT_S", 3)
+    fake, res = _send_with_dropped_starts(tmp_path, dropped=1)
+    assert res == {"uploaded": "part.gcode", "started": True}
+    assert [c["Cmd"] for c in fake.commands].count(128) == 2
+    assert fake.printing == "part.gcode"
+
+
+@pytest.mark.parametrize("rest_status", [8, 9])
+def test_elegoo_dropped_start_detected_after_previous_print(tmp_path, monkeypatch, rest_status):
+    # live 2026-09-28: printer still "completed" from the last print -> that is not a new start
+    monkeypatch.setattr("printshare.printers.elegoo.START_TIMEOUT_S", 3)
+    fake, res = _send_with_dropped_starts(tmp_path, dropped=1, rest_status=rest_status)
+    assert res == {"uploaded": "part.gcode", "started": True}
+    assert [c["Cmd"] for c in fake.commands].count(128) == 2 and fake.printing == "part.gcode"
+
+
+def test_elegoo_start_that_never_happens_is_an_error(tmp_path, monkeypatch):
+    from printshare.printers.elegoo import PrinterStartError
+    monkeypatch.setattr("printshare.printers.elegoo.START_TIMEOUT_S", 3)
+    fake, res = _send_with_dropped_starts(tmp_path, dropped=5)
+    assert isinstance(res, PrinterStartError) and "did not start part.gcode" in str(res)
+    assert fake.files["part.gcode"] and fake.printing is None
 
 
 # ---------- slicing + full pipeline ----------
