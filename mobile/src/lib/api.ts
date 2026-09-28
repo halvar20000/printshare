@@ -5,7 +5,9 @@ import { Platform } from "react-native";
 
 import type { T } from "./i18n";
 
-export type Server = { url: string; token: string };
+/** `remoteUrl`: optional second address for use away from home (e.g. Tailscale). */
+export type Server = { url: string; token: string; remoteUrl?: string };
+export type Route = "home" | "remote";
 
 export type Printer = { id: string; name: string; type: string; machine: string };
 export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "error" | "unknown";
@@ -97,24 +99,93 @@ export function friendlyError(t: T, status: number, detail: string): string {
   return detail || t("errUnknown");
 }
 
+// Address that answered last, per server. Kept outside Api so it survives re-creating the client.
+const activeAddress = new Map<string, string>();
+const PROBE_MS = 4000;
+
+/** Forget which address worked, e.g. when the app returns to the foreground (maybe left home). */
+export function resetRoutes(): void {
+  activeAddress.clear();
+}
+
 export class Api {
   constructor(private server: Server, private t: T) {}
 
-  private async request<R>(path: string, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<R> {
+  private get key() {
+    return `${this.server.url}|${this.server.remoteUrl ?? ""}`;
+  }
+
+  addresses(): string[] {
+    return [...new Set([this.server.url, this.server.remoteUrl].filter((u): u is string => !!u))];
+  }
+
+  /** Which address is in use, once known. */
+  route(): Route | null {
+    const a = activeAddress.get(this.key);
+    return !a ? null : a === this.server.url ? "home" : "remote";
+  }
+
+  private headers(json = true): Record<string, string> {
+    return { Authorization: `Bearer ${this.server.token}`, ...(json ? { "Content-Type": "application/json" } : {}) };
+  }
+
+  /** Ask all addresses at once; the first that answers at all (even 401) wins. */
+  private probe(): Promise<string | null> {
+    const addrs = this.addresses();
+    if (addrs.length === 1) return Promise.resolve(addrs[0]);
+    return new Promise(resolve => {
+      let pending = addrs.length, done = false;
+      for (const a of addrs) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), PROBE_MS);
+        fetch(`${a}/api/info`, { headers: this.headers(false), signal: ctrl.signal })
+          .then(() => { if (!done) { done = true; resolve(a); } })
+          .catch(() => {})
+          .finally(() => { clearTimeout(timer); if (--pending === 0 && !done) resolve(null); });
+      }
+    });
+  }
+
+  private async base(): Promise<string> {
+    const known = activeAddress.get(this.key);
+    if (known) return known;
+    const found = await this.probe();
+    if (found) activeAddress.set(this.key, found);
+    return found ?? this.server.url;
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit, timeout: number): Promise<Response> {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), init.timeout ?? 15000);
-    let res: Response;
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     try {
-      res = await fetch(this.server.url + path, {
-        method: init.method ?? "GET",
-        signal: ctrl.signal,
-        headers: { Authorization: `Bearer ${this.server.token}`, "Content-Type": "application/json" },
-        body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      });
+      return await fetch(url, { ...init, signal: ctrl.signal });
     } catch (e) {
       throw new ApiError(this.t(ctrl.signal.aborted ? "errTimeout" : "errOffline"), 0, String(e));
     } finally {
       clearTimeout(timer);
+    }
+  }
+
+  private async request<R>(path: string, init: { method?: string; body?: unknown; timeout?: number } = {}): Promise<R> {
+    const method = init.method ?? "GET";
+    const req: RequestInit = {
+      method, headers: this.headers(), body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    };
+    const timeout = init.timeout ?? 15000;
+    const base = await this.base();
+    let res: Response;
+    try {
+      res = await this.fetchWithTimeout(base + path, req, timeout);
+    } catch (e) {
+      // Maybe we moved between home and away: find the address that works now. Only reads are
+      // repeated automatically - a print start or new job is never sent twice.
+      if (this.addresses().length < 2) throw e;
+      activeAddress.delete(this.key);
+      const other = await this.probe();
+      if (!other) throw e;
+      activeAddress.set(this.key, other);
+      if (other === base || method !== "GET") throw e;
+      res = await this.fetchWithTimeout(other + path, req, timeout);
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -152,8 +223,8 @@ export class Api {
 
   /** Upload a local model file (document picker or share menu) as raw body. */
   async upload(uri: string, name: string): Promise<Upload> {
-    const url = `${this.server.url}/api/uploads?name=${encodeURIComponent(name)}`;
-    const headers = { Authorization: `Bearer ${this.server.token}`, "Content-Type": "application/octet-stream" };
+    const url = `${await this.base()}/api/uploads?name=${encodeURIComponent(name)}`;
+    const headers = { ...this.headers(false), "Content-Type": "application/octet-stream" };
     let res: Response;
     try {
       if (Platform.OS === "web") {

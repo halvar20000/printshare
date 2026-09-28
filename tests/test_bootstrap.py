@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from printshare.bootstrap import banner, ensure_config, server_url
+from printshare.bootstrap import banner, ensure_config, remote_url, server_url
+from printshare.cli import pairing_link
 from printshare.config import load_settings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +65,8 @@ def test_home_assistant_options(tmp_path):
     assert s.printers[1].url == "http://192.168.1.60:7125" and s.printers[1].slicing.machine_preset is None
     assert s.printers[1].slicing.bed_type == "High Temp Plate"
     assert server_url({}, opts) == "http://192.168.1.5:8484"
+    assert remote_url({"PRINTSHARE_REMOTE_URL": "100.64.0.1:8484"}, NO_HA) == "http://100.64.0.1:8484"
+    assert remote_url({}, NO_HA) == ""
     text = banner(info, server_url({}, opts))
     assert "fixed-token" in text and "printshare://" not in text  # QR is drawn, not printed as text
     assert "Thomas" in text
@@ -77,6 +80,12 @@ def test_empty_env_token_keeps_auth(tmp_path, monkeypatch):
     assert load_settings(cfg).api_token == "secret"
     monkeypatch.setenv("PRINTSHARE_API_TOKEN", "from-env")
     assert load_settings(cfg).api_token == "from-env"
+
+
+def test_pairing_link_with_remote_address():
+    assert pairing_link("http://192.168.1.5:8484/", "t k") == "printshare://connect?url=http%3A%2F%2F192.168.1.5%3A8484&token=t+k"
+    assert pairing_link("http://a:1", "t", "http://100.64.0.1:8484/").endswith("&remote=http%3A%2F%2F100.64.0.1%3A8484")
+    assert "away from home the app uses http://100.1:1" in banner({"token": "t", "printers": []}, "http://a:1", "http://100.1:1")
 
 
 def test_file_mode_keeps_hand_written_config(tmp_path):
@@ -120,7 +129,7 @@ def test_unraid_template():
     root = ET.parse(ROOT / "unraid" / "printshare.xml").getroot()
     assert root.findtext("Repository") == "ghcr.io/halvar20000/printshare:latest"
     targets = {c.get("Target") for c in root.findall("Config")}
-    assert {"8484", "/config", "/data", "PRINTER_ADDRESS", "PRINTER_TYPE", "PRINTSHARE_URL"} <= targets
+    assert {"8484", "/config", "/data", "PRINTER_ADDRESS", "PRINTER_TYPE", "PRINTSHARE_URL", "PRINTSHARE_REMOTE_URL"} <= targets
     types = next(c for c in root.findall("Config") if c.get("Target") == "PRINTER_TYPE").get("Default")
     assert set(types.split("|")) == {"elegoo_sdcp", "moonraker"}
 

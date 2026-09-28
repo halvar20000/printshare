@@ -39,7 +39,9 @@ def main(argv: list[str] | None = None) -> int:
 
     pa = sub.add_parser("pair", help="show a QR code that connects the PrintShare app to this server")
     pa.add_argument("--url", required=True,
-                    help="address the phone uses, e.g. https://tower.tailnet.ts.net:8443 or http://192.168.1.10:8484")
+                    help="address the phone uses at home, e.g. http://192.168.1.10:8484")
+    pa.add_argument("--remote-url", default="",
+                    help="optional address away from home, e.g. http://100.64.1.2:8484 (Tailscale)")
 
     sub.add_parser("serve", help="run the web UI / API")
     sub.add_parser("printers", help="list configured printers")
@@ -57,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"Error in the printer settings: {e}", file=sys.stderr)
             return 1
-        print(bootstrap.banner(info, bootstrap.server_url()), flush=True)
+        print(bootstrap.banner(info, bootstrap.server_url(), bootstrap.remote_url()), flush=True)
     settings = load_settings(a.config)
 
     try:
@@ -81,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
             for pc in settings.printers:
                 print(f"{pc.id:<16} {pc.type:<12} {pc.host or pc.url}  [{pc.slicing.machine}]")
         elif a.cmd == "pair":
-            print_pairing(a.url, settings.api_token)
+            print_pairing(a.url, settings.api_token, a.remote_url)
         elif a.cmd == "serve":
             import uvicorn
             uvicorn.run("printshare.api:app", host="0.0.0.0", port=8484)
@@ -91,19 +93,27 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def pairing_link(url: str, token: str) -> str:
+def pairing_link(url: str, token: str, remote: str = "") -> str:
+    """QR content for the app; `remote` = second address for use away from home (e.g. Tailscale)."""
     from urllib.parse import urlencode
-    return "printshare://connect?" + urlencode({"url": url.rstrip("/"), "token": token})
+    q = {"url": url.rstrip("/"), "token": token}
+    if remote:
+        q["remote"] = remote.rstrip("/")
+    return "printshare://connect?" + urlencode(q)
 
 
-def print_pairing(url: str, token: str) -> None:
-    if not url.startswith(("http://", "https://")):
-        raise ValueError("--url must start with http:// or https://")
+def print_pairing(url: str, token: str, remote: str = "") -> None:
+    for u, flag in ((url, "--url"), (remote, "--remote-url")):
+        if u and not u.startswith(("http://", "https://")):
+            raise ValueError(f"{flag} must start with http:// or https://")
     import segno
-    link = pairing_link(url, token)
+    link = pairing_link(url, token, remote)
     print("Scan this code in the PrintShare app (Settings → Connect server → Scan QR code):\n")
     segno.make(link, error="m").terminal(compact=True)
-    print(f"\nOr enter manually:\n  Server: {url.rstrip('/')}\n  Token:  {token or '(none)'}")
+    print(f"\nOr enter manually:\n  Server: {url.rstrip('/')}")
+    if remote:
+        print(f"  Away from home: {remote.rstrip('/')}")
+    print(f"  Token:  {token or '(none)'}")
 
 
 if __name__ == "__main__":

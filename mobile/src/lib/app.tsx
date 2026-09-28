@@ -1,7 +1,8 @@
 // App-wide state: server connection, language, API client.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AppState as RNAppState } from "react-native";
 
-import { Api, type Server } from "./api";
+import { Api, resetRoutes, type Server } from "./api";
 import { makeT, resolveLang, type LangPref, type T } from "./i18n";
 import { getItem, getJSON, setItem, setJSON } from "./storage";
 
@@ -29,6 +30,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (l === "de" || l === "en" || l === "auto") setLangState(l);
       setReady(true);
     })();
+  }, []);
+
+  // back in the foreground: maybe we left home (or came back) -> find the working address again
+  useEffect(() => {
+    const sub = RNAppState.addEventListener("change", s => { if (s === "active") resetRoutes(); });
+    return () => sub.remove();
   }, []);
 
   const t = useMemo(() => makeT(resolveLang(langPref)), [langPref]);

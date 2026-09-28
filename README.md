@@ -72,7 +72,8 @@ Or with `docker compose up -d` using [docker-compose.yml](docker-compose.yml).
 | `PRINTER_ADDRESS` / `address` | printer IP (give it a fixed DHCP lease) |
 | `PRINTER_COSMOS` / `cosmos` | Klipper only: `PRINT_START`/`PRINT_END` start code for COSMOS (default on) |
 | `BUILD_PLATE` / `build_plate` | default plate, changeable per print |
-| `PRINTSHARE_URL` / `server_url` | address the phone uses; needed for the QR code (HA detects it) |
+| `PRINTSHARE_URL` / `server_url` | address the phone uses at home; needed for the QR code (HA detects it) |
+| `PRINTSHARE_REMOTE_URL` / `remote_url` | optional address away from home, e.g. Tailscale `http://100.x.y.z:8484`; the app switches automatically |
 | `PRINTSHARE_API_TOKEN` / `api_token` | empty = generated once |
 
 When a printer is set in the form, `config.yaml` is regenerated on every start. Leave the printer address

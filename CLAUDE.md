@@ -162,6 +162,14 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   store listing (DE/EN, screenshots, 1024×500 graphic), and a demo mode or server access for the review.
 - iOS not built yet (Dominique's Apple developer account; `eas build -p ios`).
 
+## Home / away addresses (2026-09-28)
+- App `Server` has `url` (home) + optional `remoteUrl` (Tailscale). `Api` probes both via `/api/info`
+  (4 s, first answer wins), caches per server, re-probes on app foreground (`resetRoutes`) and after a
+  network error; only GETs are retried on the other address (never a print start / job creation).
+- Pairing link `printshare://connect?url=…&token=…&remote=…`; server env `PRINTSHARE_REMOTE_URL`,
+  HA option `remote_url`, CLI `printshare pair --remote-url`. Tested in the web build with an
+  unreachable home IP (10.255.255.1): connects via away address in ~2 s.
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

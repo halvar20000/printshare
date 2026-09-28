@@ -10,6 +10,11 @@ configuration:
     description: >-
       Adresse, die das Handy verwendet, z. B. http://192.168.1.5:8484. Leer = automatisch ermittelt.
       Wird im Protokoll als QR-Code angezeigt.
+  remote_url:
+    name: Adresse unterwegs
+    description: >-
+      Optional, z. B. deine Tailscale-Adresse http://100.x.y.z:8484. Die App probiert zuerst die
+      Adresse zu Hause und wechselt automatisch. Steht mit im QR-Code.
   api_token:
     name: Zugangs-Token
     description: Leer = wird einmalig erzeugt und im Protokoll angezeigt.

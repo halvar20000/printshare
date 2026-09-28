@@ -20,6 +20,7 @@ map:
 options:
   printers: []
   server_url: ""
+  remote_url: ""
   api_token: ""
   thingiverse_token: ""
 schema:
@@ -34,5 +35,6 @@ schema:
       filament_profile: str?
       build_plate: list(Textured PEI Plate|High Temp Plate|Cool Plate|Engineering Plate|Supertack Plate)?
   server_url: str?
+  remote_url: str?
   api_token: password?
   thingiverse_token: password?

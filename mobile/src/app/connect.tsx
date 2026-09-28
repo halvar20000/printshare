@@ -12,18 +12,19 @@ export default function Connect() {
   const { t, server, setServer } = useApp();
   const c = useColors();
   const router = useRouter();
-  const params = useLocalSearchParams<{ url?: string; token?: string }>();
+  const params = useLocalSearchParams<{ url?: string; token?: string; remote?: string }>();
   const [url, setUrl] = useState(params.url ?? server?.url ?? "");
+  const [remote, setRemote] = useState(params.remote ?? server?.remoteUrl ?? "");
   const [token, setToken] = useState(params.token ?? server?.token ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const auto = useRef(false);
 
-  const connect = async (u = url, tk = token) => {
+  const connect = async (u = url, tk = token, r = remote) => {
     setBusy(true);
     setError("");
     try {
-      await setServer(await checkServer({ url: u, token: tk }, t));
+      await setServer(await checkServer({ url: u, token: tk, remoteUrl: r }, t));
       if (router.canDismiss()) router.dismissAll();
       else router.replace("/");
     } catch (e) {
@@ -39,10 +40,11 @@ export default function Connect() {
       auto.current = true;
       setUrl(params.url);
       setToken(params.token ?? "");
-      connect(params.url, params.token ?? "");
+      setRemote(params.remote ?? "");
+      connect(params.url, params.token ?? "", params.remote ?? "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.url, params.token]);
+  }, [params.url, params.token, params.remote]);
 
   const input = { color: c.text, fontSize: 16, paddingHorizontal: space, paddingVertical: 14 };
   const mono = Platform.select({ ios: "Menlo", default: "monospace" });
@@ -68,10 +70,17 @@ export default function Connect() {
           placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} keyboardType="url"
           accessibilityLabel={t("serverUrl")} style={input} />
         <Divider />
+        <TextInput value={remote} onChangeText={setRemote} placeholder={`${t("remoteUrl")} – http://100.x.y.z:8484`}
+          placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} keyboardType="url"
+          accessibilityLabel={t("remoteUrl")} style={input} />
+        <Divider />
         <TextInput value={token} onChangeText={setToken} placeholder={t("token")} placeholderTextColor={c.sub}
           autoCapitalize="none" autoCorrect={false} secureTextEntry accessibilityLabel={t("token")} style={input}
           onSubmitEditing={() => connect()} returnKeyType="go" />
       </Section>
+      <Text style={{ color: c.sub, fontSize: 13, lineHeight: 18, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
+        {t("remoteHint")}
+      </Text>
       <View>
         <Button title={busy ? t("connecting") : t("connect")} icon="link" onPress={() => connect()}
           loading={busy} disabled={!url.trim()} />

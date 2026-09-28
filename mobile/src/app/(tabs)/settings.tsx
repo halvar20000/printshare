@@ -14,10 +14,12 @@ export default function Settings() {
   const router = useRouter();
   const [online, setOnline] = useState<boolean | null>(null);
   const [serverVersion, setServerVersion] = useState("");
+  const [route, setRoute] = useState<"home" | "remote" | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!api) { setOnline(null); return; }
-    api.info().then(i => { setOnline(true); setServerVersion(i.version); }).catch(() => setOnline(false));
+    api.info().then(i => { setOnline(true); setServerVersion(i.version); setRoute(api.route()); })
+      .catch(() => { setOnline(false); setRoute(null); });
   }, [api]));
 
   const disconnect = () => {
@@ -33,9 +35,12 @@ export default function Settings() {
     <Screen>
       <Section title={t("server")}>
         <Row icon="server-outline" label={server ? server.url.replace(/^https?:\/\//, "") : t("notConnected")}
-          sub={server && serverVersion ? `PrintShare ${serverVersion}` : undefined}
+          sub={server && serverVersion ? [`PrintShare ${serverVersion}`, route ? t(route === "home" ? "routeHome" : "routeRemote") : null]
+            .filter(Boolean).join(" · ") : undefined}
           right={server ? <Badge text={online === false ? t("offline") : online ? t("connected") : "…"}
             kind={online === false ? "error" : online ? "ok" : "neutral"} /> : null} />
+        {server?.remoteUrl ? <><Divider /><Row icon="globe-outline" label={t("remoteUrl")}
+          sub={server.remoteUrl.replace(/^https?:\/\//, "")} /></> : null}
         <Divider />
         <Row icon="qr-code-outline" label={server ? t("changeServer") : t("connectNow")} onPress={() => router.push("/connect")} />
         {server ? <><Divider /><Row icon="log-out-outline" label={t("disconnect")} danger onPress={disconnect} /></> : null}

@@ -100,7 +100,7 @@ def ha_form(path: Path = HA_OPTIONS) -> dict[str, Any] | None:
     opts = json.loads(path.read_text(encoding="utf-8") or "{}")
     return {"source": "add-on configuration (Home Assistant)", "api_token": opts.get("api_token", ""),
             "thingiverse_token": opts.get("thingiverse_token", ""), "printers": opts.get("printers") or [],
-            "server_url": opts.get("server_url", "")}
+            "server_url": opts.get("server_url", ""), "remote_url": opts.get("remote_url", "")}
 
 
 def ensure_config(config_path: str | Path, env: Mapping[str, str] | None = None,
@@ -161,7 +161,14 @@ def server_url(env: Mapping[str, str] | None = None, ha_options: Path = HA_OPTIO
     return ""
 
 
-def banner(info: dict[str, Any], url: str) -> str:
+def remote_url(env: Mapping[str, str] | None = None, ha_options: Path = HA_OPTIONS) -> str:
+    """Optional second address for the app away from home (Tailscale / VPN)."""
+    env = os.environ if env is None else env
+    url = ((ha_form(ha_options) or {}).get("remote_url") or env.get("PRINTSHARE_REMOTE_URL") or "").strip()
+    return "" if not url else url if re.match(r"^https?://", url) else f"http://{url}"
+
+
+def banner(info: dict[str, Any], url: str, remote: str = "") -> str:
     """Start message for the container log: token and pairing code for the app."""
     lines = ["", "=" * 60, "PrintShare is running on port 8484"]
     names = ", ".join(p.get("name") or p.get("id", "?") for p in info["printers"])
@@ -170,13 +177,16 @@ def banner(info: dict[str, Any], url: str) -> str:
     lines.append(f"Access token: {info['token'] or '(none)'}")
     if url:
         from .cli import pairing_link
-        lines += [f"App: scan this code (Settings > Connect server) or enter {url} and the token:", ""]
+        lines.append(f"App: scan this code (Settings > Connect server) or enter {url} and the token")
+        if remote:
+            lines.append(f"     away from home the app uses {remote}")
+        lines.append("")
         try:
             import io
 
             import segno
             buf = io.StringIO()
-            segno.make(pairing_link(url, info["token"]), error="m").terminal(out=buf, compact=True)
+            segno.make(pairing_link(url, info["token"], remote), error="m").terminal(out=buf, compact=True)
             lines.append(buf.getvalue())
         except Exception:  # noqa: BLE001
             pass

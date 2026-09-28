@@ -7,12 +7,14 @@ export function parsePairing(data: string): Server | null {
   if (!m) return null;
   const q = new URLSearchParams(m[1]);
   const url = normalizeUrl(q.get("url") ?? "");
-  return url ? { url, token: q.get("token") ?? "" } : null;
+  const remote = normalizeUrl(q.get("remote") ?? "");
+  return url ? { url, token: q.get("token") ?? "", ...(remote ? { remoteUrl: remote } : {}) } : null;
 }
 
-/** Throws ApiError with a friendly message when the server can't be used. */
+/** Throws ApiError with a friendly message when neither address can be used. */
 export async function checkServer(server: Server, t: T): Promise<Server> {
-  const s = { url: normalizeUrl(server.url), token: server.token.trim() };
+  const remote = normalizeUrl(server.remoteUrl ?? "");
+  const s: Server = { url: normalizeUrl(server.url), token: server.token.trim(), ...(remote ? { remoteUrl: remote } : {}) };
   await new Api(s, t).info();
   return s;
 }

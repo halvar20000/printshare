@@ -31,6 +31,7 @@ Moonraker (`moonraker`, e.g. OpenCentauri COSMOS).
 |---|---|
 | `printers` | Your printers (see above). Optional per printer: `build_plate` (Textured PEI Plate, High Temp Plate, Cool Plate, Engineering Plate, Supertack Plate), `printer_profile` / `quality_profile` / `filament_profile` (OrcaSlicer preset names, default: Centauri Carbon 0.4, 0.20mm Standard, Elegoo PLA), `api_key` (Moonraker, if required). |
 | `server_url` | Address the phone uses. Empty = the IP of Home Assistant on port 8484. Use your Tailscale / VPN address to print on the go. |
+| `remote_url` | Optional address away from home, e.g. your Tailscale address `http://100.x.y.z:8484`. The app switches between both automatically; it is part of the QR code. |
 | `api_token` | Empty = generated once and kept. |
 | `thingiverse_token` | Only for Thingiverse links. |
 

@@ -17,10 +17,16 @@ Android. The app only talks to your own PrintShare server; the server downloads,
 - **Pairing:** scan the QR code from `printshare pair`, or enter address + token; token stored in Keychain/Keystore (NF-04).
 - German and English, light and dark mode.
 
+## Home and away
+The app stores two addresses: the home address (LAN) and an optional address away from home, e.g. Tailscale
+(`http://100.x.y.z:8484`, find it with `tailscale ip -4` on the server; the phone needs the Tailscale app).
+It asks both when it starts or returns to the foreground and uses the one that answers; after a connection
+error it switches (reads are retried, a print start is never sent twice). Never expose port 8484 to the internet.
+
 ## Connect a phone
 On the server (Unraid):
 ```
-docker exec printshare printshare pair --url http://192.168.86.230:8484
+docker exec printshare printshare pair --url http://192.168.86.230:8484 --remote-url http://100.x.y.z:8484
 ```
 Use the address the phone can reach (LAN IP, or the Tailscale name for access from outside). In the app:
 *Connect server → Scan QR code*.
