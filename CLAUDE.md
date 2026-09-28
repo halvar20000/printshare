@@ -147,6 +147,17 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - Tower now runs the Unraid-template container (0.3.0, printer id `centauri-carbon`); its API token is
   in /mnt/user/appdata/printshare/config.yaml, the project-folder config.yaml is stale.
 
+## App releases (2026-09-28)
+- EAS project `@halvar20000/printshare` (ID 29ebeeac-4fb7-451c-b335-cdacaf3a8afd, Expo account
+  halvar20000). Token for CLI builds: `.expo-token` in the project root (gitignored) →
+  `EXPO_TOKEN=$(cat ../.expo-token) npx eas-cli@latest build -p android --profile production --non-interactive`.
+- Android upload key generated and stored by EAS (Play App Signing holds the app key). versionCode is
+  remote/auto-incremented; first Play build: 0.1.0 (2), `releases/printshare-0.1.0-2.aab` (gitignored).
+- Thomas has a Play developer account (3 apps published before). PrintShare 0.1.0 (2) is in
+  **Play internal testing** since 2026-09-28. Before public release: privacy policy URL, data safety,
+  store listing (DE/EN, screenshots, 1024×500 graphic), and a demo mode or server access for the review.
+- iOS not built yet (Dominique's Apple developer account; `eas build -p ios`).
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),
