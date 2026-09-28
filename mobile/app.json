@@ -27,7 +27,10 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -83,6 +86,30 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ShareExtension",
+                  "bundleIdentifier": "io.github.halvar20000.printshare.share-extension",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.io.github.halvar20000.printshare"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "29ebeeac-4fb7-451c-b335-cdacaf3a8afd"
+      }
+    },
+    "owner": "halvar20000"
   }
 }
