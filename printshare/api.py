@@ -437,11 +437,13 @@ def _bed(printer_id: str) -> tuple[float, float] | None:
 
 
 @app.get("/api/jobs/{job_id}/preview", dependencies=[Depends(auth)])
-async def preview(job_id: str) -> dict[str, Any]:
-    """Layer data for the G-code viewer (SL-06/07)."""
+async def preview(job_id: str, format: int = 1) -> dict[str, Any]:
+    """Layer data for the G-code viewer (SL-06/07). Apps ask for the format they understand
+    (?format=2 adds the filament per line); without it, app builds from before 0.6.0 keep working."""
     job, gcode = _job_gcode(job_id)
     bed = await asyncio.to_thread(_bed, job["result"]["printer"])
-    return await asyncio.to_thread(gcode_preview.build, gcode, bed)
+    data = await asyncio.to_thread(gcode_preview.build, gcode, bed)
+    return gcode_preview.as_version(data, format)
 
 
 @app.get("/api/jobs/{job_id}/gcode", dependencies=[Depends(auth)])

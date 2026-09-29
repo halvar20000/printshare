@@ -229,7 +229,7 @@ export class Api {
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
   send = (id: string, start: boolean, leveling?: boolean) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`, { method: "POST", body: { start, confirm: start, leveling } });
-  preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview`, { timeout: 60000 });
+  preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview?format=2`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
   sources = () => this.request<Source[]>("/api/sources");
   search = (q: string, source: string, page: number, sort: SortKey) =>

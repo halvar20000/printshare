@@ -206,6 +206,14 @@ def build(gcode: Path, bed: tuple[float, float] | None = None) -> dict[str, Any]
     return data
 
 
+def as_version(data: dict[str, Any], version: int) -> dict[str, Any]:
+    """Older apps (preview format 1) don't know the tool entry: [type, x0, y0, …]."""
+    if version >= VERSION:
+        return data
+    return {**data, "version": 1,
+            "layers": [{"z": lay["z"], "paths": [[p[0], *p[2:]] for p in lay["paths"]]} for lay in data["layers"]]}
+
+
 def bed_size(printable_area: Any) -> tuple[float, float] | None:
     """Orca `printable_area` ["0x0", "256x0", "256x256", "0x256"] -> (256, 256)."""
     try:
