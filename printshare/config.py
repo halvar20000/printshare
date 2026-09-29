@@ -11,12 +11,29 @@ import yaml
 
 # Start/end G-code required by OpenCentauri COSMOS (>= 26.07.0). The stock Elegoo
 # macros M729 / M8213 trigger an emergency stop on COSMOS on purpose.
+# Multicolour (CANVAS via AFC) as in Dominique's COSMOS AFC OrcaSlicer profile (2026-09-29): AFC does the
+# tool change (T<n> PURGE_LENGTH=…) instead of Elegoo's M6211, PRINT_START gets the first tool, and
+# OrcaSlicer's own ramming/parking moves are switched off because AFC loads and unloads itself.
 COSMOS_OVERRIDES: dict[str, Any] = {
     "machine_start_gcode": (
+        "M104 S0 ; stops OrcaSlicer from sending temperature waits separately\n"
+        "M140 S0\n"
+        "SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\n"
         "PRINT_START EXTRUDER=[nozzle_temperature_initial_layer] "
-        "BED=[bed_temperature_initial_layer_single] CHAMBER=[chamber_temperature]\n"
+        "BED=[bed_temperature_initial_layer_single] CHAMBER=[chamber_temperature] TOOL={initial_tool}\n"
     ),
     "machine_end_gcode": "PRINT_END\n",
+    "machine_pause_gcode": "PAUSE",
+    "change_filament_gcode": (
+        "T[next_extruder] PURGE_LENGTH=[flush_length]\n"
+        "; FLUSH_START\n"
+        "; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\n"
+        "; FLUSH_END"
+    ),
+    "cooling_tube_length": "0",
+    "cooling_tube_retraction": "0",
+    "extra_loading_move": "0",
+    "parking_pos_retraction": "0",
 }
 
 PRESETS: dict[str, dict[str, Any]] = {"cosmos": COSMOS_OVERRIDES}

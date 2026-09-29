@@ -99,7 +99,7 @@ Only needed without the form fields above. Edit `config.yaml`, keep only your ow
 
 * **Thomas (stock firmware):** `type: elegoo_sdcp` with `host:` set to the printer's IP. Give the printer a fixed DHCP lease.
 * **Dominique (COSMOS):** `type: moonraker` with `url:` set to the same address you use for Mainsail, plus `machine_preset: cosmos`.
-  - The preset replaces Elegoo's start/end G-code with `PRINT_START … / PRINT_END`, because COSMOS ≥ 26.07 deliberately e-stops on the old `M729`/`M8213` commands.
+  - The preset replaces Elegoo's start/end G-code with `PRINT_START … TOOL=… / PRINT_END`, because COSMOS ≥ 26.07 deliberately e-stops on the old `M729`/`M8213` commands, and uses AFC tool changes (`T<n> PURGE_LENGTH=…`) for multicolour prints with CANVAS on COSMOS.
   - Best practice: import the official [COSMOS OrcaSlicer profile](https://cloud.orcaslicer.com/b/3fad3c38f25f) in OrcaSlicer on the desktop and export the printer preset as JSON. Copy it to `/mnt/user/appdata/printshare/profiles/` and set `machine_file: /config/profiles/<file>.json`.
 
 To list the preset names you can use:

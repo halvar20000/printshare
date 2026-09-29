@@ -56,8 +56,11 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
    Thumbnails are blank headless (no OpenGL) — P1 item.
 6. Orca CLI *does* have `--arrange 1` and `--orient` (spec PL-04 says it doesn't — it does, v2.4.2).
 7. COSMOS ≥ 26.07 e-stops on stock Elegoo start G-code (`M729`, `M8213`). `machine_preset: cosmos`
-   replaces start/end with `PRINT_START EXTRUDER=[nozzle_temperature_initial_layer]
-   BED=[bed_temperature_initial_layer_single] CHAMBER=[chamber_temperature]` / `PRINT_END`.
+   replaces start/end with `SET_PRINT_STATS_INFO TOTAL_LAYER=…` + `PRINT_START EXTRUDER=[nozzle_temperature_initial_layer]
+   BED=[bed_temperature_initial_layer_single] CHAMBER=[chamber_temperature] TOOL={initial_tool}` / `PRINT_END`,
+   and (from Dominique's COSMOS AFC profile, 2026-09-29) the tool change `T[next_extruder] PURGE_LENGTH=[flush_length]`
+   instead of Elegoo's CANVAS `M6211`, ramming/parking moves 0, pause `PAUSE`. Dominique's profile used the
+   legacy placeholders `[first_layer_temperature]`/`[first_layer_bed_temperature]`; we keep the Orca names.
    Preferred long-term: official COSMOS Orca profile (https://cloud.orcaslicer.com/b/3fad3c38f25f)
    exported as JSON → `machine_file:`.
 8. Stock CC upload port is **80**, not 3030 as some docs claim (pycentauri verified live).
@@ -205,8 +208,9 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   **by position**; the 3MF's per-object/painted assignments stay. Slicer writes one preset per model
   colour with `filament_colour` = model colour; `JobOptions.filaments` = preset per colour (None = default).
   Orca recognises its 3MFs by `<metadata name="Application">OrcaSlicer-…` (or BambuStudio-…).
-- The Centauri profile's `change_filament_gcode` is Elegoo's CANVAS `M6211 T… ` + `T[next_extruder]` –
-  on COSMOS this probably has to become an AFC tool change (open, needs Dominique's profile).
+- The stock Centauri profile's `change_filament_gcode` is Elegoo's CANVAS `M6211 T…` + `T[next_extruder]`;
+  the `cosmos` preset now uses the AFC tool change from Dominique's profile (see finding 7).
+  Still open for AFC: lane data from Moonraker (MA-02) and choosing lanes (`SET_MAP`).
 - Lane mapping is planned printer-side (AFC `SET_MAP LANE=… MAP=T…`, CANVAS slot_map), not by rewriting G-code.
   pycentauri 0.9.1: CANVAS status/control only for the CC2 protocol; CC1 `slot_map` format undocumented.
 - Preview v2: paths `[type, tool, x…]`, `filament_colors` from the G-code footer (`filament_colour`

@@ -158,6 +158,7 @@ def test_pipeline_cosmos_moonraker(tmp_path):
     fake, res = asyncio.run(go())
     gcode = fake.uploads[0]["data"].decode()
     assert "PRINT_START EXTRUDER=" in gcode and "BED=60" in gcode
+    assert "TOOL=0" in gcode and "SET_PRINT_STATS_INFO TOTAL_LAYER=" in gcode   # AFC start (Dominique's profile)
     assert "M729" not in gcode and "M8213" not in gcode      # would e-stop COSMOS
     assert res.print_time and res.filament_g
 
@@ -259,3 +260,27 @@ def test_slice_two_colour_3mf_for_centauri(tmp_path):
     preview = build(res.gcode_path)
     assert preview["filament_colors"][:2] == ["#FF0000", "#00AE42"]
     assert {p[1] for lay in preview["layers"] for p in lay["paths"]} >= {0, 1}
+
+
+def test_cosmos_preset_uses_afc_tool_changes():
+    """Dominique's COSMOS AFC profile: AFC tool change instead of Elegoo's CANVAS M6211."""
+    o = SlicingConfig(machine_preset="cosmos").machine_overrides
+    assert o["change_filament_gcode"].startswith("T[next_extruder] PURGE_LENGTH=[flush_length]")
+    assert "M6211" not in o["change_filament_gcode"] and "TOOL={initial_tool}" in o["machine_start_gcode"]
+    assert o["cooling_tube_length"] == "0" and o["parking_pos_retraction"] == "0"
+
+
+@needs_orca
+def test_slice_two_colour_3mf_for_cosmos_afc(tmp_path):
+    from printshare.config import JobOptions
+    from printshare.slicer import Slicer
+    s = _settings(tmp_path)
+    printer = PrinterConfig(id="dom", type="moonraker", url="http://127.0.0.1:7125",
+                            slicing=SlicingConfig(machine_preset="cosmos"))
+    slicing = JobOptions(filaments=["Elegoo PLA @ECC", "Elegoo PLA @ECC"]).apply(printer.slicing)
+    res = Slicer(s).slice(_two_colour_3mf(tmp_path), printer, tmp_path / "out", slicing)
+    gcode = res.gcode_path.read_text()
+    assert "T1 PURGE_LENGTH=" in gcode, res.log[-3000:]    # AFC switches to filament 2
+    assert "M6211" not in gcode                           # Elegoo's CANVAS command is not for COSMOS
+    assert "TOOL=0" in gcode and "M729" not in gcode
+    assert len(res.filaments) == 2 and all(f["grams"] for f in res.filaments)
