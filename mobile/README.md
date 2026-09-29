@@ -26,8 +26,10 @@ error it switches (reads are retried, a print start is never sent twice). Never 
 ## Connect a phone
 On the server (Unraid):
 ```
-docker exec printshare printshare pair --url http://192.168.86.230:8484 --remote-url http://100.x.y.z:8484
+docker exec PrintShare printshare pair --url http://192.168.86.230:8484 --remote-url http://100.x.y.z:8484
 ```
+`PrintShare` is the container name from the Unraid template; with `docker run`/Docker Compose it is `printshare`
+(`docker ps` shows it).
 Use the address the phone can reach (LAN IP, or the Tailscale name for access from outside). In the app:
 *Connect server → Scan QR code*.
 
