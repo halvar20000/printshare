@@ -143,6 +143,9 @@ class Slicer:
             gcode_src = self._find_gcode(work / "out", slicing.plate)
             if gcode_src is None:
                 tail = "\n".join(log.strip().splitlines()[-25:])
+                if proc.returncode < 0:   # killed by a signal, e.g. -11 = segmentation fault
+                    raise SliceError(f"OrcaSlicer crashed (signal {-proc.returncode}) - the model or project file "
+                                     f"may be damaged or incomplete.\n{tail}")
                 raise SliceError(f"OrcaSlicer produced no G-code (exit {proc.returncode}).\n{tail}")
             target = out_dir / f"{model.stem[:60]}.gcode"
             shutil.copyfile(gcode_src, target)

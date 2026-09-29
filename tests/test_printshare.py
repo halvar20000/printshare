@@ -232,7 +232,13 @@ def _two_colour_3mf(tmp_path) -> Path:
                    '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
                    "</Relationships>")
         z.writestr("3D/3dmodel.model", model)
+        # OrcaSlicer reads these without checking (a missing printer_settings_id crashes it); real projects
+        # always have them. Lists per preset: process, filament 1..n, printer.
         z.writestr("Metadata/project_settings.config", json.dumps({
+            "printer_settings_id": "Elegoo Centauri Carbon 0.4 nozzle",
+            "print_settings_id": "0.20mm Standard @Elegoo CC 0.4 nozzle",
+            "filament_settings_id": ["Elegoo PLA @ECC", "Elegoo PLA @ECC"],
+            "inherits_group": ["", "", "", ""], "different_settings_to_system": ["", "", "", ""],
             "filament_colour": ["#FF0000", "#00AE42"], "filament_type": ["PLA", "PLA"]}))
         z.writestr("Metadata/model_settings.config",
                    '<?xml version="1.0" encoding="UTF-8"?><config>'
