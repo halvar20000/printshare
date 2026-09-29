@@ -93,10 +93,26 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Tests with the real OrcaSlicer
         run: |
+          set -o pipefail
           digest=$(ls /tmp/digests)
           docker run --rm -v "$PWD:/src:ro" -w /src -e ORCA_ROOT=/opt/orca -e PYTHONDONTWRITEBYTECODE=1 \
             --entrypoint sh "$IMAGE@sha256:$digest" -c \
-            "pip install -q pytest aiohttp trimesh && python -m pytest -q -p no:cacheprovider -rs tests"
+            "pip install -q pytest aiohttp trimesh && python -m pytest -q -p no:cacheprovider -rfEs --tb=short tests" \
+            | tee /tmp/pytest.log
+      - name: Report failed tests as annotations
+        # job logs need admin rights; annotations are public, so failures can be read without them
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import re
+          log = open("/tmp/pytest.log", encoding="utf-8", errors="replace").read()
+          for line in re.findall(r"^(?:FAILED|ERROR) .*$", log, re.M)[:20]:
+              print("::error title=test failed::" + line[:900].replace("%", "%25"))
+          blocks = re.split(r"\n_{5,} (.+?) _{5,}\n", log)
+          for name, body in list(zip(blocks[1::2], blocks[2::2]))[:10]:
+              text = body.strip()[-3500:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+              print(f"::error title={name[:80]}::{text}")
+          PY
 
   publish:
     needs: [build, integration]
