@@ -199,3 +199,63 @@ def test_elegoo_leveling_per_print(tmp_path, leveling, expected):
     fake = asyncio.run(go())
     start = [c for c in fake.commands if c["Cmd"] == 128][0]
     assert start["Data"]["Calibration_switch"] == expected
+
+
+def _two_colour_3mf(tmp_path) -> Path:
+    """Two cubes as separate objects, filament 1 red and filament 2 green - like an OrcaSlicer project."""
+    import json
+    import zipfile
+
+    import trimesh
+    objects, items = [], []
+    for oid, dx in ((1, 0), (2, 30)):
+        m = trimesh.creation.box(extents=(20, 20, 10))
+        m.apply_translation((dx, 0, 5))
+        verts = "".join(f'<vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in m.vertices)
+        tris = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in m.faces)
+        objects.append(f'<object id="{oid}" type="model"><mesh><vertices>{verts}</vertices>'
+                       f"<triangles>{tris}</triangles></mesh></object>")
+        items.append(f'<item objectid="{oid}"/>')
+    model = ('<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" '
+             'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+             '<metadata name="Application">OrcaSlicer-2.4.2</metadata>'
+             f'<resources>{"".join(objects)}</resources><build>{"".join(items)}</build></model>')
+    path = tmp_path / "two_colours.3mf"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("[Content_Types].xml",
+                   '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                   '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>')
+        z.writestr("_rels/.rels",
+                   '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+                   "</Relationships>")
+        z.writestr("3D/3dmodel.model", model)
+        z.writestr("Metadata/project_settings.config", json.dumps({
+            "filament_colour": ["#FF0000", "#00AE42"], "filament_type": ["PLA", "PLA"]}))
+        z.writestr("Metadata/model_settings.config",
+                   '<?xml version="1.0" encoding="UTF-8"?><config>'
+                   '<object id="1"><metadata key="name" value="red"/><metadata key="extruder" value="1"/></object>'
+                   '<object id="2"><metadata key="name" value="green"/><metadata key="extruder" value="2"/></object>'
+                   "</config>")
+    return path
+
+
+@needs_orca
+def test_slice_two_colour_3mf_for_centauri(tmp_path):
+    """Real OrcaSlicer: one filament preset per model colour; CANVAS colour changes in the G-code."""
+    from printshare.config import JobOptions
+    from printshare.gcode_preview import build
+    from printshare.slicer import Slicer
+    s = _settings(tmp_path)
+    printer = PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1")
+    slicing = JobOptions(filaments=["Elegoo PLA @ECC", "Elegoo PLA @ECC"]).apply(printer.slicing)
+    res = Slicer(s).slice(_two_colour_3mf(tmp_path), printer, tmp_path / "out", slicing)
+    gcode = res.gcode_path.read_text()
+    assert "\nT1" in gcode, res.log[-3000:]                       # switches to filament 2
+    assert "M6211" in gcode                                       # CANVAS change on stock firmware
+    assert [f["color"] for f in res.filaments] == ["#FF0000", "#00AE42"]
+    assert all(f["grams"] and f["grams"] > 0 for f in res.filaments), res.filaments
+    preview = build(res.gcode_path)
+    assert preview["filament_colors"][:2] == ["#FF0000", "#00AE42"]
+    assert {p[1] for lay in preview["layers"] for p in lay["paths"]} >= {0, 1}

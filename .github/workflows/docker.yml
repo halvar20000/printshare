@@ -75,8 +75,31 @@ jobs:
           path: /tmp/digests/*
           retention-days: 1
 
-  publish:
+  integration:
+    # All tests again, inside the freshly built amd64 image - so the ones that need the real
+    # OrcaSlicer (slicing, presets, multicolour) run too. Tags are only set when they pass.
     needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-amd64
+          path: /tmp/digests
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tests with the real OrcaSlicer
+        run: |
+          digest=$(ls /tmp/digests)
+          docker run --rm -v "$PWD:/src:ro" -w /src -e ORCA_ROOT=/opt/orca -e PYTHONDONTWRITEBYTECODE=1 \
+            --entrypoint sh "$IMAGE@sha256:$digest" -c \
+            "pip install -q pytest aiohttp trimesh && python -m pytest -q -p no:cacheprovider -rs tests"
+
+  publish:
+    needs: [build, integration]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

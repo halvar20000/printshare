@@ -9,6 +9,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import model_info
 from .config import PrinterConfig, Settings, SlicingConfig
 from .profiles import ProfileLibrary, load_user_preset, write_preset
 
@@ -26,12 +27,29 @@ class SliceResult:
     layers: int | None = None
     log: str = ""
     warnings: list[str] = field(default_factory=list)
+    filaments: list[dict] = field(default_factory=list)   # multicolour: per filament of the model
 
 
 _TIME_RE = re.compile(r";\s*(?:model printing time|estimated printing time \(normal mode\))\s*[:=]\s*([^;\n]+)")
 _GRAMS_RE = re.compile(r";\s*(?:total filament weight \[g\]|filament used \[g\]|total filament used \[g\])\s*[:=]\s*([\d.]+)")
 _METERS_RE = re.compile(r";\s*(?:total filament length \[mm\]|filament used \[mm\])\s*[:=]\s*([\d.]+)")
 _LAYERS_RE = re.compile(r";\s*total layer number\s*[:=]\s*(\d+)")
+_GRAMS_EACH_RE = re.compile(r";\s*filament used \[g\]\s*=\s*([\d., ]+)")
+
+
+def filament_grams(gcode: Path) -> list[float]:
+    """Per-filament weights from the G-code footer: '; filament used [g] = 1.23, 4.56'."""
+    data = gcode.read_bytes()
+    m = _GRAMS_EACH_RE.search(data[-200_000:].decode("utf-8", "ignore"))
+    if not m:
+        return []
+    out = []
+    for v in m.group(1).split(","):
+        try:
+            out.append(round(float(v), 2))
+        except ValueError:
+            pass
+    return out
 
 
 def _parse_estimates(gcode: Path) -> tuple[str | None, float | None, float | None, int | None]:
@@ -62,7 +80,11 @@ class Slicer:
         return self._library
 
     def build_presets(self, printer: PrinterConfig, workdir: Path,
-                      slicing: SlicingConfig | None = None) -> tuple[Path, Path, Path]:
+                      slicing: SlicingConfig | None = None,
+                      colors: list[str] | None = None) -> tuple[Path, Path, list[Path]]:
+        """Machine + process preset, and one filament preset per filament of the model.
+        `colors` are the model's filament colours: they go into the presets so the G-code (and
+        the app's preview) know them."""
         s = slicing or printer.slicing
         lib = self.library
         if s.machine_file:
@@ -70,17 +92,24 @@ class Slicer:
         else:
             machine = lib.resolve("machine", s.machine, s.machine_overrides)
         process = lib.resolve("process", s.process, s.process_overrides)
-        filament = lib.resolve("filament", s.filament, s.filament_overrides)
+        count = max(len(colors or []), len(s.filaments), 1)
+        names = [(s.filaments[i] if i < len(s.filaments) else None) or s.filament for i in range(count)]
+        filaments = []
+        for i, name in enumerate(names):
+            f = lib.resolve("filament", name, s.filament_overrides)
+            if colors and i < len(colors):
+                f["filament_colour"] = [colors[i]]
+            filaments.append(f)
         # Make sure the process/filament accept this machine even if it was renamed.
         mname = machine["name"]
-        for preset in (process, filament):
+        for preset in (process, *filaments):
             cp = preset.get("compatible_printers")
             if isinstance(cp, list) and cp and mname not in cp:
                 preset["compatible_printers"] = cp + [mname]
         return (
             write_preset(machine, workdir / "machine.json"),
             write_preset(process, workdir / "process.json"),
-            write_preset(filament, workdir / "filament.json"),
+            [write_preset(f, workdir / f"filament_{i + 1}.json") for i, f in enumerate(filaments)],
         )
 
     def slice(self, model: Path, printer: PrinterConfig, out_dir: Path,
@@ -90,7 +119,9 @@ class Slicer:
         out_dir.mkdir(parents=True, exist_ok=True)
         work = Path(tempfile.mkdtemp(prefix="slice-", dir=self.settings.work_dir))
         try:
-            m, p, f = self.build_presets(printer, work, slicing)
+            info = model_info.inspect(model)
+            colors = [f["color"] for f in info["filaments"]]
+            m, p, fs = self.build_presets(printer, work, slicing, colors)
             cmd = [
                 self.settings.orca_binary,
                 "--arrange", "1",
@@ -98,7 +129,8 @@ class Slicer:
                 "--ensure-on-bed",
                 "--slice", str(slicing.plate),
                 "--load-settings", f"{m};{p}",
-                "--load-filaments", str(f),
+                # by position: 1st file replaces the model's filament 1, … (OrcaSlicer CLI)
+                "--load-filaments", ";".join(str(f) for f in fs),
                 "--outputdir", str(work / "out"),
                 "--export-3mf", "result.3mf",
             ]
@@ -115,7 +147,14 @@ class Slicer:
             target = out_dir / f"{model.stem[:60]}.gcode"
             shutil.copyfile(gcode_src, target)
             t, g, mtr, layers = _parse_estimates(target)
-            return SliceResult(target, t, g, mtr, layers, log)
+            per = []
+            if len(fs) > 1:
+                grams = filament_grams(target)
+                names = [(slicing.filaments[i] if i < len(slicing.filaments) else None) or slicing.filament
+                         for i in range(len(fs))]
+                per = [{"index": i + 1, "color": colors[i] if i < len(colors) else None, "preset": names[i],
+                        "grams": grams[i] if i < len(grams) else None} for i in range(len(fs))]
+            return SliceResult(target, t, g, mtr, layers, log, filaments=per)
         finally:
             if not self.settings.keep_work_files:
                 shutil.rmtree(work, ignore_errors=True)

@@ -11,10 +11,16 @@ export type Route = "home" | "remote";
 
 /** leveling: null = this printer can't switch bed leveling per print; else its default. */
 export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null };
-/** Layer data for the G-code viewer; paths are [typeIndex, x0, y0, x1, y1, ...] in 1/unit mm. */
+/** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
+ * (version 1 without the tool). */
 export type Preview = {
   version: number; unit: number; types: string[]; bounds: [number, number, number, number] | null;
-  bed: [number, number] | null; layers: { z: number; paths: number[][] }[];
+  bed: [number, number] | null; layers: { z: number; paths: number[][] }[]; filament_colors?: string[];
+};
+/** Filaments (colours) of a model, from its 3MF project; `used` = indices printed with. */
+export type ModelColors = {
+  file: string; filaments: { index: number; color: string; type: string | null; name: string | null }[];
+  used: number[]; painted: boolean;
 };
 export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "error" | "unknown";
 export type PrinterStatus = {
@@ -33,7 +39,7 @@ export type Options = {
 };
 export type JobOptions = Partial<{
   filament: string; process: string; bed_type: string; supports: string; brim: string;
-  infill: number; walls: number;
+  infill: number; walls: number; filaments: (string | null)[];
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
 export type JobState = "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
@@ -41,6 +47,7 @@ export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
   overrides: Record<string, string>;
+  filaments?: { index: number; color: string | null; preset: string; grams: number | null }[];
 };
 export type Job = {
   id: string; kind: string; state: JobState; log: string[]; result: JobResult | null; error: string | null;
@@ -211,6 +218,9 @@ export class Api {
   control = (printer: string, action: "pause" | "resume" | "cancel") =>
     this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/control`,
       { method: "POST", body: { action, confirm: action === "cancel" } });
+  inspect = (link: string, file: string | null) =>
+    this.request<ModelColors>(`/api/inspect?link=${encodeURIComponent(link)}` +
+      (file ? `&file=${encodeURIComponent(file)}` : ""), { timeout: 120000 });
   files = (link: string) =>
     this.request<ModelFile[]>(`/api/files?link=${encodeURIComponent(link)}`, { timeout: 60000 });
   createJob = (link: string, printer: string, file: string | null, options: JobOptions) =>

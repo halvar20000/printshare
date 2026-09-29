@@ -7,7 +7,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
   Banner, Button, Divider, Field, PickerSheet, Row, Screen, Section, Segmented, Stepper, tap, type Choice,
 } from "@/components/ui";
-import type { JobOptions, ModelFile, Options, Printer, PrinterKind } from "@/lib/api";
+import type { JobOptions, ModelColors, ModelFile, Options, Printer, PrinterKind } from "@/lib/api";
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
 import { brandOf, comboWarnings, jobName, plateName, shortName } from "@/lib/format";
 import { useColors } from "@/lib/theme";
@@ -66,6 +66,29 @@ export default function Prepare() {
       }
     }).catch(e => { setListed({ link, files: [] }); setError(e.message); });
   }, [api, link, edit.file]);
+
+  // 2b. colours of a 3MF project (MA-04): one material per colour
+  const fileName = files?.length === 1 ? files[0].name : files?.find(f => String(f.index) === file)?.name ?? null;
+  const colorKey = link && fileName && /\.3mf$/i.test(fileName) ? `${link}|${files!.length > 1 ? file : ""}` : null;
+  const [colorInfo, setColorInfo] = useState<{ key: string; data: ModelColors | null } | null>(null);
+  const [perColor, setPerColor] = useState<Record<number, string>>({});
+  const [colorSheet, setColorSheet] = useState<number | null>(null);
+  useEffect(() => {
+    if (!api || !colorKey || !link) return;
+    let alive = true;
+    api.inspect(link, files!.length > 1 ? file : null)
+      .then(data => {
+        if (!alive) return;
+        setColorInfo({ key: colorKey, data });
+        const saved = edit.options?.filaments;
+        if (saved) setPerColor(Object.fromEntries(saved.map((f, i) => [i + 1, f]).filter(([, f]) => f)));
+      })
+      .catch(() => { if (alive) setColorInfo({ key: colorKey, data: null }); });   // single-colour flow
+    return () => { alive = false; };
+  }, [api, colorKey, link, file, files, edit.options?.filaments]);
+  const colors = colorInfo?.key === colorKey ? colorInfo.data : null;
+  const colorsLoading = !!colorKey && colorInfo?.key !== colorKey;
+  const multi = !!colors && colors.filaments.length > 1 && colors.used.length > 1;
 
   // 3. printers + their state (DV-01)
   useEffect(() => {
@@ -140,6 +163,7 @@ export default function Prepare() {
     if (needsFile) { setError(t("chooseFile")); return; }
     const o: JobOptions = { process, bed_type: plate };
     if (filament !== d.filament) o.filament = filament;
+    if (multi && colors) o.filaments = colors.filaments.map(f => perColor[f.index] ?? null);
     if (supports !== d.supports) o.supports = supports;
     if (brim !== d.brim) o.brim = brim;
     if (infill != null && infill !== d.infill) o.infill = infill;
@@ -225,9 +249,25 @@ export default function Prepare() {
       {opts && d ? (
         <>
           {warnings.map(w => <Banner key={w} kind="warn" text={w} />)}
+          {multi && colors ? (
+            <Section title={t("colors")} footer={colors.painted ? t("colorsPainted") : t("colorsHint")}>
+              {colors.filaments.filter(f => colors.used.includes(f.index)).map((f, i) => (
+                <View key={f.index}>
+                  {i ? <Divider /> : null}
+                  <Row label={t("colorN", { n: f.index })} value={shortName(perColor[f.index] ?? filament)}
+                    onPress={() => setColorSheet(f.index)}
+                    right={<View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: f.color, marginLeft: 10,
+                      borderWidth: 1, borderColor: c.line }} accessibilityLabel={f.color} />} />
+                </View>
+              ))}
+            </Section>
+          ) : null}
           <Section>
-            <Row icon="color-fill-outline" label={t("material")} value={shortName(filament)} onPress={() => setSheet("filament")} />
-            <Divider />
+            {multi ? null : <>
+              <Row icon="color-fill-outline" label={t("material")} value={shortName(filament)} onPress={() => setSheet("filament")}
+                right={colorsLoading ? <ActivityIndicator color={c.accent} style={{ marginLeft: 8 }} /> : null} />
+              <Divider />
+            </>}
             <Row icon="speedometer-outline" label={t("quality")} value={shortName(process)} onPress={() => setSheet("process")} />
             <Divider />
             <Row icon="grid-outline" label={t("plate")} value={plateName(t, plate)} onPress={() => setSheet("plate")} />
@@ -269,6 +309,12 @@ export default function Prepare() {
       {sheet ? (
         <PickerSheet visible title={sheetTitle[sheet]} choices={choices[sheet]} value={sheetValue[sheet]}
           onPick={sheetSet[sheet]} onClose={() => setSheet(null)} searchLabel={t("search")} closeLabel="OK" />
+      ) : null}
+      {colorSheet != null ? (
+        <PickerSheet visible title={t("colorN", { n: colorSheet })} choices={choices.filament}
+          value={perColor[colorSheet] ?? filament}
+          onPick={v => setPerColor(p => ({ ...p, [colorSheet]: v }))} onClose={() => setColorSheet(null)}
+          searchLabel={t("search")} closeLabel="OK" />
       ) : null}
     </Screen>
   );

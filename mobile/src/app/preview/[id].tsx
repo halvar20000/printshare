@@ -20,13 +20,19 @@ const TYPE_COLORS: Record<string, string> = {
 };
 const FALLBACK = ["#00A6A6", "#B36BFF", "#FF6B6B", "#6BCB77", "#4D96FF"];
 
-function pathData(paths: number[][], unit: number, flipY: number, filter?: (t: number) => boolean) {
+type Mode = "type" | "color";
+/** Group key of a path: its line type, or its filament (tool) in colour mode. Version 1 had no tool. */
+const keyOf = (p: number[], mode: Mode, v2: boolean) => (mode === "color" ? (v2 ? p[1] : 0) : p[0]);
+
+function pathData(paths: number[][], unit: number, flipY: number, mode: Mode, v2: boolean,
+                  filter?: (k: number) => boolean) {
+  const off = v2 ? 2 : 1;
   const byType = new Map<number, string[]>();
   for (const p of paths) {
-    const t = p[0];
+    const t = keyOf(p, mode, v2);
     if (filter && !filter(t)) continue;
-    let d = `M${p[1] / unit} ${flipY - p[2] / unit}`;
-    for (let i = 3; i < p.length; i += 2) d += `L${p[i] / unit} ${flipY - p[i + 1] / unit}`;
+    let d = `M${p[off] / unit} ${flipY - p[off + 1] / unit}`;
+    for (let i = off + 2; i < p.length; i += 2) d += `L${p[i] / unit} ${flipY - p[i + 1] / unit}`;
     const list = byType.get(t) ?? [];
     list.push(d);
     byType.set(t, list);
@@ -42,7 +48,8 @@ export default function PreviewScreen() {
   const [data, setData] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [layer, setLayer] = useState(0);
-  const [hidden, setHidden] = useState<Set<number>>(new Set());
+  const [hidden, setHidden] = useState<Set<string>>(new Set());   // "type:3" / "color:1"
+  const [modePref, setModePref] = useState<Mode | null>(null);
   const [view, setView] = useState<"model" | "plate">("model");
   const [attempt, setAttempt] = useState(0);
 
@@ -67,14 +74,22 @@ export default function PreviewScreen() {
     return { x: x0 - m - (s - w) / 2, y: bedH - y1 - m - (s - h) / 2, w: s, h: s, bedW, bedH };
   }, [data, view]);
 
+  const v2 = (data?.version ?? 1) >= 2;
+  // filaments used anywhere in the print; colour mode only makes sense with more than one
+  const tools = useMemo(() => {
+    const s = new Set<number>();
+    if (v2) data?.layers.forEach(l => l.paths.forEach(p => s.add(p[1])));
+    return [...s].sort((a, b) => a - b);
+  }, [data, v2]);
+  const mode: Mode = modePref ?? (tools.length > 1 ? "color" : "type");
   const current = useMemo(() => {
     if (!data || !frame || !data.layers[layer]) return [];
-    return pathData(data.layers[layer].paths, data.unit, frame.bedH, ty => !hidden.has(ty));
-  }, [data, frame, layer, hidden]);
+    return pathData(data.layers[layer].paths, data.unit, frame.bedH, mode, v2, k => !hidden.has(`${mode}:${k}`));
+  }, [data, frame, layer, hidden, mode, v2]);
   const below = useMemo(() => {
     if (!data || !frame || layer === 0) return [];
-    return pathData(data.layers[layer - 1].paths, data.unit, frame.bedH);
-  }, [data, frame, layer]);
+    return pathData(data.layers[layer - 1].paths, data.unit, frame.bedH, mode, v2);
+  }, [data, frame, layer, mode, v2]);
   // 10 mm grid on the build plate for orientation
   const grid = useMemo(() => {
     if (!frame) return "";
@@ -85,9 +100,9 @@ export default function PreviewScreen() {
   }, [frame]);
   const present = useMemo(() => {
     const s = new Set<number>();
-    data?.layers[layer]?.paths.forEach(p => s.add(p[0]));
+    data?.layers[layer]?.paths.forEach(p => s.add(keyOf(p, mode, v2)));
     return s;
-  }, [data, layer]);
+  }, [data, layer, mode, v2]);
 
   if (!data) {
     return (
@@ -102,17 +117,27 @@ export default function PreviewScreen() {
     return <View style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}><Empty icon="layers-outline" title={t("previewEmpty")} /></View>;
   }
 
-  const color = (ty: number) => TYPE_COLORS[data.types[ty]] ?? FALLBACK[ty % FALLBACK.length];
+  const color = (k: number) => mode === "color"
+    ? data.filament_colors?.[k] ?? FALLBACK[k % FALLBACK.length]
+    : TYPE_COLORS[data.types[k]] ?? FALLBACK[k % FALLBACK.length];
+  const legend: { k: number; label: string }[] = mode === "color"
+    ? tools.map(k => ({ k, label: t("colorN", { n: k + 1 }) }))
+    : data.types.map((name, k) => ({ k, label: t.table.lineTypes[name] ?? name }));
   const stroke = Math.max(frame.w / size * 1.6, 0.3);   // about 1.6 px on screen, at least 0.3 mm
   const last = data.layers.length - 1;
   const step = (d: number) => { tap(); setLayer(l => Math.min(last, Math.max(0, l + d))); };
-  const typeName = (name: string) => t.table.lineTypes[name] ?? name;
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space, maxWidth: 640, width: "100%", alignSelf: "center" }}>
       <View style={{ marginBottom: 12 }}>
         <Segmented values={["model", "plate"]} value={view} onChange={v => setView(v as "model" | "plate")}
           labels={{ model: t("fitModel"), plate: t("wholePlate") }} />
+        {tools.length > 1 ? (
+          <View style={{ marginTop: 8 }}>
+            <Segmented values={["color", "type"]} value={mode} onChange={v => setModePref(v as Mode)}
+              labels={{ color: t("byColor"), type: t("byLineType") }} />
+          </View>
+        ) : null}
       </View>
       <Card style={{ padding: 0, marginBottom: 14, backgroundColor: c.input }}>
         <Svg width={size} height={size} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}
@@ -122,6 +147,14 @@ export default function PreviewScreen() {
           <G opacity={0.25}>
             {below.map(({ t: ty, d }) => <Path key={`b${ty}`} d={d} stroke={c.sub} strokeWidth={stroke} fill="none" />)}
           </G>
+          {mode === "color" ? (
+            // thin dark outline, so white or very light filament stays visible on the plate
+            <G opacity={0.45}>
+              {current.map(({ t: ty, d }) => (
+                <Path key={`o${ty}`} d={d} stroke={c.text} strokeWidth={stroke * 1.7} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              ))}
+            </G>
+          ) : null}
           {current.map(({ t: ty, d }) => (
             <Path key={`c${ty}`} d={d} stroke={color(ty)} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeLinejoin="round" />
           ))}
@@ -145,15 +178,16 @@ export default function PreviewScreen() {
       </View>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-        {data.types.map((name, ty) => {
-          const off = hidden.has(ty), here = present.has(ty);
+        {legend.map(({ k, label }) => {
+          const key = `${mode}:${k}`, off = hidden.has(key), here = present.has(k);
           return (
-            <Pressable key={name} accessibilityRole="button" accessibilityState={{ selected: !off }}
-              onPress={() => { tap(); setHidden(h => { const n = new Set(h); if (n.has(ty)) n.delete(ty); else n.add(ty); return n; }); }}
+            <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: !off }}
+              onPress={() => { tap(); setHidden(h => { const n = new Set(h); if (n.has(key)) n.delete(key); else n.add(key); return n; }); }}
               style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999,
                 backgroundColor: c.card, opacity: off ? 0.4 : here ? 1 : 0.65 }}>
-              <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: color(ty), marginRight: 6 }} />
-              <Text style={{ color: c.text, fontSize: 13, textDecorationLine: off ? "line-through" : "none" }}>{typeName(name)}</Text>
+              <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: color(k), marginRight: 6,
+                borderWidth: 1, borderColor: c.line }} />
+              <Text style={{ color: c.text, fontSize: 13, textDecorationLine: off ? "line-through" : "none" }}>{label}</Text>
             </Pressable>
           );
         })}

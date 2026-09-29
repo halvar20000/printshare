@@ -6,6 +6,7 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
   POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
   GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
+  GET  /api/inspect?link=...&file=...   colours/filaments of a model (downloads it, cached for a day)
   GET  /api/sources         model sources for search (Thingiverse only with a token)
   GET  /api/search?q=...&source=printables|thingiverse&page=1&sort=relevant|popular|makes
   GET  /api/models/{source}/{id}   details: images, description, license, author's settings, files
@@ -40,7 +41,7 @@ from pydantic import BaseModel, Field
 from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_settings
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
-from .pipeline import JobResult, prepare_job, run_job, send_job
+from .pipeline import JobResult, inspect_model, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
 from .profiles import ProfileError, ProfileLibrary
 from .search import Search
@@ -52,7 +53,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.5.0")
+app = FastAPI(title="PrintShare", version="0.6.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -254,6 +255,16 @@ async def files(link: str) -> list[dict[str, Any]]:
     return [{"index": i, "name": f.name, "size": f.size} for i, f in enumerate(fl, 1)]
 
 
+@app.get("/api/inspect", dependencies=[Depends(auth)])
+async def inspect(link: str, file: str | None = None) -> dict[str, Any]:
+    """Filaments (colours) of a model, so the app can offer a material per colour (MA-04)."""
+    local = _resolve_link(link)
+    try:
+        return await asyncio.to_thread(inspect_model, settings, local, file)
+    except FetchError as e:
+        raise HTTPException(400, str(e))
+
+
 # ---------- search (MQ-05/06) ----------
 def _search() -> Search:
     global _SEARCH
@@ -297,6 +308,7 @@ class OptionsModel(BaseModel):
     brim: str | None = None
     infill: int | None = None
     walls: int | None = None
+    filaments: list[str | None] | None = None   # multicolour: preset per filament of the model
 
 
 class JobRequest(BaseModel):
@@ -315,9 +327,11 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     if opts.bed_type and opts.bed_type not in PLATES:
         raise HTTPException(400, f"unknown plate {opts.bed_type!r}")
     s = printer.slicing
-    if opts.filament and opts.filament != s.filament and \
-            opts.filament not in _library().compatible("filament", s.machine):
-        raise HTTPException(400, f"material {opts.filament!r} does not fit {printer.name or printer.id}")
+    for f in [opts.filament, *(opts.filaments or [])]:
+        if f and f != s.filament and f not in _library().compatible("filament", s.machine):
+            raise HTTPException(400, f"material {f!r} does not fit {printer.name or printer.id}")
+    if opts.filaments and len(opts.filaments) > 16:
+        raise HTTPException(400, "at most 16 filaments")
     if opts.process and opts.process != s.process and \
             opts.process not in _library().compatible("process", s.machine):
         raise HTTPException(400, f"quality {opts.process!r} does not fit {printer.name or printer.id}")

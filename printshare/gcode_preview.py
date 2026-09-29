@@ -1,7 +1,7 @@
 """Layer data for the G-code preview in the app (spec SL-06/SL-07, BE-03).
 
-Parses the sliced G-code into extrusion polylines per layer and line type (OrcaSlicer's `;TYPE:`
-comments) and returns a compact JSON structure: coordinates as integers in 1/20 mm, collinear and
+Parses the sliced G-code into extrusion polylines per layer, line type (OrcaSlicer's `;TYPE:`
+comments) and filament (tool changes T0, T1 …) and returns a compact JSON structure: coordinates as integers in 1/20 mm, collinear and
 very short segments merged. Travel moves and retractions are left out.
 """
 from __future__ import annotations
@@ -18,10 +18,14 @@ ARC_STEP = math.radians(12)   # G2/G3 are drawn as polylines with this angular s
 _WORD = re.compile(r"([A-Z])([-+]?\d*\.?\d+)")
 
 
+VERSION = 2
+_COLOURS = re.compile(r"^;\s*(filament_colour|extruder_colour)\s*=\s*(.+)$")
+
+
 class _Layer:
     def __init__(self, z: float):
         self.z = z
-        self.paths: list[list[int]] = []   # [type_index, x0, y0, x1, y1, ...]
+        self.paths: list[list[int]] = []   # [type_index, tool, x0, y0, x1, y1, ...]
 
 
 def _simplify(pts: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -52,8 +56,11 @@ def parse(lines) -> dict[str, Any]:
     x = y = z = e = 0.0
     abs_xyz, abs_e = True, True
     cur_type = "Custom"
+    tool = 0
+    colours: dict[str, list[str]] = {}   # filament_colour wins over extruder_colour
     poly: list[tuple[float, float]] | None = None
     poly_type = -1
+    poly_tool = 0
     poly_layer: _Layer | None = None
     # the model's extent, without start/end code (e.g. the purge line at the edge of the plate)
     bounds = [math.inf, math.inf, -math.inf, -math.inf]
@@ -62,7 +69,7 @@ def parse(lines) -> dict[str, Any]:
     def flush() -> None:
         nonlocal poly
         if poly and len(poly) >= 2 and poly_layer is not None:
-            flat = [poly_type]
+            flat = [poly_type, poly_tool]
             for px, py in _simplify(poly):
                 flat += [round(px * UNIT), round(py * UNIT)]
             poly_layer.paths.append(flat)
@@ -86,12 +93,12 @@ def parse(lines) -> dict[str, Any]:
         return layer
 
     def extrude_to(px: float, py: float) -> None:
-        nonlocal poly, poly_type, poly_layer
+        nonlocal poly, poly_type, poly_layer, poly_tool
         lay = layer_for(z)
         t = tidx(cur_type)
-        if poly is None or poly_type != t or poly_layer is not lay or poly[-1] != (x, y):
+        if poly is None or poly_type != t or poly_tool != tool or poly_layer is not lay or poly[-1] != (x, y):
             flush()
-            poly, poly_type, poly_layer = [(x, y)], t, lay
+            poly, poly_type, poly_layer, poly_tool = [(x, y)], t, lay, tool
         poly.append((px, py))
         for b in ((all_bounds,) if cur_type == "Custom" else (all_bounds, bounds)):
             b[0], b[1] = min(b[0], x, px), min(b[1], y, py)
@@ -103,6 +110,9 @@ def parse(lines) -> dict[str, Any]:
             continue
         if line[0] == ";":
             c = line[1:].strip()
+            m = _COLOURS.match(line)
+            if m:
+                colours.setdefault(m.group(1), [v.strip().strip('"') for v in m.group(2).split(";")])
             if c.startswith("TYPE:"):
                 cur_type = c[5:].strip() or "Custom"
             elif c == "LAYER_CHANGE":
@@ -154,6 +164,9 @@ def parse(lines) -> dict[str, Any]:
             elif moves:
                 flush()           # travel
             x, y = nx, ny
+        elif len(cmd) > 1 and cmd[0] == "T" and cmd[1:].isdigit():   # tool / filament change
+            flush()
+            tool = int(cmd[1:])
         elif cmd == "G90":
             abs_xyz = True
         elif cmd == "G91":
@@ -169,7 +182,9 @@ def parse(lines) -> dict[str, Any]:
 
     kept = [lay for lay in layers if lay.paths]
     return {
-        "version": 1, "unit": UNIT, "types": types,
+        "version": VERSION, "unit": UNIT, "types": types,
+        "filament_colors": [c[:7].upper() if re.match(r"#[0-9A-Fa-f]{6}", c) else "#808080"
+                            for c in colours.get("filament_colour") or colours.get("extruder_colour") or []],
         "bounds": [round(b, 2) for b in (bounds if math.isfinite(bounds[0]) else all_bounds)] if kept else None,
         "layers": [{"z": round(lay.z, 3), "paths": lay.paths} for lay in kept],
     }
@@ -178,9 +193,12 @@ def parse(lines) -> dict[str, Any]:
 def build(gcode: Path, bed: tuple[float, float] | None = None) -> dict[str, Any]:
     """Preview for a G-code file; cached next to it (sliced G-code never changes)."""
     cache = gcode.with_suffix(".preview.json")
+    data = None
     if cache.is_file() and cache.stat().st_mtime >= gcode.stat().st_mtime:
         data = json.loads(cache.read_text())
-    else:
+        if data.get("version") != VERSION:
+            data = None                    # made by an older PrintShare
+    if data is None:
         with gcode.open(encoding="utf-8", errors="replace") as fh:
             data = parse(fh)
         cache.write_text(json.dumps(data, separators=(",", ":")))

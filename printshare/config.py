@@ -27,6 +27,8 @@ class SlicingConfig:
     machine: str = "Elegoo Centauri Carbon 0.4 nozzle"
     process: str = "0.20mm Standard @Elegoo CC 0.4 nozzle"
     filament: str = "Elegoo PLA @ECC"
+    # multicolour: one filament preset per filament of the model (index 0 = filament 1); empty = `filament`
+    filaments: list[str] = field(default_factory=list)
     machine_file: str | None = None          # preset exported from the OrcaSlicer GUI
     machine_preset: str | None = None        # e.g. "cosmos"
     machine_overrides: dict[str, Any] = field(default_factory=dict)
@@ -62,6 +64,8 @@ class JobOptions:
     brim: str | None = None       # "auto" | "off" | "outer"
     infill: int | None = None     # sparse infill density in percent
     walls: int | None = None      # wall loops
+    # multicolour: preset per filament of the model (1st = filament 1); None entries use `filament`
+    filaments: list[str | None] | None = None
 
     def process_overrides(self) -> dict[str, Any]:
         o: dict[str, Any] = {}
@@ -89,6 +93,7 @@ class JobOptions:
         """Return a copy of `base` with these options applied (base stays untouched)."""
         s = copy.copy(base)  # no __post_init__: overrides are already merged in `base`
         s.filament = self.filament or base.filament
+        s.filaments = [f or s.filament for f in self.filaments] if self.filaments else list(base.filaments)
         s.process = self.process or base.process
         s.bed_type = self.bed_type or base.bed_type
         s.process_overrides = {**base.process_overrides, "curr_bed_type": s.bed_type,

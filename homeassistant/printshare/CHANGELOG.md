@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+- Multicolour groundwork: colours of 3MF projects are detected, the app lets you choose a material per colour,
+  slicing uses one filament per colour, filament use per colour and a colour preview.
+- Model downloads are cached for a day (colour check and slicing download once).
+
 ## 0.5.0
 - G-code preview in the app: every layer from above, coloured by line type, with a layer slider.
 - Bed leveling on/off per print (Elegoo Centauri Carbon stock firmware).

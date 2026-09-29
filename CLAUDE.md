@@ -195,6 +195,26 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `<gcode>.preview.json`; GZip middleware. Synthetic 300-layer 4.5 MB G-code → 0.95 MB JSON in 0.4 s.
   Not yet checked against a real Orca G-code from the CC — do that on Tower after the update.
 
+## Multicolour groundwork (2026-09-29, 0.6.0) – for Dominique's COSMOS + AFC
+- `printshare/model_info.py`: colours of 3MF projects – Orca/Bambu `Metadata/project_settings.config`
+  (JSON `filament_colour`) + `model_settings.config` (object/part `extruder`), PrusaSlicer
+  `Slic3r_PE.config` (quoted `;`-lists, `extruder_colour` wins if set) + `Slic3r_PE_model.config`;
+  `paint_color`/`mmu_segmentation` on triangles = painted → all filaments used. `/api/inspect`.
+- `pipeline.fetch_model`: download cache `work_dir/cache/<sha1>` (24 h) used by inspect + slicing.
+- Orca CLI (source v2.4.2 OrcaSlicer.cpp): `--load-filaments "f1;f2"` replaces the project's filaments
+  **by position**; the 3MF's per-object/painted assignments stay. Slicer writes one preset per model
+  colour with `filament_colour` = model colour; `JobOptions.filaments` = preset per colour (None = default).
+  Orca recognises its 3MFs by `<metadata name="Application">OrcaSlicer-…` (or BambuStudio-…).
+- The Centauri profile's `change_filament_gcode` is Elegoo's CANVAS `M6211 T… ` + `T[next_extruder]` –
+  on COSMOS this probably has to become an AFC tool change (open, needs Dominique's profile).
+- Lane mapping is planned printer-side (AFC `SET_MAP LANE=… MAP=T…`, CANVAS slot_map), not by rewriting G-code.
+  pycentauri 0.9.1: CANVAS status/control only for the CC2 protocol; CC1 `slot_map` format undocumented.
+- Preview v2: paths `[type, tool, x…]`, `filament_colors` from the G-code footer (`filament_colour`
+  before `extruder_colour`); old cached v1 previews are rebuilt. App: colour/line-type switch, outline
+  so white filament is visible.
+- CI job `integration` runs all tests inside the built amd64 image (real Orca) before tags are set;
+  `test_slice_two_colour_3mf_for_centauri` checks T1 + M6211 + grams per colour with the real Orca.
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),

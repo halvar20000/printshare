@@ -275,6 +275,20 @@ export default function JobScreen() {
       <Button kind="secondary" title={t("showPreview")} icon="layers-outline" style={{ marginBottom: 22 }}
         onPress={() => router.push({ pathname: "/preview/[id]", params: { id: job.id } })} />
 
+      {r?.filaments && r.filaments.length > 1 ? (
+        <Section title={t("colors")}>
+          {r.filaments.map((f, i) => (
+            <View key={f.index}>
+              {i ? <Divider /> : null}
+              <Row label={t("colorN", { n: f.index })} sub={shortName(f.preset)}
+                value={f.grams != null ? `${f.grams.toFixed(1)} g` : "–"}
+                right={<View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: f.color ?? c.track,
+                  marginLeft: 10, borderWidth: 1, borderColor: c.line }} />} />
+            </View>
+          ))}
+        </Section>
+      ) : null}
+
       <Section title={t("details")}>
         <Row label={t("printer")} value={pname} />
         <Divider />

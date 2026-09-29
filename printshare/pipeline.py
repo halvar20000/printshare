@@ -6,16 +6,20 @@ The app uses two steps (`prepare_job`, then `send_job` after the user confirmed)
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
+import os
 import shutil
 import tempfile
 import threading
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 from .config import JobOptions, Settings
-from .fetch import Fetcher, choose_file
+from . import model_info
+from .fetch import Fetcher, RemoteFile, choose_file
 from .printers import get_adapter
 from .slicer import Slicer
 
@@ -45,9 +49,63 @@ class JobResult:
     profiles: dict[str, str] = field(default_factory=dict)
     overrides: dict[str, Any] = field(default_factory=dict)
     sent: dict[str, Any] = field(default_factory=dict)
+    # multicolour: [{"index", "color", "preset", "grams"}] per filament of the model (empty = one colour)
+    filaments: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+CACHE_TTL_S = 24 * 3600
+
+
+def _prune_cache(cache: Path) -> None:
+    now = time.time()
+    for d in cache.iterdir() if cache.is_dir() else []:
+        try:
+            if now - d.stat().st_mtime > CACHE_TTL_S:
+                shutil.rmtree(d, ignore_errors=True)
+        except OSError:
+            pass
+
+
+def fetch_model(settings: Settings, link: str, file_choice: str | int | None = None,
+                say: Callable[[str], None] | None = None) -> tuple[RemoteFile, Path]:
+    """List + download a model file (blocking). Downloads are kept for a day, so looking at the
+    colours of a model and slicing it later fetch the file only once."""
+    say = say or (lambda msg: log.info(msg))
+    fetcher = Fetcher(settings.thingiverse_token)
+    say("Looking up model files")
+    chosen = choose_file(fetcher.list_files(link), file_choice)
+    if chosen.source == "local":
+        return chosen, Path(chosen.file_id)
+    cache = Path(settings.work_dir) / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    _prune_cache(cache)
+    key = hashlib.sha1(f"{chosen.source}|{chosen.model_id}|{chosen.file_id}|{chosen.name}".encode()).hexdigest()[:20]
+    target = cache / key
+    hit = next((f for f in target.iterdir() if f.is_file()), None) if target.is_dir() else None
+    if hit:
+        os.utime(target)
+        return chosen, hit
+    say(f"Downloading {chosen.name}")
+    tmp = Path(tempfile.mkdtemp(prefix="dl-", dir=cache))
+    try:
+        path = fetcher.download(chosen, tmp)
+        try:
+            tmp.rename(target)
+        except OSError:           # another request downloaded it at the same time
+            shutil.rmtree(tmp, ignore_errors=True)
+        return chosen, next(f for f in target.iterdir() if f.is_file()) if target.is_dir() else path
+    except BaseException:
+        shutil.rmtree(tmp, ignore_errors=True)
+        raise
+
+
+def inspect_model(settings: Settings, link: str, file_choice: str | int | None = None) -> dict[str, Any]:
+    """Colours/filaments of a model before slicing (blocking)."""
+    chosen, path = fetch_model(settings, link, file_choice)
+    return {"file": chosen.name, **model_info.inspect(path)}
 
 
 def _slice_queued(settings: Settings, say: Callable[[str], None], *args: Any):
@@ -69,32 +127,21 @@ async def prepare_job(settings: Settings, link: str, printer_id: str | None = No
     say = progress or (lambda msg: log.info(msg))
     printer = settings.printer(printer_id)
     slicing = (options or JobOptions()).apply(printer.slicing)
-    fetcher = Fetcher(settings.thingiverse_token)
-
-    say("Looking up model files")
-    files = await asyncio.to_thread(fetcher.list_files, link)
-    chosen = choose_file(files, file_choice)
-
-    dl_dir = Path(tempfile.mkdtemp(prefix="dl-", dir=settings.work_dir))
-    try:
-        say(f"Downloading {chosen.name}")
-        model = await asyncio.to_thread(fetcher.download, chosen, dl_dir)
-
-        say(f"Slicing for {printer.name or printer.id}")
-        # own folder per job, so jobs for the same model don't overwrite each other's G-code
-        out_dir = Path(settings.gcode_dir) / printer.id
-        if out_name:
-            out_dir = out_dir / out_name
-        # blocking work runs in a thread so the web server stays responsive
-        result = await asyncio.to_thread(_slice_queued, settings, say, model, printer, out_dir, slicing)
-        say(f"Sliced: {result.print_time or '?'} / {result.filament_g or '?'} g")
-        profiles = {"machine": slicing.machine_file or slicing.machine, "process": slicing.process,
-                    "filament": slicing.filament, "bed_type": slicing.bed_type}
-        overrides = (options or JobOptions()).process_overrides()
-        return JobResult(printer.id, chosen.name, str(result.gcode_path), result.print_time,
-                         result.filament_g, result.filament_m, result.layers, profiles, overrides)
-    finally:
-        shutil.rmtree(dl_dir, ignore_errors=True)
+    chosen, model = await asyncio.to_thread(fetch_model, settings, link, file_choice, say)
+    say(f"Slicing for {printer.name or printer.id}")
+    # own folder per job, so jobs for the same model don't overwrite each other's G-code
+    out_dir = Path(settings.gcode_dir) / printer.id
+    if out_name:
+        out_dir = out_dir / out_name
+    # blocking work runs in a thread so the web server stays responsive
+    result = await asyncio.to_thread(_slice_queued, settings, say, model, printer, out_dir, slicing)
+    say(f"Sliced: {result.print_time or '?'} / {result.filament_g or '?'} g")
+    profiles = {"machine": slicing.machine_file or slicing.machine, "process": slicing.process,
+                "filament": slicing.filament, "bed_type": slicing.bed_type}
+    overrides = (options or JobOptions()).process_overrides()
+    return JobResult(printer.id, chosen.name, str(result.gcode_path), result.print_time,
+                     result.filament_g, result.filament_m, result.layers, profiles, overrides,
+                     filaments=result.filaments)
 
 
 async def send_job(settings: Settings, result: JobResult, start: bool,
