@@ -130,7 +130,7 @@ def test_elegoo_start_that_never_happens_is_an_error(tmp_path, monkeypatch):
 def _settings(tmp_path) -> Settings:
     s = Settings(orca_binary=f"{ORCA_ROOT}/AppRun", orca_profiles_dir=f"{ORCA_ROOT}/resources/profiles",
                  work_dir=str(tmp_path / "work"), gcode_dir=str(tmp_path / "gcode"))
-    Path(s.work_dir).mkdir()
+    Path(s.work_dir).mkdir(parents=True)
     return s
 
 
@@ -203,48 +203,28 @@ def test_elegoo_leveling_per_print(tmp_path, leveling, expected):
 
 
 def _two_colour_3mf(tmp_path) -> Path:
-    """Two cubes as separate objects, filament 1 red and filament 2 green - like an OrcaSlicer project."""
-    import json
-    import zipfile
+    """A real OrcaSlicer project with two objects: filament 1 red, filament 2 green - like a multicolour
+    model from Printables/MakerWorld. Made by OrcaSlicer itself: it crashes on hand-written project 3MFs
+    that lack parts of its project structure (plates, object files …)."""
+    import subprocess
 
     import trimesh
-    objects, items = [], []
-    for oid, dx in ((1, 0), (2, 30)):
-        m = trimesh.creation.box(extents=(20, 20, 10))
-        m.apply_translation((dx, 0, 5))
-        verts = "".join(f'<vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in m.vertices)
-        tris = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in m.faces)
-        objects.append(f'<object id="{oid}" type="model"><mesh><vertices>{verts}</vertices>'
-                       f"<triangles>{tris}</triangles></mesh></object>")
-        items.append(f'<item objectid="{oid}"/>')
-    model = ('<?xml version="1.0" encoding="UTF-8"?><model unit="millimeter" '
-             'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
-             '<metadata name="Application">OrcaSlicer-2.4.2</metadata>'
-             f'<resources>{"".join(objects)}</resources><build>{"".join(items)}</build></model>')
-    path = tmp_path / "two_colours.3mf"
-    with zipfile.ZipFile(path, "w") as z:
-        z.writestr("[Content_Types].xml",
-                   '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-                   '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>')
-        z.writestr("_rels/.rels",
-                   '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-                   '<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
-                   "</Relationships>")
-        z.writestr("3D/3dmodel.model", model)
-        # OrcaSlicer reads these without checking (a missing printer_settings_id crashes it); real projects
-        # always have them. Lists per preset: process, filament 1..n, printer.
-        z.writestr("Metadata/project_settings.config", json.dumps({
-            "printer_settings_id": "Elegoo Centauri Carbon 0.4 nozzle",
-            "print_settings_id": "0.20mm Standard @Elegoo CC 0.4 nozzle",
-            "filament_settings_id": ["Elegoo PLA @ECC", "Elegoo PLA @ECC"],
-            "inherits_group": ["", "", "", ""], "different_settings_to_system": ["", "", "", ""],
-            "filament_colour": ["#FF0000", "#00AE42"], "filament_type": ["PLA", "PLA"]}))
-        z.writestr("Metadata/model_settings.config",
-                   '<?xml version="1.0" encoding="UTF-8"?><config>'
-                   '<object id="1"><metadata key="name" value="red"/><metadata key="extruder" value="1"/></object>'
-                   '<object id="2"><metadata key="name" value="green"/><metadata key="extruder" value="2"/></object>'
-                   "</config>")
+
+    from printshare.slicer import Slicer
+    s = _settings(tmp_path / "project")
+    printer = PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1")
+    work = tmp_path / "project"
+    m, p, fs = Slicer(s).build_presets(printer, work, printer.slicing.__class__(
+        filaments=["Elegoo PLA @ECC", "Elegoo PLA @ECC"]), ["#FF0000", "#00AE42"])
+    for name in ("red", "green"):
+        trimesh.creation.box(extents=(20, 20, 10)).export(work / f"{name}.stl")
+    r = subprocess.run([s.orca_binary, "--arrange", "1", "--load-settings", f"{m};{p}",
+                        "--load-filaments", ";".join(map(str, fs)), "--load-filament-ids", "1,2",
+                        "--slice", "1", "--outputdir", str(work / "out"), "--export-3mf", "two_colours.3mf",
+                        str(work / "red.stl"), str(work / "green.stl")],
+                       capture_output=True, text=True, cwd=work, timeout=300)
+    path = work / "out" / "two_colours.3mf"
+    assert path.is_file(), r.stdout[-2000:] + r.stderr[-2000:]
     return path
 
 

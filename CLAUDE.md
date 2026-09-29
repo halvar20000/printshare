@@ -219,6 +219,20 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - CI job `integration` runs all tests inside the built amd64 image (real Orca) before tags are set;
   `test_slice_two_colour_3mf_for_centauri` checks T1 + M6211 + grams per colour with the real Orca.
 
+## Real OrcaSlicer inside this claude-agent container (2026-09-29)
+- The container's glibc (Debian 12) is too old for Orca, but an Ubuntu 24.04 rootfs + proot works:
+  `/tmp/u24` = ubuntu-base 24.04 + the Dockerfile's apt packages (needed `mknod` /dev/null etc. for apt),
+  Orca AppImage extracted on the host into `/tmp/u24/opt/orca`, venv `/venv`; `/tmp/proot` (static, from
+  proot.gitlab.io) provides /proc (chroot alone fails: Orca needs /proc/self/exe). Run all tests:
+  `/tmp/proot -r /tmp/u24 -b /proc -b /dev -b /sys -b <project>:/src -w /src /bin/bash -c
+  'ORCA_ROOT=/opt/orca LANG=C.UTF-8 /venv/bin/python -m pytest -q -p no:cacheprovider tests'`.
+  /tmp is not persistent – rebuild it when needed (~10 min).
+- Orca crashes (SIGSEGV, no output) on hand-written 3MFs that claim to be Orca/Bambu projects
+  (`Application` metadata) but lack its project structure; plain 3MFs are fine. Test projects are
+  therefore made by Orca itself (`--load-filament-ids 1,2 --slice 1 --export-3mf`), see `_two_colour_3mf`.
+- Verified with the real Orca 2.4.2 (75/75 tests): two-colour project → CC stock `T1` + `M6211`,
+  COSMOS `T1 PURGE_LENGTH=` without M6211 + `TOOL=0`, grams per colour, preview colours.
+
 ## Next steps (in order)
 1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
    installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),
