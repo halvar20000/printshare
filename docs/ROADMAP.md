@@ -34,7 +34,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | SL-02 | Summary time/filament | 🟡 time + g + m + layers; per-lane, thumbnail ⬜ |
 | SL-04 | Understandable slice errors | 🟡 app maps server errors to plain German/English + technical details; Orca-specific causes (out of build volume …) ⬜ |
 | DR-01 | Printer setup | ✅ config.yaml |
-| DR-02 | Moonraker upload + start | ✅ (tested against fake) ; WebSocket status ⬜ (polling) |
+| DR-02 | Moonraker upload + start | ✅ real print on COSMOS + CANVAS/AFC started from the iOS app (2026-09-29); WebSocket status ⬜ (polling) |
 | DR-04 | Live status | 🟡 snapshot status endpoint |
 | DR-05 | Pause/resume/cancel | ✅ API + app (cancel asks); untested on real printers |
 | DR-11 | SDCP adapter | ✅ (tested against fake + real CC1) |
@@ -42,7 +42,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | SL-06/07 | G-code layer viewer | ✅ server turns G-code into compact layer data (`/api/jobs/<id>/preview`, cached, gzip); app: top view per layer, line-type colours + legend toggles, previous layer faint, slider, model/plate view. 3D view ⬜ |
 | SL-10 | Export G-code | 🟡 `/api/jobs/<id>/gcode`; share button in the app ⬜ |
 | NF-08 | More printers | 🟡 PrusaLink + OctoPrint adapters (tested against fakes from the official APIs, 2026-09-28); quality/filament default from the Orca machine preset; Bambu LAN, Flashforge, Creality stock ⬜ |
-| PR-03 | Resolve `inherits` | ✅ for system presets |
+| PR-03 | Resolve `inherits` | ✅ for system presets and user presets via `machine_file` (AFC COSMOS preset, 2026-09-29) |
 | BE-01 | Queue, 1 slice at a time | ✅ `max_parallel_slices` (default 1) |
 | BE-07 | Docker image + Unraid template | 🟡 GHCR multi-arch image (GitHub Actions), Unraid template `unraid/printshare.xml`, Home Assistant add-on `homeassistant/printshare`; listing in Community Applications ⬜ (needs a separate templates repo) |
 | NF-03/04 | VPN only, token | 🟡 single global token; per-device tokens ⬜ |
@@ -68,6 +68,8 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 5. Pre-sliced G-code / gcode.3mf passthrough (MQ-04); file upload endpoint (MQ-03).
 6. Printer control endpoints pause/resume/cancel (DR-05); Moonraker WebSocket status (DR-02/04).
 7. Thumbnails: run Orca under Xvfb + Mesa (llvmpipe) or render our own preview (SL-02).
-8. User-preset import from Mac Orca folder (PR-01/02) — e.g. Syncthing to `/config/profiles`.
-9. COSMOS: read AFC lane data from Moonraker (MA-02) — open question in spec.
+8. User-preset import (PR-01/02): upload in the app (#2) and/or Orca Cloud sync (#7). `machine_file` works today (manual config).
+9. COSMOS: AFC lane selection + lane data from Moonraker (MA-02, #6). `PRINT_START … TOOL={initial_tool}` loads the lane (verified 2026-09-29).
 10. ntfy / Home Assistant notifications (BE-06, DR-12).
+11. Printer camera in the app (#3); G-code preview (#4): layer viewer done in 0.5.0, open: 3D view, current
+    layer while printing; printer control: temperatures + graphs, fans, LED (#5).

@@ -59,7 +59,9 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
    replaces start/end with `PRINT_START EXTRUDER=[nozzle_temperature_initial_layer]
    BED=[bed_temperature_initial_layer_single] CHAMBER=[chamber_temperature]` / `PRINT_END`.
    Preferred long-term: official COSMOS Orca profile (https://cloud.orcaslicer.com/b/3fad3c38f25f)
-   exported as JSON → `machine_file:`.
+   exported as JSON → `machine_file:`. `machine_preset: cosmos` only swaps start/end: no `TOOL=` for AFC,
+   `change_filament_gcode` stays Elegoo's `M6211 …`, `machine_pause_gcode` stays `M600` (see #6). With CANVAS/AFC
+   use the AFC COSMOS machine preset as `machine_file` (verified 2026-09-29, see below).
 8. Stock CC upload port is **80**, not 3030 as some docs claim (pycentauri verified live).
    Thomas' CC (192.168.86.144, FW V0.3.0-o) did NOT push Attributes (MainboardID) even when
    idle → adapter now gets it via unicast UDP discovery (`M99999` to host:3000) unless
@@ -82,7 +84,48 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 
 ## First real print (reported by Thomas 2026-09-28)
 - Thomas printed something on 2026-09-27 and it worked (Centauri Carbon, stock firmware / SDCP).
-  Details of the path used (app / web / CLI) not recorded yet. COSMOS (Dominique) still untested.
+  Details of the path used (app / web / CLI) not recorded yet.
+
+## First COSMOS print (Dominique, 2026-09-29)
+- Centauri Carbon with COSMOS + CANVAS (AFC, 4 lanes), Moonraker `http://192.168.0.95`, Unraid template container
+  `PrintShare`. Benchy sliced by PrintShare, **started from the iOS app** (local Xcode dev build, iPhone 14 Pro,
+  iOS 27, built from a2614f0 = before 0.5.0): AFC unloaded the lane in the toolhead (T1), loaded T0, print runs
+  as intended. No problems seen so far.
+- Machine preset: Dominique's Orca user preset *"AFC COSMOS - Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC"*
+  (`inherits: Elegoo Centauri Carbon 0.4 nozzle`, `single_extruder_multi_material = 1`, 4 lanes) as
+  `machine_file: "/config/profiles/AFC COSMOS - Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC.json"`, no
+  `machine_preset`. Its start code: `M104 S0` / `M140 S0` / `SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]` /
+  `PRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature]
+  TOOL={initial_tool}`; tool change `T[next_extruder] PURGE_LENGTH=[flush_length]` + `; FLUSH_START … ; FLUSH_END`;
+  pause `PAUSE`; end `PRINT_END`.
+- AFC's `PRINT_START` evaluates `TOOL=`: no separate `T0` needed. Orca only writes `T<n>` after `PRINT_START`
+  when several filaments are used; with one filament the lane comes from `TOOL={initial_tool}` alone (always 0 =
+  lane 1 until lane selection exists, #6). The CLI slices a 4-lane SEMM preset with a single filament fine.
+- Result identical to the system preset: 240 layers, 34m52s, 11.36 g, `0.20mm Standard @Elegoo CC 0.4 nozzle`,
+  `Elegoo PLA @ECC`, Textured PEI, 210/60 °C.
+- Compared with a G-code from the Orca desktop (same presets, 2 colours): some process/filament values differ
+  (flow ratio 1 vs 0.98, fan_min_speed 100 vs 50, gap fill nowhere vs everywhere, inner wall/travel accel …).
+  Not a flattening bug: `ProfileLibrary` against the Mac's Orca 2.4.2 bundle gives exactly PrintShare's values;
+  the other desktop had different (online-updated) Elegoo system profiles.
+- Where Orca keeps user presets: `~/Library/Application Support/OrcaSlicer/user/default/` without login,
+  `user/<uuid>/` when logged in to Orca Cloud (then synced; idea for automatic import: #7).
+- Manual `machine_file` needs the "managed" mode off: empty *Printer IP address* in the Unraid template,
+  otherwise `config.yaml` is regenerated on every start. The CLI (`docker exec … printshare print`) reads
+  `config.yaml` on every call; the server only at start → restart the container after editing. Too complex
+  for users → #2 (upload button, keep uploaded profile in managed mode).
+
+## iOS dev build findings (2026-09-29)
+- iOS 27 SDK: apps crash at launch without the UIScene life cycle
+  (`UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`); the Expo SDK 57 template (≤ 57.0.27) lacks
+  it → `mobile/plugins/with-scene-lifecycle.js` (PR #1). Open `ios/PrintShare.xcworkspace`, not the
+  `.xcodeproj` ("No such module 'Expo'"); `pod install` needs `LANG=en_US.UTF-8`; after `expo prebuild` set the
+  team again for PrintShare + ShareExtension.
+- Pairing command: the Unraid template names the container `PrintShare` (docker exec is case-sensitive),
+  compose / `docker run` use `printshare` → app + docs show both (PR #1).
+
+## Open issues from this test (GitHub)
+#2 profile upload + no manual config mode · #3 camera in the app · #4 G-code preview (2D layer viewer already
+in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED) · #6 AFC lane selection · #7 Orca Cloud profile sync.
 
 ## Current state of the Unraid install (2026-09-26 evening)
 - `docker build` is GREEN on Unraid (image `printshare:0.1`, Orca 2.4.2 `--help` runs). Needed extra
@@ -196,12 +239,11 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   Not yet checked against a real Orca G-code from the CC — do that on Tower after the update.
 
 ## Next steps (in order)
-1. Native app: Dominique runs `eas init` + `eas build --profile development` (iOS) / `preview` (Android APK),
-   installs on the phones; redeploy the server (`scripts/unraid-install.sh cc-thomas`, adds uploads/pair),
-   pair via QR, test share → slice → upload-only; then a real print with Thomas at the printer.
+1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
+   Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.
 2. After the reboot: rerun `scripts/unraid-install.sh cc-thomas`; check that the parity check and the
    hetzner-cls backup ran; then `printshare print <benchy> -p cc-thomas --no-start`, then a real
-   print — for both printers (Thomas: SDCP; Dominique: COSMOS).
+   print — for both printers (Thomas: SDCP ✅ 2026-09-27; Dominique: COSMOS ✅ 2026-09-29).
 3. Then work down `docs/ROADMAP.md` (Phase 1 gaps from the spec first).
 
 ## Conventions
