@@ -12,6 +12,16 @@ const I18N = {
     edit: "Einstellungen ändern", new_job: "Neues Modell", no_jobs: "Noch keine Aufträge.",
     token: "API-Token", save: "Speichern", language: "Sprache", lang_auto: "Automatisch",
     install_title: "Als App installieren", install: "Installieren",
+    profiles_title: "Druckerprofil",
+    profiles_hint: "Eigenes Druckerprofil aus OrcaSlicer, z. B. für COSMOS mit AFC: in OrcaSlicer den Drucker wählen, dann Datei → Exportieren → Voreinstellungs-Paket (.zip) oder die JSON-Datei des Profils. Der Server prüft das Profil vor der Verwendung.",
+    profile_standard: "Standard: {name}", profile_cosmos: " (mit eingebautem COSMOS-Startcode)",
+    profile_config: "Aus config.yaml: {name}", profile_for: "Hochladen für",
+    profile_upload: "Druckerprofil hochladen", profile_uploading: "Wird hochgeladen …",
+    profile_uploaded: "„{name}“ wird ab jetzt für {printer} verwendet.",
+    profile_stored: "Hochgeladen: {names}", profile_saved: "{printer} verwendet jetzt: {name}",
+    profile_delete: "Löschen", profile_delete_q: "Profil „{name}“ löschen?",
+    profile_based_on: "basiert auf {name}", profile_own_start: "eigener Startcode", profile_in_use: "verwendet von {printers}",
+    profile_kinds: { machine: "Drucker", process: "Qualität", filament: "Material", unknown: "unbekannt" },
     pair_title: "App verbinden",
     pair_hint: "In der PrintShare-App unter Einstellungen → Server verbinden → QR-Code scannen. Der Code enthält das Zugangs-Token – nicht öffentlich zeigen.",
     pair_url: "Adresse zu Hause", pair_remote: "Adresse unterwegs (optional, z. B. Tailscale)",
@@ -66,6 +76,16 @@ const I18N = {
     edit: "Change settings", new_job: "New model", no_jobs: "No jobs yet.",
     token: "API token", save: "Save", language: "Language", lang_auto: "Automatic",
     install_title: "Install as app", install: "Install",
+    profiles_title: "Printer profile",
+    profiles_hint: "Your own printer profile from OrcaSlicer, e.g. for COSMOS with AFC: select the printer in OrcaSlicer, then File → Export → preset bundle (.zip) or the profile's JSON file. The server checks the profile before using it.",
+    profile_standard: "Standard: {name}", profile_cosmos: " (with built-in COSMOS start code)",
+    profile_config: "From config.yaml: {name}", profile_for: "Upload for",
+    profile_upload: "Upload printer profile", profile_uploading: "Uploading …",
+    profile_uploaded: "“{name}” is now used for {printer}.",
+    profile_stored: "Uploaded: {names}", profile_saved: "{printer} now uses: {name}",
+    profile_delete: "Delete", profile_delete_q: "Delete profile “{name}”?",
+    profile_based_on: "based on {name}", profile_own_start: "own start code", profile_in_use: "used by {printers}",
+    profile_kinds: { machine: "Printer", process: "Quality", filament: "Material", unknown: "unknown" },
     pair_title: "Connect the app",
     pair_hint: "In the PrintShare app: Settings → Connect server → Scan QR code. The code contains the access token – don't show it publicly.",
     pair_url: "Home address", pair_remote: "Away address (optional, e.g. Tailscale)",
@@ -180,7 +200,7 @@ function show(view) {
   });
   if (view === "jobs") loadJobs();
   if (view === "printer") pollPrinters();
-  if (view === "settings") loadPairing();
+  if (view === "settings") { loadPairing(); loadProfiles(); }
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -519,6 +539,108 @@ $("save-token").onclick = async () => {
   try { await loadPrinters(); location.hash = "#print"; } catch (e) { if (!(e instanceof ApiError)) showSettings(e.message); }
 };
 $("lang").onchange = () => { store.set("ps_lang", $("lang").value); location.reload(); };
+
+// ---------- own printer profile (issue #2) ----------
+const PR = { profiles: [], assigned: {} };
+function profilesMsg(text, error = false) {
+  $("profiles-msg").textContent = text || "";
+  $("profiles-msg").className = error ? "error" : "hint ok";
+  $("profiles-msg").hidden = !text;
+}
+async function loadProfiles() {
+  if (!store.get("ps_token")) { $("profiles-card").hidden = true; return; }
+  try {
+    if (!S.printers.length) S.printers = await api("/api/printers");
+    const [profiles, ...assigned] = await Promise.all([api("/api/profiles"),
+      ...S.printers.map(p => api(`/api/printers/${encodeURIComponent(p.id)}/profile`))]);
+    PR.profiles = profiles;
+    PR.assigned = Object.fromEntries(S.printers.map((p, i) => [p.id, assigned[i]]));
+  } catch (e) {
+    $("profiles-card").hidden = !(e instanceof ApiError) || e.message === t("token_invalid");
+    profilesMsg(e.message, true);
+    return;
+  }
+  $("profiles-card").hidden = false;
+  renderProfiles();
+}
+const profileName = p => p.name || p.file;
+function renderProfiles() {
+  const machines = PR.profiles.filter(p => p.kind === "machine" && !p.error);
+  $("profile-printers").replaceChildren(...S.printers.flatMap(pr => {
+    const cur = PR.assigned[pr.id] || {};
+    const sel = el("select", { id: "profile-" + pr.id });
+    const std = t("profile_standard", { name: cur.machine || "–" }) +
+                (cur.machine_preset === "cosmos" ? t("profile_cosmos") : "");
+    fillSelect(sel, [["", std], ...machines.map(m => [m.file, profileName(m)])], cur.machine_file || "");
+    sel.onchange = () => assignProfile(pr, sel.value || null);
+    return [el("label", { for: sel.id }, pr.name), sel,
+            cur.config_file ? el("p", { class: "hint" }, t("profile_config", { name: cur.config_file })) : null];
+  }).filter(Boolean));
+  const target = $("profile-target");
+  fillSelect(target, S.printers.map(p => [p.id, p.name]), target.value || store.get("ps_printer"));
+  $("profile-target-row").hidden = S.printers.length < 2;
+  const users = file => S.printers.filter(p => PR.assigned[p.id]?.machine_file === file).map(p => p.name);
+  $("profile-list").replaceChildren(...PR.profiles.map(p => {
+    const used = users(p.file);
+    const meta = [t("profile_kinds")[p.kind] || p.kind, p.inherits ? t("profile_based_on", { name: p.inherits }) : null,
+                  p.print_start ? t("profile_own_start") : null,
+                  used.length ? t("profile_in_use", { printers: used.join(", ") }) : null, p.error].filter(Boolean);
+    return el("li", {},
+      el("div", { class: "main" }, el("div", { class: "name" }, profileName(p)),
+         el("div", { class: "meta" }, meta.join(" · "))),
+      el("button", { type: "button", class: "danger", onclick: () => deleteProfile(p) }, t("profile_delete")));
+  }));
+}
+async function assignProfile(printer, file) {
+  profilesMsg("");
+  try {
+    PR.assigned[printer.id] = await api(`/api/printers/${encodeURIComponent(printer.id)}/profile`,
+                                        { method: "PUT", body: JSON.stringify({ machine_file: file }) });
+    const m = PR.profiles.find(p => p.file === file);
+    profilesMsg(t("profile_saved", { printer: printer.name,
+      name: m ? profileName(m) : t("profile_standard", { name: PR.assigned[printer.id].machine }) }));
+  } catch (e) { profilesMsg(e.message, true); }
+  renderProfiles();
+}
+async function uploadProfile(file) {
+  const printer = S.printers.find(p => p.id === $("profile-target").value) || S.printers[0];
+  profilesMsg("");
+  $("profile-upload").disabled = true;
+  $("profile-upload").textContent = t("profile_uploading");
+  try {
+    // raw body, like the app (POST /api/profiles?filename=…); never retried
+    const stored = await api("/api/profiles?filename=" + encodeURIComponent(file.name),
+                             { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
+    const machine = stored.find(p => p.kind === "machine");
+    if (machine && printer) {
+      // the usual case: one printer preset -> use it for the chosen printer right away
+      PR.assigned[printer.id] = await api(`/api/printers/${encodeURIComponent(printer.id)}/profile`,
+                                          { method: "PUT", body: JSON.stringify({ machine_file: machine.file }) });
+      profilesMsg(t("profile_uploaded", { name: profileName(machine), printer: printer.name }));
+    } else {
+      profilesMsg(t("profile_stored", { names: stored.map(profileName).join(", ") }));
+    }
+    PR.profiles = await api("/api/profiles");
+  } catch (e) { profilesMsg(e.message, true); }
+  $("profile-upload").disabled = false;
+  $("profile-upload").textContent = t("profile_upload");
+  renderProfiles();
+}
+async function deleteProfile(p) {
+  if (!confirm(t("profile_delete_q", { name: profileName(p) }))) return;
+  profilesMsg("");
+  try {
+    await api("/api/profiles/" + encodeURIComponent(p.file), { method: "DELETE" });
+    PR.profiles = PR.profiles.filter(x => x.file !== p.file);
+  } catch (e) { profilesMsg(e.message, true); }
+  renderProfiles();
+}
+$("profile-upload").onclick = () => $("profile-file").click();
+$("profile-file").onchange = () => {
+  const f = $("profile-file").files[0];
+  $("profile-file").value = "";          // the same file can be chosen again
+  if (f) uploadProfile(f);
+};
 
 // ---------- pairing code for the app (issue #10) ----------
 const P = { shown: false, timer: 0, edited: false };

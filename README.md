@@ -95,7 +95,7 @@ bash scripts/unraid-install.sh             # Unraid: build + run from a source c
 
 ## 2. Your own OrcaSlicer printer profile (optional)
 
-In the app: **Settings → your printer → Upload printer profile**. Export the profile in OrcaSlicer
+In the app: **Settings → your printer → Upload printer profile**, or on the web page: **Settings → Printer profile**. Export the profile in OrcaSlicer
 (File → Export → preset bundle `.zip`, or the profile's JSON file), pick it on the phone – the server
 checks it (valid preset, parent profile known to OrcaSlicer 2.4.2) and uses it for this printer right away.
 It is kept in `/config/profiles/` and assigned in `/config/printers.d/<printer>.yaml`, so it survives the

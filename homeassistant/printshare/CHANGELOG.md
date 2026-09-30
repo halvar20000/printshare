@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.3
+- Upload your own OrcaSlicer printer profile on the web page too (Settings → "Printer profile"): upload a
+  JSON or preset bundle for a printer, switch each printer between its standard and an uploaded profile, delete
+  profiles that are no longer used.
+
 ## 0.10.2
 - Connect the app without the command line: the web page (Settings → "Connect the app") shows the pairing
   QR code, the address and the token. Addresses can be edited there; the code stays hidden until you tap
