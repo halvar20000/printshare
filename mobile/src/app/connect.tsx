@@ -57,11 +57,12 @@ export default function Connect() {
         <>
           <Button title={t("scanQr")} icon="qr-code-outline" onPress={() => router.push("/scan")} />
           <Text style={{ color: c.sub, fontSize: 13, marginTop: 12, marginHorizontal: 4 }}>{t("scanHelp")}</Text>
-          <Card style={{ padding: 12, marginTop: 6, marginBottom: 28 }}>
+          <Card style={{ padding: 12, marginTop: 6, marginBottom: 8 }}>
             <Text selectable style={{ color: c.text, fontFamily: mono, fontSize: 12 }}>
-              docker exec printshare printshare pair --url http://SERVER-IP:8484
+              docker exec PrintShare printshare pair --url http://SERVER-IP:8484
             </Text>
           </Card>
+          <Text style={{ color: c.sub, fontSize: 13, marginBottom: 28, marginHorizontal: 4 }}>{t("pairCmdHint")}</Text>
         </>
       ) : null}
 

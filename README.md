@@ -111,6 +111,9 @@ docker exec printshare printshare presets filament -s "@ECC"
 
 ## 3. Test from the command line first
 
+The commands below use the container name `printshare` from `docker run`/Docker Compose. The Unraid template
+names the container `PrintShare` – use `docker exec PrintShare …` there (`docker ps` shows the name).
+
 ```bash
 docker exec printshare printshare printers
 docker exec printshare printshare status -p cc-thomas
@@ -125,7 +128,8 @@ docker exec printshare printshare print "https://www.printables.com/model/3161-3
 **Native app (iOS + Android):** see [`mobile/README.md`](mobile/README.md). Connect it by scanning the pairing code:
 
 ```bash
-docker exec printshare printshare pair --url http://<server-ip>:8484
+docker exec PrintShare printshare pair --url http://<server-ip>:8484   # Unraid template
+docker exec printshare printshare pair --url http://<server-ip>:8484   # docker run / Compose
 ```
 
 **Web app (PWA)** — works in any browser without installing from a store:
