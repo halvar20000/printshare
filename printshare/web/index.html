@@ -129,6 +129,22 @@
         <option value="en">English</option>
       </select>
     </div>
+    <!-- pairing code for the native app (issue #10) -->
+    <div class="card" id="pair-card" hidden>
+      <h2 data-t="pair_title">App verbinden</h2>
+      <p class="hint" data-t="pair_hint"></p>
+      <label for="pair-url" data-t="pair_url">Adresse zu Hause</label>
+      <input id="pair-url" type="url" inputmode="url" autocomplete="off" spellcheck="false">
+      <label for="pair-remote" data-t="pair_remote">Adresse unterwegs (optional)</label>
+      <input id="pair-remote" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+             placeholder="https://tower.example.ts.net:8443">
+      <p id="pair-warn" class="error" hidden></p>
+      <button type="button" id="pair-show" class="primary" data-t="pair_show">QR-Code anzeigen</button>
+      <div id="pair-code" hidden>
+        <div id="pair-qr" class="qr"></div>
+        <p class="hint" id="pair-manual"></p>
+      </div>
+    </div>
     <div class="card">
       <h2 data-t="install_title">Als App installieren</h2>
       <button type="button" id="install" class="primary" data-t="install" hidden>Installieren</button>

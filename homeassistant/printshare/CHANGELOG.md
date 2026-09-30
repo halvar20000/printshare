@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+- Connect the app without the command line: the web page (Settings → "Connect the app") shows the pairing
+  QR code, the address and the token. Addresses can be edited there; the code stays hidden until you tap
+  "Show QR code" because it contains the token.
+
 ## 0.10.1
 - The app can show a model file in 3D before slicing (`/api/model-file`, served from the download cache).
 

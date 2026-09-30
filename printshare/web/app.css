@@ -130,3 +130,8 @@ button:active:not(:disabled) { transform: scale(.99); }
 }
 .tabs svg { width: 24px; height: 24px; fill: currentColor; }
 .tabs a[aria-current="page"] { color: var(--accent); font-weight: 600; }
+
+/* pairing QR code: always dark on white, whatever the theme, so every camera reads it */
+.qr { background: #fff; border-radius: 12px; padding: 12px; margin: 14px auto 0; width: max-content; max-width: 100%; }
+.qr svg { display: block; width: 240px; max-width: 100%; height: auto; }
+#pair-manual { word-break: break-all; }

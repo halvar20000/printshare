@@ -2,6 +2,7 @@
 
 App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token=`):
   GET  /api/info            server name/version (the app uses it to test the connection)
+  GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
   POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
@@ -40,6 +41,7 @@ import uuid
 from collections import deque
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
@@ -65,7 +67,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.10.1")
+app = FastAPI(title="PrintShare", version="0.10.2")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -116,6 +118,45 @@ def _new_job(kind: str, state: str, request: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/info", dependencies=[Depends(auth)])
 def info() -> dict[str, Any]:
     return {"name": "PrintShare", "version": app.version, "printers": len(settings.printers)}
+
+
+@app.get("/api/pairing", dependencies=[Depends(auth)])
+async def pairing(request: Request, url: str | None = None, remote: str | None = None) -> dict[str, Any]:
+    """Pairing code for the app (issue #10), so nobody needs the command line or the container log.
+    Addresses: query > PRINTSHARE_URL / HA server_url (remote: PRINTSHARE_REMOTE_URL / HA remote_url) >
+    the address this page was opened with. Needs the token like every /api endpoint - the code contains it."""
+    import segno
+
+    from . import bootstrap
+    from .cli import pairing_link
+    configured = await asyncio.to_thread(bootstrap.server_url) if url is None else ""
+    home = (url if url is not None else configured or str(request.base_url)).strip().rstrip("/")
+    away = (remote if remote is not None else bootstrap.remote_url()).strip().rstrip("/")
+    if not home:
+        raise HTTPException(400, "url is required")
+    hosts = {}
+    for u, name in ((home, "url"), (away, "remote")):
+        if not u:
+            continue
+        try:
+            parts = urlsplit(u)
+            parts.port                       # raises ValueError for a broken port
+        except ValueError:
+            parts = None
+        if not parts or parts.scheme not in ("http", "https") or not parts.hostname or re.search(r"\s", u) \
+                or parts.query or parts.fragment:
+            raise HTTPException(400, f"{name} must look like http://192.168.1.10:8484 or https://name:port")
+        hosts[name] = parts.hostname.lower()
+    warnings = []
+    host = hosts["url"]
+    if host in ("localhost", "::1", "0.0.0.0") or host.startswith("127."):
+        warnings.append("localhost")          # the phone can't reach the server's own loopback address
+    if request.headers.get("x-ingress-path") or "/api/hassio_ingress/" in home:
+        warnings.append("ingress")            # Home Assistant ingress: not reachable for the app
+    link = pairing_link(home, settings.api_token, away)
+    svg = segno.make(link, error="m").svg_inline(scale=5, border=2, light="#fff", omitsize=True)  # viewBox: scales in CSS
+    return {"link": link, "svg": svg, "url": home, "remote_url": away, "token": settings.api_token,
+            "configured": bool(configured), "warnings": warnings}
 
 
 # ---------- printers ----------

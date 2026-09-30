@@ -137,7 +137,16 @@ docker exec printshare printshare print "https://www.printables.com/model/3161-3
 
 ## 4. The app on your phone
 
-**Native app (iOS + Android):** see [`mobile/README.md`](mobile/README.md). Connect it by scanning the pairing code:
+**Native app (iOS + Android):** see [`mobile/README.md`](mobile/README.md).
+
+**Connect the app** – easiest way: open `http://<server-ip>:8484` in a browser, enter the access token
+(shown in the container / add-on log) under *Settings*, then *Settings → Connect the app → Show QR code* and
+scan it in the app (*Settings → Connect server → Scan QR code*). Check the home address first – when the page
+was opened as `localhost` or through Home Assistant, enter the server's IP address with port 8484 instead;
+add the away address (e.g. Tailscale) there too. The code contains the token, so don't share screenshots of it.
+
+The same code is printed in the container log on start (when `PRINTSHARE_URL` / add-on `server_url` is set)
+and by the command line:
 
 ```bash
 docker exec PrintShare printshare pair --url http://<server-ip>:8484   # Unraid template

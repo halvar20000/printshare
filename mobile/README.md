@@ -14,7 +14,7 @@ Android. The app only talks to your own PrintShare server; the server downloads,
   change settings and re-slice (SL-05).
 - **Confirm:** "plate empty and material loaded" switch + confirmation dialog; the server refuses to start on a busy printer (NF-05, DR-03).
 - **Printers:** live progress, layer, remaining time, temperatures, pause/resume/cancel, camera link (DR-04/05/06).
-- **Pairing:** scan the QR code from `printshare pair`, or enter address + token; token stored in Keychain/Keystore (NF-04).
+- **Pairing:** scan the QR code from the web page (Settings → Connect the app, #10) or `printshare pair`, or enter address + token; token stored in Keychain/Keystore (NF-04).
 - German and English, light and dark mode.
 
 ## Home and away

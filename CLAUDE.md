@@ -342,6 +342,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   confirms during a print and for high targets (nozzle ≥ 260, bed ≥ 100). Pure JS → no new native build needed
   beyond the regular release.
 
+## Pairing code in the web UI (issue #10, 2026-09-30, 0.10.2)
+- `GET /api/pairing?url=&remote=` (auth): `link`, `svg` (segno, `omitsize` → viewBox), `url`, `remote_url`, `token`,
+  `configured`, `warnings` (`localhost` for loopback hosts, `ingress` for HA ingress). Address: query >
+  `bootstrap.server_url()` (PRINTSHARE_URL / HA server_url / supervisor IP) > `request.base_url`; away address:
+  query > `bootstrap.remote_url()`. URLs checked with `urlsplit` (scheme, host, numeric port, no query).
+- PWA settings card "App verbinden": editable addresses (re-fetch after 500 ms), QR hidden until "anzeigen",
+  a stale code is cleared on an error. PR #11 (Dominique, 0.10.1): `GET /api/model-file` for the iOS 3D view.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

@@ -274,6 +274,37 @@ def test_preview_and_gcode_download(api, client, monkeypatch, tmp_path):
     assert client.get("/api/jobs/nope/preview", headers=H).status_code == 404
 
 
+def test_pairing_code_for_the_web_ui(client, monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+    for var in ("PRINTSHARE_URL", "PRINTSHARE_REMOTE_URL", "SUPERVISOR_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+    assert client.get("/api/pairing").status_code == 401
+    # nothing configured: the address the page was opened with
+    r = client.get("/api/pairing", headers=H).json()
+    assert r["url"] == "http://testserver" and r["remote_url"] == "" and not r["configured"]
+    assert r["token"] == TOKEN and r["svg"].startswith("<svg") and r["warnings"] == []
+    q = parse_qs(urlsplit(r["link"]).query)
+    assert r["link"].startswith("printshare://connect?") and q == {"url": ["http://testserver"], "token": [TOKEN]}
+    # configured addresses win over the request
+    monkeypatch.setenv("PRINTSHARE_URL", "192.168.1.5:8484")
+    monkeypatch.setenv("PRINTSHARE_REMOTE_URL", "https://tower.example.ts.net:8443/")
+    r = client.get("/api/pairing", headers=H).json()
+    assert (r["url"], r["remote_url"], r["configured"]) == \
+        ("http://192.168.1.5:8484", "https://tower.example.ts.net:8443", True)
+    assert parse_qs(urlsplit(r["link"]).query)["remote"] == ["https://tower.example.ts.net:8443"]
+    # edited in the web UI; an empty away address removes it
+    r = client.get("/api/pairing", headers=H, params={"url": "http://10.0.0.2:8484", "remote": ""}).json()
+    assert r["url"] == "http://10.0.0.2:8484" and "remote" not in parse_qs(urlsplit(r["link"]).query)
+    assert client.get("/api/pairing", headers=H, params={"url": "localhost:8484"}).status_code == 400
+    assert client.get("/api/pairing", headers=H, params={"url": ""}).status_code == 400
+    for bad in ("http://localhost:859htowerttp://127.0.0.1:8484", "http://", "ftp://x", "http://a b:1", "http://x/?t=1"):
+        assert client.get("/api/pairing", headers=H, params={"url": bad}).status_code == 400, bad
+    assert client.get("/api/pairing", headers=H, params={"url": "http://[::1]:8484"}).json()["warnings"] == ["localhost"]
+    assert client.get("/api/pairing", headers=H, params={"url": "http://127.0.0.1:8484"}).json()["warnings"] == ["localhost"]
+    r = client.get("/api/pairing", headers={**H, "X-Ingress-Path": "/api/hassio_ingress/abc"}).json()
+    assert r["warnings"] == ["ingress"]
+
+
 def test_model_file_for_the_3d_view(client):
     stl = b"solid cube\nendsolid cube\n"
     up = client.post("/api/uploads", headers=H, params={"name": "cube.stl"}, content=stl).json()
