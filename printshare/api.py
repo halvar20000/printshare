@@ -72,7 +72,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.13.1")
+app = FastAPI(title="PocketPrint3D", version="0.14.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -721,6 +721,11 @@ class OptionsModel(BaseModel):
     infill: int | None = None
     walls: int | None = None
     filaments: list[str | None] | None = None   # multicolour: preset per filament of the model
+    copies: int | None = None                    # plate: copies, OrcaSlicer arranges them (fewer if they don't fit)
+    rotate_x: float | None = None                # plate: tilt in degrees before slicing
+    rotate_y: float | None = None
+    scale: int | None = None                     # plate: size in percent
+    orient: bool | None = None                   # plate: lay flat automatically (None = printer setting)
 
 
 class JobRequest(BaseModel):
@@ -734,6 +739,7 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     opts = JobOptions(**o.model_dump())
     try:
         opts.process_overrides()
+        opts.check_plate()
     except ValueError as e:
         raise HTTPException(400, str(e))
     if opts.bed_type and opts.bed_type not in PLATES:

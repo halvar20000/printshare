@@ -77,9 +77,14 @@ const I18N = {
     nozzle: "Düse", bed: "Bett", progress: "Fortschritt", layer: "Schicht", file_label: "Datei",
     changed: "Geänderte Werte", changed_none: "keine – Profilwerte", profile_values: "Profil",
     infill_v: "Füllung {v}", walls_v: "{v} Wände", supports_v: "Stützen: {v}", brim_v: "Brim: {v}",
+    arrange: "Auf der Platte", copies: "Anzahl", tilt: "Lage", size: "Größe",
+    tilt_: "Wie im Modell", tilt_auto: "Automatisch hinlegen", tilt_x90: "Nach vorne kippen",
+    tilt_x_90: "Nach hinten kippen", tilt_y90: "Nach rechts kippen", tilt_y_90: "Nach links kippen",
+    tilt_x180: "Auf den Kopf stellen", copies_v: "{n}×", copies_fit: "Nur {n} von {m} Kopien passen auf die Platte.",
     log: [[/^Looking up model files/, "Modelldateien werden gesucht"], [/^Downloading (.*)/, "Download: $1"],
           [/^Waiting for another slice job/, "Wartet auf einen anderen Slice-Auftrag"],
           [/^Slicing for (.*)/, "Slicen für $1"], [/^Sliced: (.*)/, "Geslict: $1"],
+          [/^Only (\d+) of (\d+) copies fit on the plate/, "Nur $1 von $2 Kopien passen auf die Platte"],
           [/^Sending to printer and starting/, "Wird gesendet und gestartet"],
           [/^Sending to printer/, "Wird gesendet"], [/^Done/, "Fertig"]],
   },
@@ -157,6 +162,10 @@ const I18N = {
     nozzle: "Nozzle", bed: "Bed", progress: "Progress", layer: "Layer", file_label: "File",
     changed: "Changed values", changed_none: "none – profile values", profile_values: "Profile",
     infill_v: "Infill {v}", walls_v: "{v} walls", supports_v: "Supports: {v}", brim_v: "Brim: {v}",
+    arrange: "On the plate", copies: "Copies", tilt: "Position", size: "Size",
+    tilt_: "As in the model", tilt_auto: "Lay flat automatically", tilt_x90: "Tip forward",
+    tilt_x_90: "Tip backward", tilt_y90: "Tip to the right", tilt_y_90: "Tip to the left",
+    tilt_x180: "Upside down", copies_v: "{n}×", copies_fit: "Only {n} of {m} copies fit on the plate.",
     log: [],
   },
 };
@@ -284,6 +293,29 @@ function setDetailControls(d, keep = {}) {
              keep.walls ?? "");
 }
 
+// plate options: one choice for the position -> rotate_x / rotate_y / orient (server 0.14.0)
+const TILTS = { "": {}, auto: { orient: true }, x90: { rotate_x: 90 }, x_90: { rotate_x: -90 },
+                y90: { rotate_y: 90 }, y_90: { rotate_y: -90 }, x180: { rotate_x: 180 } };
+const SIZES = [25, 50, 75, 100, 125, 150, 200, 300];
+function tiltKey(o) {
+  if (o.orient) return "auto";
+  return Object.keys(TILTS).find(k => k && k !== "auto" && (TILTS[k].rotate_x || 0) === (o.rotate_x || 0) &&
+                                       (TILTS[k].rotate_y || 0) === (o.rotate_y || 0)) || "";
+}
+function setPlateControls(keep = {}) {
+  $("copies").value = keep.copies || 1;
+  fillSelect($("tilt"), Object.keys(TILTS).map(k => [k, t("tilt_" + k)]), tiltKey(keep));
+  fillSelect($("scale"), SIZES.map(v => [v, v + "\u00a0%"]), keep.scale || 100);
+}
+function plateLabel(o) {
+  const out = [];
+  if (o.copies > 1) out.push(t("copies_v", { n: o.copies }));
+  const k = tiltKey(o);
+  if (k) out.push(t("tilt_" + k));
+  if (o.scale && o.scale !== 100) out.push(o.scale + "\u00a0%");
+  return out;
+}
+
 async function loadPrinters() {
   S.printers = await api("/api/printers");
   fillSelect($("printer"), S.printers.map(p => [p.id, p.name]), store.get("ps_printer"));
@@ -322,6 +354,10 @@ function formOptions() {
   if (brim !== d.brim) o.brim = brim;
   if ($("infill").value !== "") o.infill = Number($("infill").value);
   if ($("walls").value !== "") o.walls = Number($("walls").value);
+  const copies = Math.min(50, Math.max(1, Math.round(Number($("copies").value) || 1)));
+  if (copies > 1) o.copies = copies;
+  Object.assign(o, TILTS[$("tilt").value] || {});
+  if (Number($("scale").value) !== 100) o.scale = Number($("scale").value);
   return o;
 }
 
@@ -420,6 +456,9 @@ function showReview(j) {
   const rows = [[t("printer"), printer?.name || r.printer], [t("material"), short(p.filament)],
                 [t("quality"), short(p.process)], [t("plate"), plateName(p.bed_type)],
                 [t("changed"), changed.length ? changed.join(" · ") : t("changed_none"), changed.length > 0]];
+  const ro = j.request?.options || {};
+  const arranged = plateLabel({ ...ro, copies: r.copies ?? ro.copies });
+  if (arranged.length) rows.push([t("arrange"), arranged.join(" · "), true]);
   $("review-details").replaceChildren(...rows.flatMap(([k, v, hi]) =>
     [el("dt", {}, k), el("dd", hi ? { class: "changed" } : {}, v || "–")]));
   $("plate-empty-text").textContent = t("plate_empty", { material: short(p.filament) || "Filament" });
@@ -431,8 +470,10 @@ function showReview(j) {
   $("sent-text").textContent = done ? t("started_msg") : t("uploaded_msg");
   $("edit").hidden = done;
   $("new-job").hidden = !(done || uploaded);
-  $("review-error").textContent = j.error || "";
-  $("review-error").hidden = !j.error;
+  const fewer = r.copies_requested && r.copies != null && r.copies < r.copies_requested;
+  $("review-error").textContent = j.error || (fewer ? t("copies_fit", { n: r.copies, m: r.copies_requested }) : "");
+  $("review-error").hidden = !j.error && !fewer;
+  $("review-error").classList.toggle("warn", !j.error && fewer);
   $("do-upload").hidden = uploaded;
   $("do-print").textContent = t("print");
   S.lastJob = j;
@@ -546,6 +587,7 @@ async function editJob() {
   try {
     await loadOptions({ filament: o.filament, process: o.process, bed_type: o.bed_type,
                         supports: o.supports, brim: o.brim, infill: o.infill, walls: o.walls });
+    setPlateControls(o);
   } catch (e) { formError(e.message); }
   await loadFiles();
   if (req.file) $("file").value = req.file;
@@ -902,6 +944,7 @@ async function init() {
   if (shared) $("link").value = shared;
   if (location.search) history.replaceState(null, "", "/" + location.hash);  // keep the token out of history
   $("token").value = store.get("ps_token");
+  setPlateControls();
   if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
   show(location.hash.slice(1) || "print");

@@ -61,6 +61,8 @@ export type Options = {
 export type JobOptions = Partial<{
   filament: string; process: string; bed_type: string; supports: string; brim: string;
   infill: number; walls: number; filaments: (string | null)[];
+  /** plate (server 0.14.0): copies 1-50, tilt in degrees, size in %, lay flat automatically */
+  copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
 export type JobState = "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
@@ -69,6 +71,8 @@ export type JobResult = {
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
   overrides: Record<string, string>;
   filaments?: { index: number; color: string | null; preset: string; grams: number | null }[];
+  /** server 0.14.0: copies asked for / on the plate (null for one copy) */
+  copies_requested?: number | null; copies?: number | null;
 };
 export type Job = {
   id: string; kind: string; state: JobState; log: string[]; result: JobResult | null; error: string | null;

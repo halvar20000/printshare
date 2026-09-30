@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 
-from .config import load_settings
+from .config import JobOptions, load_settings
 from .fetch import FetchError, Fetcher
 from .pipeline import run_job
 from .printers import get_adapter
@@ -27,6 +27,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-start", action="store_true", help="upload only, do not start")
     p.add_argument("--slice-only", action="store_true", help="do not send to the printer")
     p.add_argument("--no-leveling", action="store_true", help="skip bed leveling (Centauri Carbon stock firmware)")
+    p.add_argument("--copies", type=int, help="copies on the plate (as many as fit)")
+    p.add_argument("--rotate-x", type=float, help="tilt about X in degrees before slicing")
+    p.add_argument("--rotate-y", type=float, help="tilt about Y in degrees before slicing")
+    p.add_argument("--scale", type=int, help="size in percent")
+    p.add_argument("--orient", action=argparse.BooleanOptionalAction, default=None,
+                   help="lay flat automatically (default: printer setting)")
 
     f = sub.add_parser("files", help="list the files of a model")
     f.add_argument("link")
@@ -65,10 +71,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if a.cmd == "print":
+            opts = JobOptions(copies=a.copies, rotate_x=a.rotate_x, rotate_y=a.rotate_y, scale=a.scale,
+                              orient=a.orient)
+            opts.check_plate()
             res = asyncio.run(run_job(settings, a.link, a.printer, a.file,
                                       send=not a.slice_only, start=not a.no_start,
                                       progress=lambda m: print(f"• {m}", flush=True),
-                                      leveling=False if a.no_leveling else None))
+                                      options=opts, leveling=False if a.no_leveling else None))
             print(json.dumps(res.as_dict(), indent=2))
         elif a.cmd == "files":
             files = Fetcher(settings.thingiverse_token).list_files(a.link)

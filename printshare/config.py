@@ -54,6 +54,11 @@ class SlicingConfig:
     filament_overrides: dict[str, Any] = field(default_factory=dict)
     plate: int = 1
     auto_orient: bool = False
+    # per job (app "Platte" section): copies on the plate, tilt in degrees, scale factor
+    copies: int = 1
+    rotate_x: float = 0
+    rotate_y: float = 0
+    scale: float = 1.0
     # Build plate; the CLI otherwise defaults to "Cool Plate" (35 °C for PLA).
     # Options: "Textured PEI Plate", "High Temp Plate", "Cool Plate", "Engineering Plate", "Supertack Plate"
     bed_type: str = "Textured PEI Plate"
@@ -81,6 +86,7 @@ def _has_print_start(machine_file: str) -> bool:
     return "PRINT_START" in ("\n".join(start) if isinstance(start, list) else str(start))
 
 
+MAX_COPIES = 50
 SUPPORT_TYPES = {"normal": "normal(auto)", "tree": "tree(auto)"}
 BRIM_TYPES = {"auto": "auto_brim", "off": "no_brim", "outer": "outer_only"}
 
@@ -97,6 +103,13 @@ class JobOptions:
     walls: int | None = None      # wall loops
     # multicolour: preset per filament of the model (1st = filament 1); None entries use `filament`
     filaments: list[str | None] | None = None
+    # plate: copies (OrcaSlicer arranges them), tilt about X/Y in degrees, scale in percent,
+    # orient = lay flat automatically (None = printer setting)
+    copies: int | None = None
+    rotate_x: float | None = None
+    rotate_y: float | None = None
+    scale: int | None = None
+    orient: bool | None = None
 
     def process_overrides(self) -> dict[str, Any]:
         o: dict[str, Any] = {}
@@ -120,6 +133,18 @@ class JobOptions:
             o["wall_loops"] = str(self.walls)
         return o
 
+    def check_plate(self) -> None:
+        """Raise ValueError for plate options out of range."""
+        if self.copies is not None and not 1 <= self.copies <= MAX_COPIES:
+            raise ValueError(f"copies must be 1-{MAX_COPIES}")
+        for v in (self.rotate_x, self.rotate_y):
+            if v is not None and not -360 <= v <= 360:
+                raise ValueError("rotation must be -360 to 360 degrees")
+        if self.scale is not None and not 10 <= self.scale <= 1000:
+            raise ValueError("scale must be 10-1000 %")
+        if self.orient and (self.rotate_x or self.rotate_y):
+            raise ValueError("choose either a rotation or automatic orientation")
+
     def apply(self, base: SlicingConfig) -> SlicingConfig:
         """Return a copy of `base` with these options applied (base stays untouched)."""
         s = copy.copy(base)  # no __post_init__: overrides are already merged in `base`
@@ -129,6 +154,12 @@ class JobOptions:
         s.bed_type = self.bed_type or base.bed_type
         s.process_overrides = {**base.process_overrides, "curr_bed_type": s.bed_type,
                                **self.process_overrides()}
+        s.copies = self.copies or 1
+        s.rotate_x = self.rotate_x or 0
+        s.rotate_y = self.rotate_y or 0
+        s.scale = (self.scale or 100) / 100
+        if self.orient is not None:
+            s.auto_orient = self.orient
         return s
 
 

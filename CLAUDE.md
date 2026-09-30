@@ -397,6 +397,23 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store
   the pulled presets as `profiles/` files (kind prefix) so everything above works unchanged.
 
+## Copies, tilt, size on the plate (2026-09-30, 0.14.0, Dominique's "Stufe 1")
+- Job options `copies` (1-50), `rotate_x`/`rotate_y` (degrees), `scale` (%), `orient`; result `copies_requested` /
+  `copies`. Concept for a later free placement editor: project file `analysen/konzept-anordnen-duplizieren-drehen.md`.
+- OrcaSlicer 2.4.2 CLI findings (checked with the real binary): `--rotate-x/-y` and `--scale` > 1 **segfault**
+  (`PartPlate::check_outside` → `Plater::build_volume()` is null headless) as soon as the object reaches below the
+  bed, i.e. almost always → `printshare/transform.py` turns/scales STL/OBJ vertices or the 3MF `<build><item>`
+  transforms itself (each item about its own centre, lifted to z = 0; other 3MF bytes untouched). `--rotate`
+  (Z) is useless: `--arrange 1` turns objects back to their smallest footprint. `--repetitions N` only works for
+  Orca/Bambu projects ("can not set repetitions when slice all" otherwise, the plate is reset to 0 for other
+  files) → other files are passed N times as input. Too many copies: Orca puts what fits on plate 1 (and the rest
+  on plates we don't slice); with `--repetitions` it bisects to the largest count that fits. Count = objects in
+  `result.3mf` `Metadata/slice_info.config` of the plate ÷ objects per copy.
+- The claude-agent container is now Ubuntu 24.04: Orca runs directly after `apt-get install` of the Dockerfile's
+  libraries (no proot needed); `ORCA_ROOT=<extracted AppImage> pytest` → 142 tests green.
+- Web: card "Auf der Platte" (Anzahl, Größe, Lage = one select for tilt/auto), review row + yellow hint when fewer
+  fit. Expo app: same section on `prepare.tsx` (`lib/plate.ts`), row + banner on `job/[id].tsx`.
+
 ## Product decisions (Thomas, 2026-09-30)
 - **Cloud service** planned, run by Thomas on **Hetzner** (EU): slicing, search, accounts in the cloud; the **phone app
   relays G-code to the printer on the home Wi-Fi** (nothing to install at home); remote access needs a **bridge**

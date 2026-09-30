@@ -9,7 +9,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import model_info
+from . import model_info, transform
 from .config import PrinterConfig, Settings, SlicingConfig
 from .profiles import ProfileLibrary, load_user_preset, write_preset
 from .user_profiles import resolve_preset
@@ -29,6 +29,7 @@ class SliceResult:
     log: str = ""
     warnings: list[str] = field(default_factory=list)
     filaments: list[dict] = field(default_factory=list)   # multicolour: per filament of the model
+    copies: int | None = None       # copies that fit on the plate (only set when more than 1 was asked for)
 
 
 _TIME_RE = re.compile(r";\s*(?:model printing time|estimated printing time \(normal mode\))\s*[:=]\s*([^;\n]+)")
@@ -124,6 +125,15 @@ class Slicer:
             info = model_info.inspect(model)
             colors = [f["color"] for f in info["filaments"]]
             m, p, fs = self.build_presets(printer, work, slicing, colors)
+            source = model
+            if transform.needed(slicing.rotate_x, slicing.rotate_y, slicing.scale):
+                try:
+                    source = transform.transform_model(model, work / "model", slicing.rotate_x,
+                                                       slicing.rotate_y, slicing.scale)
+                except transform.TransformError as e:
+                    raise SliceError(str(e)) from e
+            copies = max(1, slicing.copies)
+            project = transform.is_orca_project(source)
             cmd = [
                 self.settings.orca_binary,
                 "--arrange", "1",
@@ -138,7 +148,13 @@ class Slicer:
             ]
             if model.suffix.lower() == ".3mf":
                 cmd += ["--allow-newer-file"]
-            cmd.append(str(model))
+            if copies > 1 and project:
+                # only OrcaSlicer/Bambu projects keep a plate for --repetitions; it fits as many as it can
+                cmd += ["--repetitions", str(copies)]
+                cmd.append(str(source))
+            else:
+                # other files: load the model once per copy; what does not fit goes to plates we don't slice
+                cmd += [str(source)] * copies
             proc = subprocess.run(cmd, capture_output=True, text=True, cwd=work,
                                   timeout=self.settings.slice_timeout_s)
             log = (proc.stdout or "") + (proc.stderr or "")
@@ -152,6 +168,11 @@ class Slicer:
             target = out_dir / f"{model.stem[:60]}.gcode"
             shutil.copyfile(gcode_src, target)
             t, g, mtr, layers = _parse_estimates(target)
+            placed = None
+            if copies > 1:
+                total = transform.placed_objects(work / "out" / "result.3mf", slicing.plate if project else 1)
+                if total is not None:
+                    placed = max(1, total // transform.count_objects(source, slicing.plate))
             per = []
             if len(fs) > 1:
                 grams = filament_grams(target)
@@ -159,7 +180,7 @@ class Slicer:
                          for i in range(len(fs))]
                 per = [{"index": i + 1, "color": colors[i] if i < len(colors) else None, "preset": names[i],
                         "grams": grams[i] if i < len(grams) else None} for i in range(len(fs))]
-            return SliceResult(target, t, g, mtr, layers, log, filaments=per)
+            return SliceResult(target, t, g, mtr, layers, log, filaments=per, copies=placed)
         finally:
             if not self.settings.keep_work_files:
                 shutil.rmtree(work, ignore_errors=True)

@@ -12,6 +12,7 @@ import { useApp } from "@/lib/app";
 import { getItem, setItem } from "@/lib/storage";
 import { jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
+import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
 
@@ -263,6 +264,10 @@ export default function JobScreen() {
   // ---------- review / sent ----------
   const p = r?.profiles ?? {};
   const changed = changedValues(t, r?.overrides ?? {});
+  // plate options only from servers that know them (0.14.0 reports copies_requested)
+  const arranged = r && "copies_requested" in r ? plateSummary(t, job.request.options, r.copies) : "";
+  const fewer = r?.copies_requested && r.copies != null && r.copies < r.copies_requested
+    ? t("copiesFit", { n: r.copies, m: r.copies_requested }) : null;
   const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
   const done = job.state === "started";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
@@ -338,6 +343,7 @@ export default function JobScreen() {
           })}
         </Section>
       ) : null}
+      {fewer ? <Banner kind="warn" text={fewer} /> : null}
       {!done ? laneWarnings.map(w => <Banner key={w.text} kind={w.blocking ? "error" : "warn"} text={w.text} />) : null}
       {laneSheet != null ? (
         <PickerSheet visible title={colours.length > 1 ? t("colorN", { n: laneSheet }) : t("lane")}
@@ -372,6 +378,7 @@ export default function JobScreen() {
         <Row label={t("plate")} value={plateName(t, p.bed_type)} />
         <Divider />
         <Row label={t("changed")} sub={changed.length ? changed.join(" · ") : t("changedNone")} />
+        {arranged ? <><Divider /><Row label={t("arrange")} sub={arranged} /></> : null}
       </Section>
 
       {!done ? (
