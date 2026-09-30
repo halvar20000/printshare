@@ -270,6 +270,13 @@ def test_slice_two_colour_3mf_for_cosmos_afc(tmp_path):
     assert "M6211" not in gcode                           # Elegoo's CANVAS command is not for COSMOS
     assert "TOOL=0" in gcode and "M729" not in gcode
     assert len(res.filaments) == 2 and all(f["grams"] for f in res.filaments)
+    # lane selection (issue #6) on the real G-code: colour 1 -> lane T2, colour 2 -> lane T3
+    from printshare.lanes import remap_tools
+    mapped = remap_tools(res.gcode_path, {0: 2, 1: 3}, tmp_path / "mapped").read_text()
+    code = [ln for ln in mapped.splitlines() if not ln.startswith(";")]
+    assert any("PRINT_START" in ln and "TOOL=2" in ln for ln in code)
+    assert any(ln.startswith("T3 PURGE_LENGTH=") for ln in code)
+    assert not any(ln.startswith(("T0", "T1")) for ln in code)
 
 
 @needs_orca

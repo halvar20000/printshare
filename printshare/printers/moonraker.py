@@ -5,6 +5,7 @@ Moonraker installs listen on 7125. We try the configured URL first, then :7125.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -85,6 +86,7 @@ class Moonraker:
             if r.status_code != 200:
                 raise MoonrakerError(f"Status failed: HTTP {r.status_code}")
             st = r.json()["result"]["status"]
+            lanes = await self._lanes(client, base)
         ps = st.get("print_stats", {})
         info = ps.get("info") or {}
         return {
@@ -99,4 +101,48 @@ class Moonraker:
             "bed": st.get("heater_bed", {}).get("temperature"),
             "bed_target": st.get("heater_bed", {}).get("target"),
             "camera": f"{base}/webcam/?action=stream",
+            "lanes": lanes,
         }
+
+    async def _lanes(self, client: httpx.AsyncClient, base: str) -> list[dict[str, Any]]:
+        """Filament lanes of an AFC unit (e.g. CANVAS on COSMOS), [] without AFC (spec MA-02).
+
+        AFC (AFCProject/AFC-Klipper-Add-On) reports the lane names in `AFC.lanes`; each lane is its own
+        Klipper object ("AFC_stepper lane1", "AFC_lane lane1" …) with map (tool), material, colour, load.
+        """
+        try:
+            r = await client.get(f"{base}/printer/objects/list", headers=self.headers)
+            objects = r.json()["result"]["objects"] if r.status_code == 200 else []
+            if "AFC" not in objects:
+                return []
+            r = await client.get(f"{base}/printer/objects/query", params={"AFC": ""}, headers=self.headers)
+            afc = r.json()["result"]["status"].get("AFC") or {}
+            names = set(afc.get("lanes") or [])
+            lane_objs = [o for o in objects if o.startswith("AFC_") and " " in o and o.split(" ", 1)[1] in names]
+            if not lane_objs:
+                return []
+            r = await client.get(f"{base}/printer/objects/query", params={o: "" for o in lane_objs},
+                                 headers=self.headers)
+            status = r.json()["result"]["status"]
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            return []            # lanes are extra information; the printer status works without them
+        current = afc.get("current_load")
+        out = []
+        for obj in lane_objs:
+            ln = status.get(obj) or {}
+            name = obj.split(" ", 1)[1]
+            m = re.fullmatch(r"T(\d+)", str(ln.get("map") or ""))
+            color = str(ln.get("color") or "")
+            out.append({
+                "id": name,
+                "tool": int(m.group(1)) if m else None,
+                "unit": ln.get("unit"),
+                "material": ln.get("material") or None,
+                "color": ("#" + color.lstrip("#")[:6].upper()) if re.fullmatch(r"#?[0-9A-Fa-f]{6,8}", color) else None,
+                "filament": ln.get("filament_name") or None,
+                "weight_g": ln.get("weight"),
+                "loaded": bool(ln.get("prep") or ln.get("load")),
+                "in_toolhead": bool(ln.get("tool_loaded")) or name == current,
+                "status": ln.get("status"),
+            })
+        return sorted(out, key=lambda x: (x["tool"] is None, x["tool"] if x["tool"] is not None else 0, x["id"]))

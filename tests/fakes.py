@@ -95,12 +95,26 @@ class FakeCentauri:
             await r.cleanup()
 
 
+# 4 CANVAS lanes via AFC (fields as AFC_lane.get_status in AFCProject/AFC-Klipper-Add-On)
+AFC_LANES = {
+    "lane1": {"map": "T0", "material": "PLA", "color": "#FFFFFF", "filament_name": "Elegoo PLA White", "prep": True,
+              "load": True, "tool_loaded": True, "weight": 820, "status": "Tooled", "unit": "CANVAS_1"},
+    "lane2": {"map": "T1", "material": "PLA", "color": "#e53935", "filament_name": "Elegoo PLA Red", "prep": True,
+              "load": True, "tool_loaded": False, "weight": 400, "status": "Loaded", "unit": "CANVAS_1"},
+    "lane3": {"map": "T2", "material": "PETG", "color": "#1E88E5", "filament_name": "", "prep": True,
+              "load": True, "tool_loaded": False, "weight": 950, "status": "Loaded", "unit": "CANVAS_1"},
+    "lane4": {"map": "T3", "material": "", "color": "", "filament_name": "", "prep": False,
+              "load": False, "tool_loaded": False, "weight": 0, "status": "None", "unit": "CANVAS_1"},
+}
+
+
 class FakeMoonraker:
-    def __init__(self, port: int = 7125) -> None:
+    def __init__(self, port: int = 7125, afc: bool = False) -> None:
         self.port = port
         self.uploads: list[dict] = []
         self.actions: list[str] = []
         self.state = "printing"
+        self.afc = afc
         self.runner: web.AppRunner | None = None
 
     async def info(self, request: web.Request) -> web.Response:
@@ -116,13 +130,27 @@ class FakeMoonraker:
                                              "print_started": form.get("print") == "true",
                                              "action": "create_file"}}, status=201)
 
-    async def query(self, request: web.Request) -> web.Response:
-        return web.json_response({"result": {"status": {
+    def _objects(self) -> dict:
+        objs = {
             "print_stats": {"state": self.state, "filename": "cube.gcode", "print_duration": 60,
                             "info": {"current_layer": 3, "total_layer": 100}},
             "display_status": {"progress": 0.031},
             "extruder": {"temperature": 210.1, "target": 210},
-            "heater_bed": {"temperature": 60.0, "target": 60}}}})
+            "heater_bed": {"temperature": 60.0, "target": 60},
+            "virtual_sdcard": {"progress": 0.03},
+        }
+        if self.afc:
+            objs["AFC"] = {"current_load": "lane1", "lanes": list(AFC_LANES), "units": ["CANVAS CANVAS_1"]}
+            objs.update({f"AFC_stepper {name}": dict(ln, name=name) for name, ln in AFC_LANES.items()})
+        return objs
+
+    async def objects_list(self, request: web.Request) -> web.Response:
+        return web.json_response({"result": {"objects": list(self._objects())}})
+
+    async def query(self, request: web.Request) -> web.Response:
+        # like Klipper: only the requested objects, unknown ones are left out
+        objs = self._objects()
+        return web.json_response({"result": {"status": {k: objs[k] for k in request.query if k in objs}}})
 
     async def control(self, request: web.Request) -> web.Response:
         self.actions.append(request.match_info["action"])
@@ -134,6 +162,7 @@ class FakeMoonraker:
         app.router.add_get("/server/info", self.info)
         app.router.add_post("/server/files/upload", self.upload)
         app.router.add_get("/printer/objects/query", self.query)
+        app.router.add_get("/printer/objects/list", self.objects_list)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         await web.TCPSite(self.runner, "127.0.0.1", self.port).start()

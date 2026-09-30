@@ -290,6 +290,21 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   host removed): his legacy placeholders `[first_layer_temperature]` expand fine (EXTRUDER=210 … TOOL=0).
 - Not yet: choosing uploaded process/filament presets (stored and listed, not offered in the pickers).
 
+## Lane selection for AFC (issue #6, 2026-09-30, 0.8.0)
+- AFC (now `AFCProject/AFC-Klipper-Add-On`): `AFC` object lists `lanes`, `current_load`; each lane is its own
+  Klipper object (`AFC_stepper lane1`, `AFC_lane …`, prefix varies) with `map` ("T0"), `load`, `prep`,
+  `tool_loaded`, `material`, `color`, `filament_name`, `weight`, `status`. `moonraker._lanes()`:
+  `/printer/objects/list` → query `AFC` + lane objects → `status.lanes` (`[]` without AFC).
+- Lane choice is made on the review screen, after slicing: `/send` takes `lanes {"<model filament>": <tool>}`;
+  `printshare/lanes.py` rewrites a copy of the G-code at send time (`T<n>` at line start, `TOOL=<n>`,
+  `M6211 … T<n>`; comments/settings dump untouched). The sliced G-code stays as it is (change lanes without
+  re-slicing). AFC's own map (`SET_MAP`) is deliberately not touched. Start refused (409) on an empty lane,
+  400 if no lane has that tool.
+- App: section "Spuren" (default: loaded lane with the profile's material and the closest colour, else T<n-1>),
+  red warning + print blocked for an empty lane, yellow for a material mismatch; printers tab shows lane chips.
+- Verified with the real Orca: remap on a COSMOS two-colour G-code (TOOL=2, `T3 PURGE_LENGTH=`); fake Moonraker
+  with 4 AFC lanes. NOT yet on Dominique's printer (object names / field values to confirm there).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

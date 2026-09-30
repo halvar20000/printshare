@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import JobOptions, Settings
+from . import lanes as lane_map
 from . import model_info
 from .fetch import Fetcher, RemoteFile, choose_file
 from .printers import get_adapter
@@ -145,10 +146,23 @@ async def prepare_job(settings: Settings, link: str, printer_id: str | None = No
 
 
 async def send_job(settings: Settings, result: JobResult, start: bool,
-                   progress: Callable[[str], None] | None = None, leveling: bool | None = None) -> dict[str, Any]:
+                   progress: Callable[[str], None] | None = None, leveling: bool | None = None,
+                   tools: dict[int, int] | None = None) -> dict[str, Any]:
+    """tools: OrcaSlicer tool -> printer tool (lane selection, issue #6); the G-code is rewritten on a copy."""
     say = progress or (lambda msg: log.info(msg))
     say("Sending to printer" + (" and starting" if start else ""))
-    sent = await get_adapter(settings.printer(result.printer)).send(Path(result.gcode), start=start, leveling=leveling)
+    gcode = Path(result.gcode)
+    tmp = None
+    if tools and any(k != v for k, v in tools.items()):
+        tmp = Path(tempfile.mkdtemp(prefix="lanes-", dir=settings.work_dir))
+        gcode = await asyncio.to_thread(lane_map.remap_tools, gcode, tools, tmp)
+    try:
+        sent = await get_adapter(settings.printer(result.printer)).send(gcode, start=start, leveling=leveling)
+    finally:
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+    if tools:
+        sent = {**sent, "tools": {str(k): v for k, v in tools.items()}}
     result.sent = sent
     say("Done")
     return sent

@@ -62,6 +62,14 @@ export function compact(n?: number | null): string {
 export const temp = (v?: number | null, target?: number | null) =>
   v == null ? "–" : `${Math.round(v)}${target ? ` / ${Math.round(target)}` : ""} °C`;
 
+const MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PA", "PC", "PVA", "HIPS", "PET"];
+
+/** Material type from a filament preset name: "Elegoo PETG @ECC" -> "PETG" (null if unknown). */
+export function materialOf(name?: string | null): string | null {
+  const words = (name ?? "").toUpperCase().split(/[^A-Z0-9]+/);
+  return MATERIALS.find(m => words.includes(m)) ?? null;
+}
+
 /** Warnings for odd combinations (DV-04). Material names come from Orca profile names. */
 export function comboWarnings(t: T, filament: string, plate: string): string[] {
   const f = filament.toUpperCase(), out: string[] = [];

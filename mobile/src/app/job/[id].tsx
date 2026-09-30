@@ -3,14 +3,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
-import { Banner, Button, Card, Divider, Empty, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { friendlyError, type Job, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
+import { friendlyError, type Job, type Lane, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { getItem, setItem } from "@/lib/storage";
-import { jobName, plateName, printTime, shortName } from "@/lib/format";
+import { jobName, materialOf, plateName, printTime, shortName } from "@/lib/format";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
 
@@ -120,6 +120,51 @@ export default function JobScreen() {
     return () => clearInterval(iv);
   }, [job?.state, refreshPrinter]);
 
+  // Lane selection (issue #6): which lane of the printer prints each filament of the model.
+  const printerLanes = useMemo<Lane[]>(
+    () => (pstatus && pstatus !== "offline" ? (pstatus.lanes ?? []).filter(l => l.tool != null) : []), [pstatus]);
+  const colours = useMemo(() => {
+    const r = job?.result;
+    if (!r) return [];
+    return r.filaments && r.filaments.length > 1 ? r.filaments
+      : [{ index: 1, color: null as string | null, preset: r.profiles?.filament ?? "", grams: r.filament_g }];
+  }, [job?.result]);
+  const [laneChoice, setLaneChoice] = useState<Record<number, number>>({});
+  const [laneSheet, setLaneSheet] = useState<number | null>(null);
+  const laneFor = useMemo(() => {
+    // default: a loaded lane with the profile's material (closest colour), else T<n-1>, else any loaded lane
+    const hex = (c?: string | null) => (c ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : null);
+    const dist = (a?: string | null, b?: string | null) => {
+      const x = hex(a), y = hex(b);
+      return x && y ? x.reduce((s, v, i) => s + (v - y[i]) ** 2, 0) : 1e6;
+    };
+    const out: Record<number, number> = {};
+    for (const c of colours) {
+      if (laneChoice[c.index] != null) { out[c.index] = laneChoice[c.index]; continue; }
+      const want = materialOf(c.preset);
+      const loaded = printerLanes.filter(l => l.loaded);
+      const same = loaded.filter(l => want && (l.material ?? "").toUpperCase().startsWith(want))
+        .sort((a, b) => dist(a.color, c.color) - dist(b.color, c.color));
+      const pick = same[0] ?? loaded.find(l => l.tool === c.index - 1) ?? loaded[0] ?? printerLanes[0];
+      if (pick?.tool != null) out[c.index] = pick.tool;
+    }
+    return out;
+  }, [colours, printerLanes, laneChoice]);
+  const laneWarnings = useMemo(() => {
+    const out: { text: string; blocking: boolean }[] = [];
+    for (const c of colours) {
+      const lane = printerLanes.find(l => l.tool === laneFor[c.index]);
+      if (!lane) continue;
+      const what = colours.length > 1 ? t("colorN", { n: c.index }) : t("lane");
+      if (!lane.loaded) out.push({ text: t("laneEmptyWarn", { what, lane: lane.id }), blocking: true });
+      const want = materialOf(c.preset), have = (lane.material ?? "").toUpperCase();
+      if (lane.loaded && want && have && !have.startsWith(want)) {
+        out.push({ text: t("laneMaterialWarn", { what, want, lane: lane.id, have: lane.material ?? "" }), blocking: false });
+      }
+    }
+    return out;
+  }, [colours, printerLanes, laneFor, t]);
+
   const send = async (start: boolean) => {
     if (!api || !job) return;
     const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
@@ -127,7 +172,8 @@ export default function JobScreen() {
     setActionError("");
     setSending(start ? "print" : "upload");
     try {
-      await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined);
+      await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
+        printerLanes.length ? laneFor : undefined);
       let j: Job | null = null;
       for (let i = 0; i < 600; i++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -232,7 +278,12 @@ export default function JobScreen() {
   const done = job.state === "started";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
-  const canPrint = plateOk && !busy && kind !== "offline" && !sending;
+  const canPrint = plateOk && !busy && kind !== "offline" && !sending && !laneWarnings.some(w => w.blocking);
+  const laneLabel = (tool?: number) => {
+    const l = printerLanes.find(x => x.tool === tool);
+    if (!l) return "–";
+    return [l.id, l.loaded ? l.material : t("laneEmpty")].filter(Boolean).join(" · ");
+  };
 
   const footer = done ? (
     <>
@@ -274,6 +325,38 @@ export default function JobScreen() {
 
       <Button kind="secondary" title={t("showPreview")} icon="layers-outline" style={{ marginBottom: 22 }}
         onPress={() => router.push({ pathname: "/preview/[id]", params: { id: job.id } })} />
+
+      {!done && printerLanes.length ? (
+        <Section title={t("lanes")} footer={t("lanesHint")}>
+          {colours.map((col, i) => {
+            const lane = printerLanes.find(l => l.tool === laneFor[col.index]);
+            return (
+              <View key={col.index}>
+                {i ? <Divider /> : null}
+                <Row label={colours.length > 1 ? t("colorN", { n: col.index }) : t("lane")}
+                  sub={shortName(col.preset)} value={laneLabel(laneFor[col.index])}
+                  onPress={() => setLaneSheet(col.index)}
+                  right={<View style={{ flexDirection: "row", marginLeft: 8, gap: 4 }}>
+                    {col.color ? <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: col.color,
+                      borderWidth: 1, borderColor: c.line }} /> : null}
+                    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: lane?.color ?? c.track,
+                      borderWidth: 1, borderColor: c.line }} />
+                  </View>} />
+              </View>
+            );
+          })}
+        </Section>
+      ) : null}
+      {!done ? laneWarnings.map(w => <Banner key={w.text} kind={w.blocking ? "error" : "warn"} text={w.text} />) : null}
+      {laneSheet != null ? (
+        <PickerSheet visible title={colours.length > 1 ? t("colorN", { n: laneSheet }) : t("lane")}
+          choices={printerLanes.map(l => ({ value: String(l.tool), label: `${l.id} (T${l.tool})`,
+            sub: [l.loaded ? [l.material, l.filament].filter(Boolean).join(" · ") : t("laneEmpty"),
+              l.in_toolhead ? t("laneInToolhead") : null].filter(Boolean).join(" · ") }))}
+          value={laneFor[laneSheet] != null ? String(laneFor[laneSheet]) : null}
+          onPick={v => setLaneChoice(p => ({ ...p, [laneSheet]: Number(v) }))}
+          onClose={() => setLaneSheet(null)} searchLabel={t("search")} closeLabel="OK" />
+      ) : null}
 
       {r?.filaments && r.filaments.length > 1 ? (
         <Section title={t("colors")}>

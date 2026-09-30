@@ -23,11 +23,17 @@ export type ModelColors = {
   used: number[]; painted: boolean;
 };
 export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "error" | "unknown";
+/** A filament lane of a multi-filament unit (AFC / CANVAS); `tool` is the T number it prints as. */
+export type Lane = {
+  id: string; tool: number | null; unit: string | null; material: string | null; color: string | null;
+  filament: string | null; weight_g: number | null; loaded: boolean; in_toolhead: boolean; status: string | null;
+};
 export type PrinterStatus = {
   state: string | null; kind: PrinterKind; file?: string | null; progress?: number;
   layer?: number | null; layers?: number | null; print_duration_s?: number | null; time_remaining_s?: number | null;
   nozzle?: number | null; nozzle_target?: number | null; bed?: number | null; bed_target?: number | null;
   camera?: string | null;
+  lanes?: Lane[];
 };
 export type Defaults = {
   filament: string; process: string; bed_type: string; supports: string; brim: string;
@@ -235,8 +241,10 @@ export class Api {
     this.request<{ job: string }>("/api/jobs", { method: "POST", body: { link, printer, file, options }, timeout: 30000 });
   jobs = () => this.request<JobSummary[]>("/api/jobs");
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
-  send = (id: string, start: boolean, leveling?: boolean) =>
-    this.request<{ job: string }>(`/api/jobs/${id}/send`, { method: "POST", body: { start, confirm: start, leveling } });
+  /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>} */
+  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>) =>
+    this.request<{ job: string }>(`/api/jobs/${id}/send`,
+      { method: "POST", body: { start, confirm: start, leveling, lanes } });
   preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview?format=2`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
   sources = () => this.request<Source[]>("/api/sources");

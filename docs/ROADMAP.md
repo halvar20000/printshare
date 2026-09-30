@@ -26,8 +26,8 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DV-02 | Nozzle per printer/job | 🟡 via preset names in config; per-job ⬜ |
 | DV-03 | Build plate | ✅ per printer + per job (app) |
 | MA-01 | Filament profile | ✅ per job from compatible Orca presets (app) |
-| MA-04 | Multicolour mapping | 🟡 3MF colours detected (Orca/Bambu/Prusa projects), material per colour in the app, N filament presets to Orca (by position), grams per colour, colour preview. **Lane mapping (AFC/CANVAS) ⬜** – waits for Dominique's COSMOS data; planned printer-side (AFC `SET_MAP` / CANVAS slot map) |
-| MA-02/03 | Lanes from the printer, pick lane | ⬜ needs COSMOS/AFC Moonraker data (Dominique) |
+| MA-04 | Multicolour mapping | 🟡 3MF colours detected (Orca/Bambu/Prusa projects), material per colour in the app, N filament presets to Orca (by position), grams per colour, colour preview. lane mapping for AFC ✅ 0.8.0 (tool numbers rewritten at send time) |
+| MA-02/03 | Lanes from the printer, pick lane | ✅ 0.8.0 (#6): AFC lanes via Moonraker (map/material/colour/loaded), lane per colour on the review screen, no re-slicing; CANVAS on stock firmware ⬜ (undocumented) |
 | QU-01 | Quality as process profile | ✅ per job from compatible presets (app) |
 | QU-03/04, SU-01/02/05 | walls, infill, supports, brim | ✅ per job (`JobOptions`); supports off/normal/tree, brim auto/off/outer |
 | PL-02 | Auto-orient | 🟡 `auto_orient` config flag; Orca `--orient` |

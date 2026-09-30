@@ -104,6 +104,22 @@ export default function Printers() {
             ) : (
               <Text style={{ color: c.sub, fontSize: 15 }}>{t("errPrinterOffline")}</Text>
             )}
+            {s?.lanes?.length ? (
+              // filament lanes of an AFC unit (CANVAS on COSMOS), spec MA-02
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
+                {s.lanes.map(l => (
+                  <View key={l.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6,
+                    borderRadius: 999, backgroundColor: c.input, opacity: l.loaded ? 1 : 0.5,
+                    borderWidth: l.in_toolhead ? 2 : 0, borderColor: c.accent }}>
+                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: l.color ?? c.track, marginRight: 6,
+                      borderWidth: 1, borderColor: c.line }} />
+                    <Text style={{ color: c.text, fontSize: 13 }}>
+                      {`T${l.tool ?? "?"} · ${l.loaded ? l.material ?? "?" : t("laneEmpty")}`}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {busy ? (
               <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
                 {kind === "paused"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.0
+- Lane selection for AFC (e.g. CANVAS on COSMOS): the app shows the printer's lanes and lets you choose a lane
+  per colour before printing, without re-slicing; an empty lane blocks the start.
+
 ## 0.7.0
 - Upload your own OrcaSlicer printer profile in the app (Settings → printer). It is checked, used right away
   and kept when the add-on regenerates its configuration.

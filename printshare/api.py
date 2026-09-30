@@ -46,6 +46,7 @@ from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, inspect_model, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
+from . import lanes as lane_map
 from . import user_profiles
 from .profiles import ProfileError, ProfileLibrary, load_user_preset
 from .search import Search
@@ -57,7 +58,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.7.0")
+app = FastAPI(title="PrintShare", version="0.8.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -448,6 +449,8 @@ class SendRequest(BaseModel):
     start: bool = True
     confirm: bool = False
     leveling: bool | None = None  # bed leveling before the print; None = printer default
+    # lane selection (issue #6): {"<model filament, 1-based>": <printer tool of the lane>}
+    lanes: dict[str, int] | None = None
 
 
 @app.post("/api/jobs/{job_id}/send", dependencies=[Depends(auth)])
@@ -460,6 +463,23 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     if job["state"] not in ("sliced", "uploaded"):
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
     result = JobResult(**job["result"])
+    try:
+        tools = lane_map.parse_mapping(req.lanes)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if tools:
+        # the chosen lanes must exist and hold filament (DR-03)
+        try:
+            lanes = (await get_adapter(_printer(result.printer)).status()).get("lanes") or []
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"printer not reachable: {e}")
+        by_tool = {ln.get("tool"): ln for ln in lanes}
+        for idx, tool in sorted(tools.items()):
+            ln = by_tool.get(tool)
+            if ln is None:
+                raise HTTPException(400, f"the printer has no lane for T{tool}")
+            if req.start and not ln.get("loaded"):
+                raise HTTPException(409, f"lane {ln.get('id')} (T{tool}) is empty - load filament or choose another lane")
     if req.start:
         # DR-03: never start on a printer that is still busy (an unreachable printer fails in send_job)
         try:
@@ -473,7 +493,7 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     async def worker() -> None:
         try:
             await send_job(settings, result, req.start, progress=lambda m: job["log"].append(m),
-                           leveling=req.leveling)
+                           leveling=req.leveling, tools=tools)
             job["leveling"] = req.leveling
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
         except Exception as e:  # noqa: BLE001
