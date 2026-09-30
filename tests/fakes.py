@@ -108,6 +108,25 @@ AFC_LANES = {
 }
 
 
+def test_jpeg(width: int = 1280, height: int = 720, color=(40, 90, 200)) -> bytes:
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), color).save(buf, "JPEG", quality=90)
+    return buf.getvalue()
+
+
+async def mjpeg(request: web.Request, frames: int = 3) -> web.StreamResponse:
+    """MJPEG like the Centauri (:3031/video) or ustreamer: multipart/x-mixed-replace."""
+    resp = web.StreamResponse(headers={"Content-Type": "multipart/x-mixed-replace; boundary=--foo"})
+    await resp.prepare(request)
+    frame = test_jpeg(640, 360)
+    for _ in range(frames):
+        await resp.write(b"----foo\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n" % len(frame) + frame + b"\r\n")
+    return resp
+
+
 class FakeMoonraker:
     def __init__(self, port: int = 7125, afc: bool = False) -> None:
         self.port = port
@@ -115,6 +134,8 @@ class FakeMoonraker:
         self.actions: list[str] = []
         self.state = "printing"
         self.afc = afc
+        self.webcams = [{"name": "cam", "enabled": True, "service": "mjpegstreamer-adaptive",
+                         "stream_url": "/webcam/?action=stream", "snapshot_url": "/webcam/?action=snapshot"}]
         self.runner: web.AppRunner | None = None
 
     async def info(self, request: web.Request) -> web.Response:
@@ -144,6 +165,14 @@ class FakeMoonraker:
             objs.update({f"AFC_stepper {name}": dict(ln, name=name) for name, ln in AFC_LANES.items()})
         return objs
 
+    async def webcams_list(self, request: web.Request) -> web.Response:
+        return web.json_response({"result": {"webcams": self.webcams}})
+
+    async def webcam(self, request: web.Request) -> web.StreamResponse:
+        if request.query.get("action") == "snapshot":
+            return web.Response(body=test_jpeg(), content_type="image/jpeg")
+        return await mjpeg(request)
+
     async def objects_list(self, request: web.Request) -> web.Response:
         return web.json_response({"result": {"objects": list(self._objects())}})
 
@@ -163,6 +192,8 @@ class FakeMoonraker:
         app.router.add_post("/server/files/upload", self.upload)
         app.router.add_get("/printer/objects/query", self.query)
         app.router.add_get("/printer/objects/list", self.objects_list)
+        app.router.add_get("/server/webcams/list", self.webcams_list)
+        app.router.add_get("/webcam/", self.webcam)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
@@ -283,7 +314,8 @@ class FakeOctoPrint(_FakeHTTP):
 
     @web.middleware
     async def auth(self, request: web.Request, handler):
-        if request.headers.get("X-Api-Key") != self.api_key:
+        # on OctoPi the webcam (mjpg-streamer behind /webcam/) needs no API key
+        if not request.path.startswith("/webcam/") and request.headers.get("X-Api-Key") != self.api_key:
             return web.json_response({"error": "Forbidden"}, status=403)
         return await handler(request)
 
@@ -293,6 +325,8 @@ class FakeOctoPrint(_FakeHTTP):
         app.router.add_get("/api/job", self.get_job)
         app.router.add_post("/api/job", self.post_job)
         app.router.add_get("/api/printer", self.printer)
+        app.router.add_get("/api/settings", self.settings)
+        app.router.add_get("/webcam/", self.webcam)
 
     async def upload(self, request: web.Request) -> web.Response:
         form = await request.post()
@@ -323,6 +357,16 @@ class FakeOctoPrint(_FakeHTTP):
         else:
             self.paused = body.get("action") == "pause"
         return web.Response(status=204)
+
+    async def settings(self, request: web.Request) -> web.Response:
+        # OctoPi default: stream relative, snapshot pointing at the Pi itself
+        return web.json_response({"webcam": {"webcamEnabled": True, "streamUrl": "/webcam/?action=stream",
+                                             "snapshotUrl": f"http://127.0.0.1:{self.port}/webcam/?action=snapshot"}})
+
+    async def webcam(self, request: web.Request) -> web.StreamResponse:
+        if request.query.get("action") == "snapshot":
+            return web.Response(body=test_jpeg(320, 240), content_type="image/jpeg")
+        return await mjpeg(request)
 
     async def printer(self, request: web.Request) -> web.Response:
         if not self.connected:

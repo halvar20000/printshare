@@ -13,6 +13,7 @@ from urllib.parse import quote
 
 import httpx
 
+from ..camera import Camera
 from ..config import PrinterConfig
 
 # PrusaLink printer states -> the names the rest of PrintShare understands (api.printer_kind)
@@ -96,6 +97,20 @@ class PrusaLink:
             else:
                 raise ValueError(f"unknown action {action!r}")
             self._check(r, action.capitalize())
+
+    async def camera(self) -> Camera | None:
+        """PrusaLink cameras (e.g. CORE One): snapshot only; Prusa Connect cameras are not local."""
+        async with self._client() as client:
+            r = await client.get(f"{self.base}/api/v1/cameras")
+            if r.status_code != 200:
+                return None
+            data = r.json()
+        cams = data.get("camera_list") if isinstance(data, dict) else data
+        if not cams:
+            return None
+        auth = httpx.DigestAuth(self.cfg.username or "maker", self.cfg.password) if self.cfg.password else None
+        headers = {} if self.cfg.password else {"X-Api-Key": self.cfg.api_key or ""}
+        return Camera(snapshot_url=f"{self.base}/api/v1/cameras/snap", auth=auth, headers=headers, name="Prusa")
 
     async def status(self) -> dict[str, Any]:
         async with self._client() as client:

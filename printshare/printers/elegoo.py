@@ -15,6 +15,7 @@ from pycentauri import Printer
 from pycentauri.discovery import discover
 from pycentauri.models import PrintStatus
 
+from ..camera import Camera
 from ..config import PrinterConfig
 
 log = logging.getLogger("printshare")
@@ -93,6 +94,10 @@ class ElegooSDCP:
                 await p.stop()
             else:
                 raise ValueError(f"unknown action {action!r}")
+
+    async def camera(self) -> Camera:
+        # the CC1 serves its webcam as MJPEG on :3031 (pycentauri camera module)
+        return Camera(stream_url=f"http://{self.cfg.host}:3031/video", name="Centauri Carbon")
 
     async def status(self) -> dict[str, Any]:
         async with await self._connect() as p:

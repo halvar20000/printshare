@@ -10,6 +10,7 @@ export type Server = { url: string; token: string; remoteUrl?: string };
 export type Route = "home" | "remote";
 
 /** leveling: null = this printer can't switch bed leveling per print; else its default. */
+export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolean; name: string | null };
 export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
@@ -255,6 +256,22 @@ export class Api {
     this.request<ModelDetail>(`/api/models/${source}/${encodeURIComponent(id)}`, { timeout: 30000 });
 
   profiles = () => this.request<UserProfile[]>("/api/profiles", { timeout: 30000 });
+  cameraInfo = (printer: string) =>
+    this.request<CameraInfo>(`/api/printers/${encodeURIComponent(printer)}/camera`, { timeout: 20000 });
+
+  /** Image source for the camera (issue #3). Native image views send the token as a header; the web
+   * preview and the MJPEG view inside a WebView can't, so there it goes into the URL. */
+  async cameraSource(printer: string, kind: "snapshot" | "stream", width?: number, tokenInUrl = false) {
+    const q = new URLSearchParams();
+    if (width) q.set("w", String(width));
+    if (kind === "snapshot") q.set("t", String(Date.now()));          // always a fresh image
+    if (tokenInUrl || Platform.OS === "web") q.set("token", this.server.token);
+    const qs = q.toString();
+    return {
+      uri: `${await this.base()}/api/printers/${encodeURIComponent(printer)}/camera/${kind}${qs ? `?${qs}` : ""}`,
+      headers: { Authorization: `Bearer ${this.server.token}` },
+    };
+  }
   deleteProfile = (file: string) =>
     this.request<{ deleted: string }>(`/api/profiles/${encodeURIComponent(file)}`, { method: "DELETE" });
   printerProfile = (printer: string) =>

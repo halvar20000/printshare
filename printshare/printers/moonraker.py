@@ -8,10 +8,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from ..camera import Camera
 from ..config import PrinterConfig
 
 
@@ -103,6 +104,27 @@ class Moonraker:
             "camera": f"{base}/webcam/?action=stream",
             "lanes": lanes,
         }
+
+    async def camera(self) -> Camera | None:
+        """First enabled webcam from Moonraker (crowsnest/ustreamer: MJPEG stream + snapshot)."""
+        async with httpx.AsyncClient(timeout=10) as client:
+            base = await self._resolve_base(client)
+            try:
+                r = await client.get(f"{base}/server/webcams/list", headers=self.headers)
+                cams = r.json()["result"]["webcams"] if r.status_code == 200 else []
+            except (httpx.HTTPError, ValueError, KeyError):
+                cams = []
+        for cam in cams:
+            if cam.get("enabled") is False:
+                continue
+            service = str(cam.get("service") or "").lower()
+            stream = cam.get("stream_url") if "mjpeg" in service or not service else None
+            snap = cam.get("snapshot_url")
+            if stream or snap:
+                return Camera(stream_url=urljoin(base + "/", stream) if stream else None,
+                              snapshot_url=urljoin(base + "/", snap) if snap else None,
+                              headers=self.headers, name=cam.get("name"))
+        return None
 
     async def _lanes(self, client: httpx.AsyncClient, base: str) -> list[dict[str, Any]]:
         """Filament lanes of an AFC unit (e.g. CANVAS on COSMOS), [] without AFC (spec MA-02).

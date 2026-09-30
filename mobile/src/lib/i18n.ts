@@ -91,6 +91,8 @@ const de = {
   pause: "Pause", resume: "Fortsetzen", cancelPrint: "Druck abbrechen",
   cancelPrintQ: "Den laufenden Druck auf {printer} wirklich abbrechen? Das lässt sich nicht rückgängig machen.",
   nozzle: "Düse", bed: "Bett", layer: "Schicht", remaining: "Rest", camera: "Kamera",
+  cameraLive: "Live", cameraStill: "Standbild", cameraOffline: "Kamerabild nicht verfügbar",
+  cameraDataHint: "Unterwegs werden Standbilder gezeigt, um Datenvolumen zu sparen (Live ≈ 1 GB pro Stunde).",
   // settings
   server: "Server", connected: "Verbunden", offline: "Offline", notConnected: "Nicht verbunden", changeServer: "Server ändern",
   disconnect: "Trennen", disconnectQ: "Verbindung zum Server entfernen?",
@@ -227,6 +229,8 @@ const en: Strings = {
   pause: "Pause", resume: "Resume", cancelPrint: "Cancel print",
   cancelPrintQ: "Really cancel the running print on {printer}? This cannot be undone.",
   nozzle: "Nozzle", bed: "Bed", layer: "Layer", remaining: "Left", camera: "Camera",
+  cameraLive: "Live", cameraStill: "Still", cameraOffline: "Camera image not available",
+  cameraDataHint: "Away from home still images are shown to save mobile data (live ≈ 1 GB per hour).",
   server: "Server", connected: "Connected", offline: "Offline", notConnected: "Not connected", changeServer: "Change server",
   disconnect: "Disconnect", disconnectQ: "Remove the connection to the server?",
   language: "Language", langAuto: "Automatic", about: "About PrintShare",

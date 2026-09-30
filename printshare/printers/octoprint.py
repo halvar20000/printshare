@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 from typing import Any
 
 import httpx
 
+from ..camera import Camera
 from ..config import PrinterConfig
 
 
@@ -82,6 +84,29 @@ class OctoPrint:
         async with self._client() as client:
             r = await client.post(f"{self.base}/api/job", json=body)
             self._check(r, action.capitalize())
+
+    async def camera(self) -> Camera | None:
+        """Webcam from OctoPrint's settings; URLs may be relative or point to 127.0.0.1 of the Pi."""
+        async with self._client() as client:
+            r = await client.get(f"{self.base}/api/settings")
+            self._check(r, "Camera")
+            web = (r.json().get("webcam") or {})
+        if web.get("webcamEnabled") is False:
+            return None
+        host = urlparse(self.base).hostname or ""
+
+        def fix(url: str | None) -> str | None:
+            if not url:
+                return None
+            u = urlparse(urljoin(self.base + "/", url))
+            if u.hostname in ("127.0.0.1", "localhost"):
+                u = u._replace(netloc=host + (f":{u.port}" if u.port else ""))
+            return u.geturl()
+
+        stream, snap = fix(web.get("streamUrl")), fix(web.get("snapshotUrl"))
+        if not (stream or snap):
+            return None
+        return Camera(stream_url=stream, snapshot_url=snap, name="OctoPrint")
 
     async def status(self) -> dict[str, Any]:
         async with self._client() as client:

@@ -19,6 +19,7 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   POST /api/jobs/{id}/send  {"start": true, "confirm": true}  -> upload (and start) after review
   DELETE /api/jobs/{id}
   GET  /api/printers/{id}/status   (+ "kind": idle|active|paused|done|stopped|error|unknown)
+  GET  /api/printers/{id}/camera   {"available", "stream", …};  …/camera/snapshot?w=640 (JPEG);  …/camera/stream (MJPEG)
   POST /api/printers/{id}/control  {"action": "pause"|"resume"|"cancel", "confirm": true}
 One-shot (CLI / iOS Shortcut):
   POST /api/print   {"link": "...", "printer": "cc-thomas", "file": 1, "start": true}
@@ -37,11 +38,12 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_settings
+from . import camera as cam
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, inspect_model, prepare_job, run_job, send_job
@@ -58,7 +60,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.8.0")
+app = FastAPI(title="PrintShare", version="0.9.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -184,6 +186,61 @@ async def status(printer_id: str) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     return {**st, "kind": printer_kind(st.get("state"))}
+
+
+# ---------- camera (issue #3, DR-06): the app only talks to PrintShare, also away from home ----------
+async def _camera(printer_id: str) -> cam.Camera:
+    printer = _printer(printer_id)
+    adapter = get_adapter(printer)
+    try:
+        source = await adapter.camera() if hasattr(adapter, "camera") else None
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"camera not reachable: {e}")
+    if source is None:
+        raise HTTPException(404, "this printer has no camera")
+    return source
+
+
+@app.get("/api/printers/{printer_id}/camera", dependencies=[Depends(auth)])
+async def camera_info(printer_id: str) -> dict[str, Any]:
+    try:
+        return (await _camera(printer_id)).info()
+    except HTTPException as e:
+        if e.status_code == 404:
+            return {"available": False, "stream": False, "snapshot": False, "name": None}
+        raise
+
+
+@app.get("/api/printers/{printer_id}/camera/snapshot", dependencies=[Depends(auth)])
+async def camera_snapshot(printer_id: str, w: int | None = None) -> Response:
+    """Current camera image; `w` scales it down (thumbnails, mobile data)."""
+    source = await _camera(printer_id)
+    try:
+        jpeg = await cam.snapshot(source)
+        if w:
+            jpeg = await asyncio.to_thread(cam.scale, jpeg, max(160, min(w, 1920)))
+    except cam.CameraError as e:
+        raise HTTPException(502, str(e))
+    return Response(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/printers/{printer_id}/camera/stream", dependencies=[Depends(auth)])
+async def camera_stream(printer_id: str) -> StreamingResponse:
+    """Live MJPEG from the printer, passed through (ends when the app closes the view)."""
+    source = await _camera(printer_id)
+    try:
+        content_type, chunks, close = await cam.open_stream(source)
+    except cam.CameraError as e:
+        raise HTTPException(502, str(e))
+
+    async def body():
+        try:
+            async for chunk in chunks:
+                yield chunk
+        finally:
+            await close()
+
+    return StreamingResponse(body(), media_type=content_type, headers={"Cache-Control": "no-store"})
 
 
 class ControlRequest(BaseModel):

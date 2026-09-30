@@ -288,6 +288,8 @@ export default function JobScreen() {
   const footer = done ? (
     <>
       <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
+      <Button kind="secondary" title={t("camera")} icon="videocam-outline"
+        onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} />
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
     </>
   ) : (

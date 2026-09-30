@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+- Printer camera in the app: thumbnail on the printers tab, fullscreen live view or still images; the
+  image comes through PrintShare, so it also works away from home. Centauri Carbon, Klipper webcams,
+  OctoPrint and PrusaLink cameras.
+
 ## 0.8.0
 - Lane selection for AFC (e.g. CANVAS on COSMOS): the app shows the printer's lanes and lets you choose a lane
   per colour before printing, without re-slicing; an empty lane blocks the start.

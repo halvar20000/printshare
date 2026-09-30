@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Protocol
 
+from ..camera import Camera
 from ..config import PrinterConfig
 
 
@@ -13,6 +14,7 @@ class PrinterAdapter(Protocol):
     async def send(self, gcode: Path, start: bool = True, leveling: bool | None = None) -> dict[str, Any]: ...
     async def status(self) -> dict[str, Any]: ...
     async def control(self, action: str) -> None: ...  # "pause" | "resume" | "cancel"
+    async def camera(self) -> "Camera | None": ...      # where the camera image comes from (issue #3)
 
 
 CONTROL_ACTIONS = ("pause", "resume", "cancel")

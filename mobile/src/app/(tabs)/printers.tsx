@@ -1,8 +1,10 @@
 // Live status and control of every printer (DR-04, DR-05, DR-06).
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Linking, Platform, RefreshControl, Text, View } from "react-native";
+import { Alert, Platform, Pressable, RefreshControl, Text, View } from "react-native";
+
+import { CameraImage } from "@/components/camera";
 
 import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/components/ui";
 import type { Printer, PrinterStatus } from "@/lib/api";
@@ -19,6 +21,18 @@ export default function Printers() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [acting, setActing] = useState<string>("");
+  const [cams, setCams] = useState<Record<string, boolean>>({});
+  const router = useRouter();
+
+  // which printers have a camera (asked once per visit, not with every status refresh)
+  useFocusEffect(useCallback(() => {
+    if (!api) return;
+    let alive = true;
+    api.printers().then(ps => ps.forEach(p => api.cameraInfo(p.id)
+      .then(i => { if (alive) setCams(c => ({ ...c, [p.id]: i.available })); })
+      .catch(() => {}))).catch(() => {});
+    return () => { alive = false; };
+  }, [api]));
 
   const load = useCallback(async () => {
     if (!api) return;
@@ -131,9 +145,17 @@ export default function Printers() {
                   loading={acting === `${p.id}:cancel`} />
               </View>
             ) : null}
-            {s?.camera ? (
-              <Button kind="plain" title={t("camera")} icon="videocam-outline" onPress={() => Linking.openURL(s.camera!)}
-                style={{ marginTop: 6 }} />
+            {cams[p.id] ? (
+              <Pressable onPress={() => router.push({ pathname: "/camera/[id]", params: { id: p.id, name: p.name } })}
+                accessibilityRole="button" accessibilityLabel={t("camera")} style={{ marginTop: 14 }}>
+                <CameraImage printer={p.id} width={640} intervalMs={5000}
+                  style={{ width: "100%", aspectRatio: 16 / 9, borderRadius: 12 }} />
+                <View style={{ position: "absolute", right: 8, bottom: 8, flexDirection: "row", alignItems: "center",
+                  backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Ionicons name="expand-outline" size={14} color="#fff" />
+                  <Text style={{ color: "#fff", fontSize: 12, marginLeft: 4 }}>{t("camera")}</Text>
+                </View>
+              </Pressable>
             ) : null}
           </Card>
         );

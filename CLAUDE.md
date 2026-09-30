@@ -305,6 +305,18 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Verified with the real Orca: remap on a COSMOS two-colour G-code (TOOL=2, `T3 PURGE_LENGTH=`); fake Moonraker
   with 4 AFC lanes. NOT yet on Dominique's printer (object names / field values to confirm there).
 
+## Camera in the app (issue #3, 2026-09-30, 0.9.0)
+- `printshare/camera.py` + `adapter.camera() -> Camera(stream_url, snapshot_url, headers, auth)`:
+  CC1 MJPEG `http://<ip>:3031/video` (verified live on Thomas' CC: 640×360 frames ≈30 KB, ~10 fps ≈ 300 KB/s,
+  no snapshot URL → first frame SOI…EOI); Moonraker `/server/webcams/list` (first enabled; WebRTC services →
+  snapshot only); OctoPrint `/api/settings` webcam (127.0.0.1/localhost URLs rewritten to the Pi's host);
+  PrusaLink `/api/v1/cameras` + `/api/v1/cameras/snap` (digest auth).
+- API `/api/printers/<id>/camera` (info), `/camera/snapshot?w=` (Pillow scaling, `no-store`),
+  `/camera/stream` (MJPEG passthrough via StreamingResponse; `?token=` for image views without headers).
+- App: `components/camera.tsx` (two image slots take turns → no flicker, one download per frame, only while
+  focused), printers tab thumbnail (5 s), `camera/[id].tsx` fullscreen Live (WebView `<img>` MJPEG) / Still;
+  away (route "remote") defaults to still images. `react-native-webview` added (native → new app build).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.
