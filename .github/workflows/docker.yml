@@ -6,7 +6,7 @@ name: Docker image
 on:
   push:
     branches: [main]
-    paths-ignore: ["mobile/**", "docs/**", "homeassistant/**", "unraid/**", "**.md"]
+    paths-ignore: ["mobile/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "**.md"]
   workflow_dispatch:
 
 permissions:

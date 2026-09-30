@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PocketPrint3D – the 3D printer in your pocket</title>
+<meta name="description" content="Print models from Printables and Thingiverse on your own 3D printer, straight from your phone. For Elegoo Centauri Carbon, Klipper, Prusa and OctoPrint. Free and open source.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/">PocketPrint3D</a>
+    <nav><a class="opt" href="#how">How it works</a><a href="https://github.com/halvar20000/printshare">GitHub</a><a href="/de/" hreflang="de">Deutsch</a></nav>
+  </header>
+
+  <section class="hero">
+    <h1>The 3D printer<br>in your pocket.</h1>
+    <p class="lead">Find a model on Printables or Thingiverse, tap print – PocketPrint3D slices it with OrcaSlicer
+      and sends it to your own printer. For open printers, without a manufacturer cloud. Free and open source.</p>
+    <div class="buttons">
+      <a class="btn primary" href="https://github.com/halvar20000/printshare#1-install">Get started</a>
+      <a class="btn" href="https://github.com/halvar20000/printshare">Source code</a>
+    </div>
+    <p class="soon">Android app in testing · iOS app in development · server for Unraid, Home Assistant and Docker</p>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grid">
+      <div class="card"><h3>Find and print</h3><p>Search Printables and Thingiverse in the app, or share a link from the browser. Pick the file, the material and the quality – done.</p></div>
+      <div class="card"><h3>Sliced for you</h3><p>OrcaSlicer runs on the server with the right profile for your printer. You see print time, filament and a layer preview before anything starts.</p></div>
+      <div class="card"><h3>Your printer, live</h3><p>Progress, camera, temperatures, fans, light and speed. Pause or cancel from anywhere.</p></div>
+      <div class="card"><h3>Multicolour</h3><p>Choose the slot of your AFC unit (e.g. CANVAS) for every colour – the material follows the filament in the slot.</p></div>
+      <div class="card"><h3>Your own profiles</h3><p>Upload your OrcaSlicer printer, quality and material profiles; they are used for slicing right away.</p></div>
+      <div class="card"><h3>Safe by design</h3><p>Nothing starts without your confirmation. Your printer is never exposed to the internet.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Supported printers</h2>
+    <div class="table-wrap">
+    <table>
+      <tr><th>Printer</th><th>Connection</th></tr>
+      <tr><td>Elegoo Centauri Carbon (stock firmware)</td><td>SDCP – tested with real printers</td></tr>
+      <tr><td>Klipper printers, e.g. Centauri Carbon with OpenCentauri COSMOS</td><td>Moonraker – tested with a real COSMOS + CANVAS</td></tr>
+      <tr><td>Prusa MK4 / MK3.9 / Core One / XL / MINI+</td><td>PrusaLink – not yet tested with a real printer</td></tr>
+      <tr><td>Any printer with OctoPrint</td><td>OctoPrint API – not yet tested with a real printer</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works today</h2>
+    <ol class="steps">
+      <li><strong>Install the PocketPrint3D server</strong> on something that runs at home: Unraid (template), Home Assistant (add-on) or any Docker host.</li>
+      <li><strong>Connect the app</strong>: open the server's web page, go to <em>Settings → Connect the app</em> and scan the QR code.</li>
+      <li><strong>Print</strong>: share a model link with the app or search in it, check the preview, confirm – the print starts.</li>
+    </ol>
+    <p class="muted" style="color:var(--muted)">Next: a hosted service, so the app works without a server at home. The self-hosted server stays available.</p>
+  </section>
+
+  <footer>
+    <a href="/privacy/">Privacy</a><a href="/impressum/">Legal notice</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
+    <div style="margin-top:10px">PocketPrint3D is an independent open-source project (MIT licence), not affiliated with any printer manufacturer, Printables or Thingiverse.</div>
+  </footer>
+</div>
+</body>
+</html>

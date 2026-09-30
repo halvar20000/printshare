@@ -1,0 +1,54 @@
+/* pocketprint3d.com - same colours as the app and the web page */
+:root {
+  --bg: #f6f6f4; --card: #ffffff; --fg: #1d1d1b; --muted: #6b6b66; --line: #dcdcd6;
+  --accent: #2f6fed; --accent-fg: #ffffff; --accent-soft: #e6eefd;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413; --card: #1f1f1d; --fg: #ececea; --muted: #9a9a94; --line: #33332f;
+    --accent: #6b9bff; --accent-fg: #0d1526; --accent-soft: #1d2a45;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+a { color: var(--accent); }
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+header.top { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
+header.top img { width: 36px; height: 36px; border-radius: 9px; }
+header.top .brand { font-weight: 800; font-size: 20px; color: var(--fg); text-decoration: none; }
+header.top nav { margin-left: auto; display: flex; gap: 16px; font-size: 15px; }
+header.top nav a { color: var(--muted); text-decoration: none; }
+header.top nav a:hover { color: var(--fg); }
+.hero { padding: 48px 0 32px; }
+.hero h1 { font-size: clamp(34px, 7vw, 56px); line-height: 1.08; margin: 0 0 16px; letter-spacing: -0.02em; }
+.hero p.lead { font-size: 20px; color: var(--muted); max-width: 640px; margin: 0 0 28px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-block; padding: 12px 20px; border-radius: 12px; font-weight: 600; text-decoration: none;
+  border: 1px solid var(--line); color: var(--fg); background: var(--card); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.soon { font-size: 14px; color: var(--muted); margin-top: 10px; }
+section { padding: 28px 0; }
+h2 { font-size: 26px; margin: 0 0 16px; letter-spacing: -0.01em; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+.card h3 { margin: 0 0 6px; font-size: 18px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+ol.steps { padding-left: 22px; margin: 0; }
+ol.steps li { margin: 0 0 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; background: var(--card);
+  border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { color: var(--muted); font-weight: 600; }
+.table-wrap { overflow-x: auto; }
+footer { border-top: 1px solid var(--line); margin-top: 32px; padding: 22px 0 40px; color: var(--muted); font-size: 14px; }
+footer a { color: var(--muted); margin-right: 16px; }
+.legal h1 { font-size: 32px; margin: 24px 0 8px; }
+.legal h2 { font-size: 21px; margin: 28px 0 8px; }
+.legal p, .legal li { color: var(--fg); }
+.legal .muted { color: var(--muted); }
+.lang-note { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
+@media (max-width: 520px) { header.top nav a.opt { display: none; } }
