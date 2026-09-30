@@ -130,7 +130,7 @@ class Moonraker:
         """Filament lanes of an AFC unit (e.g. CANVAS on COSMOS), [] without AFC (spec MA-02).
 
         AFC (AFCProject/AFC-Klipper-Add-On) reports the lane names in `AFC.lanes`; each lane is its own
-        Klipper object ("AFC_stepper lane1", "AFC_lane lane1" …) with map (tool), material, colour, load.
+        Klipper object ("AFC_lane CANVAS_1", older "AFC_stepper lane1") with map (tool), material, colour, load.
         """
         try:
             r = await client.get(f"{base}/printer/objects/list", headers=self.headers)
@@ -139,8 +139,15 @@ class Moonraker:
                 return []
             r = await client.get(f"{base}/printer/objects/query", params={"AFC": ""}, headers=self.headers)
             afc = r.json()["result"]["status"].get("AFC") or {}
-            names = set(afc.get("lanes") or [])
-            lane_objs = [o for o in objects if o.startswith("AFC_") and " " in o and o.split(" ", 1)[1] in names]
+            # one object per lane: "AFC_lane <name>" has the lane data (AFC 1.2); older AFC only has
+            # "AFC_stepper <name>". Other objects with the same name (e.g. the unit "AFC_canvas CANVAS_1",
+            # "AFC_canvas_lane CANVAS_1") are not lanes - seen on Dominique's COSMOS 2026-09-30.
+            available = set(objects)
+            lane_objs = []
+            for name in afc.get("lanes") or []:
+                obj = next((o for o in (f"AFC_lane {name}", f"AFC_stepper {name}") if o in available), None)
+                if obj:
+                    lane_objs.append(obj)
             if not lane_objs:
                 return []
             r = await client.get(f"{base}/printer/objects/query", params={o: "" for o in lane_objs},

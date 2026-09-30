@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+- AFC lanes: each lane is shown once (AFC 1.2 has several objects per lane and a unit with the same
+  name as the first lane) – checked with data from a real COSMOS + CANVAS printer.
+
 ## 0.9.0
 - Printer camera in the app: thumbnail on the printers tab, fullscreen live view or still images; the
   image comes through PrintShare, so it also works away from home. Centauri Carbon, Klipper webcams,

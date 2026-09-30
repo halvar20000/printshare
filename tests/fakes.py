@@ -128,7 +128,9 @@ async def mjpeg(request: web.Request, frames: int = 3) -> web.StreamResponse:
 
 
 class FakeMoonraker:
-    def __init__(self, port: int = 7125, afc: bool = False) -> None:
+    def __init__(self, port: int = 7125, afc: bool = False, recorded: dict | None = None) -> None:
+        """recorded: objects list + object status captured from a real printer (tests/data/*.json)."""
+        self.recorded = recorded
         self.port = port
         self.uploads: list[dict] = []
         self.actions: list[str] = []
@@ -160,6 +162,8 @@ class FakeMoonraker:
             "heater_bed": {"temperature": 60.0, "target": 60},
             "virtual_sdcard": {"progress": 0.03},
         }
+        if self.recorded:
+            objs.update({o: self.recorded["status"].get(o, {}) for o in self.recorded["objects"]})
         if self.afc:
             objs["AFC"] = {"current_load": "lane1", "lanes": list(AFC_LANES), "units": ["CANVAS CANVAS_1"]}
             objs.update({f"AFC_stepper {name}": dict(ln, name=name) for name, ln in AFC_LANES.items()})

@@ -302,8 +302,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   400 if no lane has that tool.
 - App: section "Spuren" (default: loaded lane with the profile's material and the closest colour, else T<n-1>),
   red warning + print blocked for an empty lane, yellow for a material mismatch; printers tab shows lane chips.
-- Verified with the real Orca: remap on a COSMOS two-colour G-code (TOOL=2, `T3 PURGE_LENGTH=`); fake Moonraker
-  with 4 AFC lanes. NOT yet on Dominique's printer (object names / field values to confirm there).
+- Verified with the real Orca: remap on a COSMOS two-colour G-code (TOOL=2, `T3 PURGE_LENGTH=`).
+- Real AFC data from Dominique's COSMOS (AFC 1.2.1, recorded 2026-09-30, `tests/data/cosmos_afc_moonraker.json`):
+  Moonraker on port 80 (7125 closed); lanes `CANVAS_1`…`CANVAS_4`; each lane exists as `AFC_lane <n>` (has the
+  data), `AFC_stepper <n>` and `AFC_canvas_lane <n>`, and the unit is also `AFC_canvas CANVAS_1` → take exactly
+  one object per lane (`AFC_lane`, fallback `AFC_stepper`; bug fixed in 0.9.1: 13 entries instead of 4).
+  The tool map is not in lane order (CANVAS_1→T3, CANVAS_2→T1, CANVAS_3→T2, CANVAS_4→T0) – always use `map`.
+  Empty lane: `material: null`, `color: ""`, `prep/load: false`, `filament_status: "Not Ready"`.
 
 ## Camera in the app (issue #3, 2026-09-30, 0.9.0)
 - `printshare/camera.py` + `adapter.camera() -> Camera(stream_url, snapshot_url, headers, auth)`:

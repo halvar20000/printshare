@@ -106,3 +106,28 @@ def test_lanes_need_a_printer_with_lanes(api, client, monkeypatch, tmp_path):
         fake.state = "standby"
         r = client.post(f"/api/jobs/{job_id}/send", headers=H, json={"start": True, "confirm": True, "lanes": {"1": 1}})
     assert r.status_code == 400 and "no lane" in r.json()["detail"]
+
+
+def test_lanes_from_dominiques_cosmos():
+    """Recorded from Dominique's COSMOS (AFC 1.2.1, CANVAS, 2026-09-30): every lane exists as AFC_lane,
+    AFC_stepper and AFC_canvas_lane, the unit is also named CANVAS_1, and the tool map is not in lane order."""
+    import json
+    from pathlib import Path
+    rec = json.loads((Path(__file__).parent / "data" / "cosmos_afc_moonraker.json").read_text())
+
+    async def go():
+        fake = FakeMoonraker(recorded=rec)
+        await fake.start()
+        try:
+            return await get_adapter(PrinterConfig(id="d", type="moonraker", url="http://127.0.0.1:7125")).status()
+        finally:
+            await fake.stop()
+    lanes = asyncio.run(go())["lanes"]
+    assert [(ln["id"], ln["tool"], ln["loaded"], ln["material"], ln["color"]) for ln in lanes] == [
+        ("CANVAS_4", 0, True, "PLA", "#A18787"),
+        ("CANVAS_2", 1, True, "PLA", "#000000"),
+        ("CANVAS_3", 2, False, None, None),
+        ("CANVAS_1", 3, True, "PLA", "#FFFFFF"),
+    ]
+    assert not any(ln["in_toolhead"] for ln in lanes)
+    assert all(ln["unit"] == "CANVAS_1" for ln in lanes)
