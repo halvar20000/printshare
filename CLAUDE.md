@@ -356,6 +356,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   list of uploaded presets (kind, based on, own start code, used by) with delete (confirm; the server refuses
   profiles in use). Same flow as the app's `printer/[id].tsx`; checked with Chromium against a mocked API.
 
+## Slots before slicing (issue #12, 2026-09-30, 0.11.0) + web profile upload (PR #13, 0.10.3)
+- App `lib/lanes.ts` (rules from Dominique's Swift app `iDomi94/printshare-ios`, `LanePlan.swift`): `slots()` = lanes
+  with a tool in physical order, "Slot N" from the trailing number of the id (ids if numbers are missing/repeat);
+  `presetForLane()` = preset starting with the lane's `filament`, else last choice, else standard, else first preset
+  of that material; `defaultSlots()` = loaded slot with the closest colour (fitting material first after slicing),
+  each slot once if possible, single colour → slot in the toolhead. `prepare.tsx` shows slot + material rows per
+  colour when the printer reports lanes; a manual material is dropped when the slot changes. Slots go to the job
+  screen as the `slots` route param (not stored); `job/[id].tsx` uses them as default; edit → prepare keeps them.
+- Web UI: slot selects on the review page (`loadSlots`/`checkSlots`, same rules in JS), choice kept per job after
+  "upload only", empty slot blocks "Print", other material = yellow hint. Checked against the real server with the
+  fake Moonraker fed Dominique's recorded AFC data (G-code remapped `TOOL=1`, `T1`, `T0`).
+- Dominique writes a separate native iOS app in Swift (`iDomi94/printshare-ios`, outside this session's GitHub
+  scope); decision Expo vs. Swift for iOS still open. He is a collaborator on the repo since 2026-09-30.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

@@ -12,6 +12,9 @@ const I18N = {
     edit: "Einstellungen ändern", new_job: "Neues Modell", no_jobs: "Noch keine Aufträge.",
     token: "API-Token", save: "Speichern", language: "Sprache", lang_auto: "Automatisch",
     install_title: "Als App installieren", install: "Installieren",
+    slots_title: "Slots", slot: "Slot", color_n: "Farbe {n}", slot_empty: "leer",
+    slot_empty_warn: "{what}: {slot} ist leer – Filament laden oder einen anderen Slot wählen.",
+    slot_material_warn: "{what}: Profil ist {want}, in {slot} ist {have}.",
     profiles_title: "Druckerprofil",
     profiles_hint: "Eigenes Druckerprofil aus OrcaSlicer, z. B. für COSMOS mit AFC: in OrcaSlicer den Drucker wählen, dann Datei → Exportieren → Voreinstellungs-Paket (.zip) oder die JSON-Datei des Profils. Der Server prüft das Profil vor der Verwendung.",
     profile_standard: "Standard: {name}", profile_cosmos: " (mit eingebautem COSMOS-Startcode)",
@@ -76,6 +79,9 @@ const I18N = {
     edit: "Change settings", new_job: "New model", no_jobs: "No jobs yet.",
     token: "API token", save: "Save", language: "Language", lang_auto: "Automatic",
     install_title: "Install as app", install: "Install",
+    slots_title: "Slots", slot: "Slot", color_n: "Colour {n}", slot_empty: "empty",
+    slot_empty_warn: "{what}: {slot} is empty – load filament or choose another slot.",
+    slot_material_warn: "{what}: the profile is {want}, {slot} holds {have}.",
     profiles_title: "Printer profile",
     profiles_hint: "Your own printer profile from OrcaSlicer, e.g. for COSMOS with AFC: select the printer in OrcaSlicer, then File → Export → preset bundle (.zip) or the profile's JSON file. The server checks the profile before using it.",
     profile_standard: "Standard: {name}", profile_cosmos: " (with built-in COSMOS start code)",
@@ -402,6 +408,82 @@ function showReview(j) {
   $("do-upload").hidden = uploaded;
   $("do-print").textContent = t("print");
   S.lastJob = j;
+  loadSlots(j);
+}
+
+// ---------- AFC slots (issue #12), same rules as the app's lib/lanes.ts ----------
+const MATERIALS = ["PLA", "PETG", "ABS", "ASA", "TPU", "PA", "PC", "PVA", "HIPS", "PET"];
+const materialOf = name => { const w = (name || "").toUpperCase().split(/[^A-Z0-9]+/); return MATERIALS.find(m => w.includes(m)) || null; };
+const fitsLane = (preset, lane) => { const want = materialOf(preset), have = (lane?.material || "").toUpperCase();
+  return !want || !have || have.startsWith(want); };
+function slotList(lanes) {
+  const list = (lanes || []).filter(l => l.tool != null);
+  const nums = list.map(l => { const m = l.id.match(/(\d+)$/); return m ? Number(m[1]) : null; });
+  const numbered = nums.every(n => n != null) && new Set(nums).size === nums.length;
+  return list.map((l, i) => ({ ...l, slot: numbered ? `${t("slot")} ${nums[i]}` : l.id, o: numbered ? nums[i] : i }))
+    .sort((a, b) => a.o - b.o);
+}
+function defaultSlotsFor(colours, slots) {
+  const rgb = c => (/^#[0-9a-f]{6}$/i.test(c || "") ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : null);
+  const dist = (a, b) => { const x = rgb(a), y = rgb(b); return x && y ? x.reduce((s, v, i) => s + (v - y[i]) ** 2, 0) : 1e6; };
+  const loaded = slots.filter(l => l.loaded), taken = new Set(), out = {};
+  for (const c of colours) {
+    const fit = loaded.filter(l => fitsLane(c.preset, l)), pool = fit.length ? fit : loaded;
+    const free = pool.filter(l => !taken.has(l.tool)), from = free.length ? free : pool;
+    const pick = (c.color ? [...from].sort((a, b) => dist(a.color, c.color) - dist(b.color, c.color))[0]
+      : from.find(l => l.in_toolhead) || from[0]) || slots[0];
+    if (pick) { out[c.index] = pick.tool; taken.add(pick.tool); }
+  }
+  return out;
+}
+async function loadSlots(j) {
+  S.slots = null;
+  $("slots-box").hidden = true;
+  const r = j.result || {};
+  if (!r.printer || j.state === "started") return;
+  let st;
+  try { st = await api(`/api/printers/${encodeURIComponent(r.printer)}/status`); } catch { return; }
+  const slots = slotList(st.lanes);
+  if (!slots.length || S.jobId !== j.id) return;
+  const colours = r.filaments && r.filaments.length > 1 ? r.filaments
+    : [{ index: 1, color: null, preset: r.profiles?.filament }];
+  // keep a choice made for this job (e.g. "upload only" first, then print)
+  const kept = S.slotsKept?.job === j.id ? S.slotsKept.chosen : {};
+  const chosen = { ...defaultSlotsFor(colours, slots),
+    ...Object.fromEntries(Object.entries(kept).filter(([, tool]) => slots.some(l => l.tool === tool))) };
+  S.slotsKept = { job: j.id, chosen };
+  const label = l => [l.slot, l.loaded ? l.material : t("slot_empty"), l.filament, `T${l.tool}`].filter(Boolean).join(" · ");
+  $("slots").replaceChildren(...colours.flatMap(c => {
+    const sel = el("select", { id: "slot-" + c.index });
+    fillSelect(sel, slots.map(l => [String(l.tool), label(l)]), String(chosen[c.index]));
+    sel.onchange = () => { chosen[c.index] = Number(sel.value); checkSlots(); };
+    const what = colours.length > 1 ? t("color_n", { n: c.index }) : t("slot");
+    return [el("label", { for: sel.id }, what + (c.preset ? ` – ${short(c.preset)}` : "")), sel];
+  }));
+  S.slots = { colours, slots, chosen };
+  $("slots-box").hidden = false;
+  checkSlots();
+}
+function checkSlots() {
+  const warn = [];
+  let blocking = false;
+  if (S.slots) {
+    const { colours, slots, chosen } = S.slots;
+    for (const c of colours) {
+      const lane = slots.find(l => l.tool === chosen[c.index]);
+      if (!lane) continue;
+      const what = colours.length > 1 ? t("color_n", { n: c.index }) : t("slot");
+      if (!lane.loaded) { warn.push(t("slot_empty_warn", { what, slot: lane.slot })); blocking = true; }
+      else if (!fitsLane(c.preset, lane)) {
+        warn.push(t("slot_material_warn", { what, want: short(c.preset), slot: lane.slot, have: lane.material }));
+      }
+    }
+  }
+  S.slotsBlocking = blocking;
+  $("slots-warn").textContent = warn.join("\n");
+  $("slots-warn").className = blocking ? "error" : "error warn";   // yellow unless the print is blocked
+  $("slots-warn").hidden = !warn.length;
+  $("do-print").disabled = !$("plate-empty").checked || blocking;
 }
 
 async function sendJob(start) {
@@ -410,7 +492,9 @@ async function sendJob(start) {
   $("review-error").hidden = true;
   $("do-print").textContent = t("sending");
   try {
-    await post(`/api/jobs/${id}/send`, { start, confirm: start });
+    const body = { start, confirm: start };
+    if (S.slots) body.lanes = S.slots.chosen;       // {"<model colour>": <tool of the chosen slot>}
+    await post(`/api/jobs/${id}/send`, body);
     for (;;) {
       await sleep(1000);
       const j = await api("/api/jobs/" + id);
@@ -421,7 +505,7 @@ async function sendJob(start) {
     $("do-print").textContent = t("print");
   }
   $("do-upload").disabled = false;
-  $("do-print").disabled = !$("plate-empty").checked;
+  $("do-print").disabled = !$("plate-empty").checked || !!S.slotsBlocking;
 }
 
 async function editJob() {
@@ -681,7 +765,7 @@ $("link").addEventListener("change", loadFiles);
 $("printer").onchange = () => loadOptions().catch(e => formError(e.message));
 $("process").onchange = () => loadDefaults().catch(e => formError(e.message));
 $("progress-back").onclick = () => { S.pollToken++; stage("form"); };
-$("plate-empty").onchange = () => { $("do-print").disabled = !$("plate-empty").checked; };
+$("plate-empty").onchange = () => { $("do-print").disabled = !$("plate-empty").checked || !!S.slotsBlocking; };
 $("do-print").onclick = () => sendJob(true);
 $("do-upload").onclick = () => sendJob(false);
 $("edit").onclick = editJob;

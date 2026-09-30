@@ -74,6 +74,7 @@ button:active:not(:disabled) { transform: scale(.99); }
 
 .hint { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
 .error { color: var(--err); font-size: 14px; margin: 8px 0; white-space: pre-wrap; }
+.error.warn { color: var(--warn); }
 .card.error { margin: 0 0 12px; border-color: color-mix(in srgb, var(--err) 40%, var(--line)); }
 .printer .details { margin-top: 10px; }
 .ok { color: var(--ok); }

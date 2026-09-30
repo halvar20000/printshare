@@ -27,7 +27,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DV-03 | Build plate | ✅ per printer + per job (app) |
 | MA-01 | Filament profile | ✅ per job from compatible Orca presets (app) |
 | MA-04 | Multicolour mapping | 🟡 3MF colours detected (Orca/Bambu/Prusa projects), material per colour in the app, N filament presets to Orca (by position), grams per colour, colour preview. lane mapping for AFC ✅ 0.8.0 (tool numbers rewritten at send time) |
-| MA-02/03 | Lanes from the printer, pick lane | ✅ 0.8.0 (#6): AFC lanes via Moonraker (map/material/colour/loaded), lane per colour on the review screen, no re-slicing; CANVAS on stock firmware ⬜ (undocumented) |
+| MA-02/03 | Lanes from the printer, pick lane | ✅ 0.8.0 (#6): AFC lanes via Moonraker (map/material/colour/loaded), lane per colour on the review screen, no re-slicing; 0.11.0 (#12): slot per colour already before slicing (material preset follows the slot), "Slot N" in physical order, web page too; CANVAS on stock firmware ⬜ (undocumented) |
 | QU-01 | Quality as process profile | ✅ per job from compatible presets (app) |
 | QU-03/04, SU-01/02/05 | walls, infill, supports, brim | ✅ per job (`JobOptions`); supports off/normal/tree, brim auto/off/outer |
 | PL-02 | Auto-orient | 🟡 `auto_orient` config flag; Orca `--orient` |
@@ -57,7 +57,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 |---|---|---|
 | SL-03 | Show profiles used + changed values | ✅ review screen |
 | SL-05 | Change settings and re-slice | ✅ "Change settings" keeps link + choices |
-| DR-03 | Check before start (plate empty, material) | ✅ switch + confirm dialog; server refuses start on a busy printer (409); lane material check ⬜ (needs AFC) |
+| DR-03 | Check before start (plate empty, material) | ✅ switch + confirm dialog; server refuses start on a busy printer (409); AFC: empty slot blocks the start, other material warns (0.8.0/0.11.0) |
 | DV-04 | Warn on odd combinations | 🟡 app: PLA/Engineering, PETG/smooth PEI, Cool Plate non-PLA, CF/GF nozzle hint; build-volume check ⬜ |
 | NF-04 | Token in Keychain | ✅ SecureStore (Keychain/Keystore); pairing QR via `printshare pair` |
 | NF-10 | Distribution | EAS build → TestFlight (iOS, Dominique's account) / APK (Android) |

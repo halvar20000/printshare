@@ -7,13 +7,14 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import {
   Banner, Button, Divider, Field, PickerSheet, Row, Screen, Section, Segmented, Stepper, tap, type Choice,
 } from "@/components/ui";
-import type { JobOptions, ModelColors, ModelFile, Options, Printer, PrinterKind } from "@/lib/api";
+import type { JobOptions, Lane, ModelColors, ModelFile, Options, Printer, PrinterKind } from "@/lib/api";
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
 import { brandOf, comboWarnings, jobName, plateName, shortName } from "@/lib/format";
+import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
 import { useColors } from "@/lib/theme";
 
 type Params = { link?: string; fileUri?: string; fileName?: string; edit?: string };
-type Edit = { printer?: string; file?: string | null; options?: JobOptions; name?: string };
+type Edit = { printer?: string; file?: string | null; options?: JobOptions; name?: string; slots?: Record<number, number> };
 type Sheet = "printer" | "filament" | "process" | "plate" | "file" | null;
 
 export default function Prepare() {
@@ -31,9 +32,11 @@ export default function Prepare() {
   const [file, setFile] = useState<string | null>(edit.file ?? null);
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [kinds, setKinds] = useState<Record<string, PrinterKind | "offline">>({});
+  const [lanesBy, setLanesBy] = useState<Record<string, Lane[]>>({});
   const [printer, setPrinter] = useState<string>("");
   const [opts, setOpts] = useState<Options | null>(null);
   const [filament, setFilament] = useState("");
+  const [filamentManual, setFilamentManual] = useState(!!edit.options?.filament);
   const [process, setProcess] = useState("");
   const [plate, setPlate] = useState("");
   const [supports, setSupports] = useState("off");
@@ -100,7 +103,10 @@ export default function Prepare() {
         const last = edit.printer ?? (await loadLastPrinter());
         setPrinter(list.find(p => p.id === last)?.id ?? list[0]?.id ?? "");
         list.forEach(p => api.status(p.id)
-          .then(s => setKinds(k => ({ ...k, [p.id]: s.kind })))
+          .then(s => {
+            setKinds(k => ({ ...k, [p.id]: s.kind }));
+            setLanesBy(l => ({ ...l, [p.id]: s.lanes ?? [] }));
+          })
           .catch(() => setKinds(k => ({ ...k, [p.id]: "offline" }))));
       } catch (e) {
         setError((e as Error).message);
@@ -155,6 +161,31 @@ export default function Prepare() {
 
   const d = opts?.defaults;
   const warnings = useMemo(() => (filament && plate ? comboWarnings(t, filament, plate) : []), [t, filament, plate]);
+  // Slots (issue #12): printers with an AFC unit pick a slot per colour; the preset follows the slot
+  const printerSlots = useMemo(() => slots(lanesBy[printer]), [lanesBy, printer]);
+  const useSlots = printerSlots.length > 0;
+  const modelColors = useMemo(() => (multi && colors
+    ? colors.filaments.filter(f => colors.used.includes(f.index)).map(f => ({ index: f.index, color: f.color }))
+    : [{ index: 1, color: colors?.filaments.length === 1 ? colors.filaments[0].color : null }]), [multi, colors]);
+  const [slotChoice, setSlotChoice] = useState<Record<number, number>>(edit.slots ?? {});
+  const [slotSheet, setSlotSheet] = useState<number | null>(null);
+  const slotFor = useMemo(() => defaultSlots(modelColors, printerSlots, slotChoice),
+    [modelColors, printerSlots, slotChoice]);
+  const laneOf = (index: number) => printerSlots.find(l => l.tool === slotFor[index]);
+  const presetFor = (index: number): string => {
+    const manual = multi ? perColor[index] : filamentManual ? filament : undefined;
+    if (manual) return manual;
+    if (!useSlots) return filament;
+    return presetForLane(laneOf(index), opts?.materials ?? [], filament, d?.filament ?? null) ?? filament;
+  };
+  const slotWarnings = useSlots ? modelColors.flatMap(mc => {
+    const lane = laneOf(mc.index);
+    if (!lane) return [];
+    const what = multi ? t("colorN", { n: mc.index }) : t("lane");
+    if (!lane.loaded) return [t("laneEmptyWarn", { what, lane: lane.slot })];
+    const preset = presetFor(mc.index);
+    return fits(preset, lane) ? [] : [t("laneMaterialWarn", { what, want: shortName(preset), lane: lane.slot, have: lane.material ?? "" })];
+  }) : [];
   const needsFile = (files?.length ?? 0) > 1 && !file;
   const printerName = printers.find(p => p.id === printer)?.name ?? printer;
 
@@ -162,8 +193,12 @@ export default function Prepare() {
     if (!api || !link || !opts || !d) return;
     if (needsFile) { setError(t("chooseFile")); return; }
     const o: JobOptions = { process, bed_type: plate };
-    if (filament !== d.filament) o.filament = filament;
-    if (multi && colors) o.filaments = colors.filaments.map(f => perColor[f.index] ?? null);
+    const single = presetFor(1);
+    if (!multi && single !== d.filament) o.filament = single;
+    else if (multi && filament !== d.filament) o.filament = filament;
+    if (multi && colors) {
+      o.filaments = colors.filaments.map(f => (colors.used.includes(f.index) ? presetFor(f.index) : perColor[f.index] ?? null));
+    }
     if (supports !== d.supports) o.supports = supports;
     if (brim !== d.brim) o.brim = brim;
     if (infill != null && infill !== d.infill) o.infill = infill;
@@ -171,9 +206,11 @@ export default function Prepare() {
     setSubmitting(true);
     setError("");
     try {
-      await Promise.all([saveLastPrinter(printer), savePrefs(printer, { filament, process, bed_type: plate })]);
+      await Promise.all([saveLastPrinter(printer),
+        savePrefs(printer, { filament: multi ? filament : single, process, bed_type: plate })]);
       const { job } = await api.createJob(link, printer, file, o);
-      router.replace(`/job/${job}`);
+      // the chosen slots become the job screen's default (sent with /send, changeable without re-slicing)
+      router.replace({ pathname: "/job/[id]", params: useSlots ? { id: job, slots: JSON.stringify(slotFor) } : { id: job } });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -194,9 +231,10 @@ export default function Prepare() {
     file: (files ?? []).map(f => ({ value: String(f.index), label: f.name,
       sub: f.size ? `${(f.size / 1048576).toFixed(1)} MB` : undefined })),
   };
-  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament, process, plate, file };
+  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament: presetFor(1), process, plate, file };
   const sheetSet: Record<Exclude<Sheet, null>, (v: string) => void> = {
-    printer: setPrinter, filament: setFilament, process: changeProcess, plate: setPlate, file: setFile,
+    printer: setPrinter, filament: v => { setFilament(v); setFilamentManual(true); }, process: changeProcess,
+    plate: setPlate, file: setFile,
   };
   const sheetTitle: Record<Exclude<Sheet, null>, string> = {
     printer: t("printer"), filament: t("material"), process: t("quality"), plate: t("plate"), file: t("file"),
@@ -249,7 +287,33 @@ export default function Prepare() {
       {opts && d ? (
         <>
           {warnings.map(w => <Banner key={w} kind="warn" text={w} />)}
-          {multi && colors ? (
+          {useSlots ? (
+            <Section title={t("lanes")} footer={t("slotsHint")}>
+              {modelColors.map((mc, i) => {
+                const lane = laneOf(mc.index);
+                return (
+                  <View key={mc.index}>
+                    {i ? <Divider /> : null}
+                    <Row icon="file-tray-stacked-outline" label={multi ? t("colorN", { n: mc.index }) : t("lane")}
+                      value={lane ? [lane.slot, lane.loaded ? lane.material : t("laneEmpty")].filter(Boolean).join(" · ") : "–"}
+                      onPress={() => setSlotSheet(mc.index)}
+                      right={<View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8, gap: 4 }}>
+                        {colorsLoading ? <ActivityIndicator color={c.accent} /> : null}
+                        {multi && mc.color ? <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: mc.color,
+                          borderWidth: 1, borderColor: c.line }} /> : null}
+                        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: lane?.color || c.track,
+                          borderWidth: 1, borderColor: c.line }} />
+                      </View>} />
+                    <Divider />
+                    <Row icon="color-fill-outline" label={t("material")} value={shortName(presetFor(mc.index))}
+                      onPress={() => (multi ? setColorSheet(mc.index) : setSheet("filament"))} />
+                  </View>
+                );
+              })}
+            </Section>
+          ) : null}
+          {useSlots ? slotWarnings.map(w => <Banner key={w} kind="warn" text={w} />) : null}
+          {multi && colors && !useSlots ? (
             <Section title={t("colors")} footer={colors.painted ? t("colorsPainted") : t("colorsHint")}>
               {colors.filaments.filter(f => colors.used.includes(f.index)).map((f, i) => (
                 <View key={f.index}>
@@ -263,7 +327,7 @@ export default function Prepare() {
             </Section>
           ) : null}
           <Section>
-            {multi ? null : <>
+            {multi || useSlots ? null : <>
               <Row icon="color-fill-outline" label={t("material")} value={shortName(filament)} onPress={() => setSheet("filament")}
                 right={colorsLoading ? <ActivityIndicator color={c.accent} style={{ marginLeft: 8 }} /> : null} />
               <Divider />
@@ -310,9 +374,23 @@ export default function Prepare() {
         <PickerSheet visible title={sheetTitle[sheet]} choices={choices[sheet]} value={sheetValue[sheet]}
           onPick={sheetSet[sheet]} onClose={() => setSheet(null)} searchLabel={t("search")} closeLabel="OK" />
       ) : null}
+      {slotSheet != null ? (
+        <PickerSheet visible title={multi ? t("colorN", { n: slotSheet }) : t("lane")}
+          choices={printerSlots.map(l => ({ value: String(l.tool),
+            label: [l.slot, l.loaded ? l.material : t("laneEmpty")].filter(Boolean).join(" · "),
+            sub: [l.filament, l.in_toolhead ? t("laneInToolhead") : null, `T${l.tool}`].filter(Boolean).join(" · ") }))}
+          value={slotFor[slotSheet] != null ? String(slotFor[slotSheet]) : null}
+          onPick={v => {
+            setSlotChoice(p => ({ ...p, [slotSheet]: Number(v) }));
+            // a new slot brings its own material: drop a material chosen by hand for this colour
+            if (multi) setPerColor(({ [slotSheet]: _dropped, ...rest }) => rest);
+            else setFilamentManual(false);
+          }}
+          onClose={() => setSlotSheet(null)} searchLabel={t("search")} closeLabel="OK" />
+      ) : null}
       {colorSheet != null ? (
         <PickerSheet visible title={t("colorN", { n: colorSheet })} choices={choices.filament}
-          value={perColor[colorSheet] ?? filament}
+          value={presetFor(colorSheet)}
           onPick={v => setPerColor(p => ({ ...p, [colorSheet]: v }))} onClose={() => setColorSheet(null)}
           searchLabel={t("search")} closeLabel="OK" />
       ) : null}

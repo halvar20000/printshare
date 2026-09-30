@@ -10,6 +10,7 @@ import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/compo
 import type { Printer, PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
+import { slots } from "@/lib/lanes";
 import { space, useColors } from "@/lib/theme";
 
 type Entry = { printer: Printer; status: PrinterStatus | null; error?: string };
@@ -121,14 +122,14 @@ export default function Printers() {
             {s?.lanes?.length ? (
               // filament lanes of an AFC unit (CANVAS on COSMOS), spec MA-02
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }}>
-                {s.lanes.map(l => (
+                {slots(s.lanes).map(l => (
                   <View key={l.id} style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 6,
                     borderRadius: 999, backgroundColor: c.input, opacity: l.loaded ? 1 : 0.5,
                     borderWidth: l.in_toolhead ? 2 : 0, borderColor: c.accent }}>
-                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: l.color ?? c.track, marginRight: 6,
+                    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: l.color || c.track, marginRight: 6,
                       borderWidth: 1, borderColor: c.line }} />
                     <Text style={{ color: c.text, fontSize: 13 }}>
-                      {`T${l.tool ?? "?"} · ${l.loaded ? l.material ?? "?" : t("laneEmpty")}`}
+                      {`${l.slot} · ${l.loaded ? l.material ?? "?" : t("laneEmpty")}`}
                     </Text>
                   </View>
                 ))}

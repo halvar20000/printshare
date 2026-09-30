@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0
+- AFC units (e.g. CANVAS on COSMOS): choose the **slot** for each colour already when preparing; the material
+  profile for slicing follows the filament in that slot (can still be changed). Slots are shown in their physical
+  order as "Slot 1–4" instead of "CANVAS_4 (T0)". The web page can choose the slots before sending, too.
+
 ## 0.10.3
 - Upload your own OrcaSlicer printer profile on the web page too (Settings → "Printer profile"): upload a
   JSON or preset bundle for a printer, switch each printer between its standard and an uploaded profile, delete

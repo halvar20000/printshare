@@ -87,6 +87,12 @@
         <dl id="review-details" class="details"></dl>
       </div>
       <div class="card" id="confirm-card">
+        <!-- AFC slots (issue #12): which slot prints each colour -->
+        <div id="slots-box" hidden>
+          <h2 data-t="slots_title">Slots</h2>
+          <div id="slots"></div>
+          <p id="slots-warn" class="error" hidden></p>
+        </div>
         <label class="check">
           <input type="checkbox" id="plate-empty">
           <span id="plate-empty-text"></span>
