@@ -224,6 +224,9 @@ switching off asks first and is refused while a print is running. The token stay
 
 ## Development
 
+The server API used by the apps is documented in [`docs/API.md`](docs/API.md); plans for a hosted service in
+[`docs/CLOUD.md`](docs/CLOUD.md).
+
 ```bash
 pip install -e ".[dev]"
 ORCA_ROOT=/path/to/extracted/OrcaSlicer pytest -q     # fake SDCP + Moonraker printers, real OrcaSlicer

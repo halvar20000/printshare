@@ -409,7 +409,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - **Self-hosted stays** (Unraid, Home Assistant, Docker): same software as the cloud, cloud mode on top; the local
   server can later act as the bridge.
 - **iOS = Dominique's Swift app** (`iDomi94/printshare-ios`, suggested move to halvar20000); **Android = the Expo app**
-  in `mobile/`. The server API is the shared contract → keep it stable and documented (`docs/API.md` planned).
+  in `mobile/`. The server API is the shared contract → **`docs/API.md`** (keep it in sync: every new endpoint
+  goes into it in the same commit; changes additive only). Cloud concept with steps, Hetzner, legal: **`docs/CLOUD.md`**.
 
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
