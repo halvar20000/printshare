@@ -422,6 +422,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (`docker exec PrintShare …`), Android package `io.github.halvar20000.printshare` (can't change after Play),
   EAS slug, deep link `printshare://`, `/api/info` `"name": "PrintShare"` (API contract). The CHANGELOG history keeps the old name.
 
+## Website pocketprint3d.com (2026-09-30)
+- `site/` (static, EN + `/de/`, `/privacy/`, `/impressum/`) published by `.github/workflows/pages.yml` to GitHub Pages;
+  the workflow refuses to publish while `[TODO` placeholders exist. Pages source must be "GitHub Actions"
+  (Thomas enables it once in the repo settings, custom domain pocketprint3d.com, Enforce HTTPS).
+- DNS in Hetzner **konsoleH** (ns1.your-server.de / ns.second-ns.com / ns3.second-ns.de; no DNS API there):
+  4× A + 4× AAAA GitHub Pages, `www` CNAME halvar20000.github.io, no MX (no mail yet), `v=spf1 -all`, DMARC reject.
+  Reference zone file: `dns/pocketprint3d.com.zone`. konsoleH turns `MX 0 .` into `0.pocketprint3d.com` – don't use it.
+- Thomas lives in **France** (Kembs) → imprint = French "mentions légales" (LCEN: editor, contact, host), privacy
+  authority CNIL. Privacy policy is a draft describing the self-hosted setup; extend it before a cloud service starts.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

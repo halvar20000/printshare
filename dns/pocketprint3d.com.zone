@@ -1,0 +1,37 @@
+; Zone file for pocketprint3d.com - import into the Hetzner DNS zone (BIND format).
+; Website on GitHub Pages: https://docs.github.com/pages/configuring-a-custom-domain-for-your-github-pages-site
+; The domain is delegated to Hetzner konsoleH (ns1.your-server.de, ns.second-ns.com, ns3.second-ns.de):
+; konsoleH -> pocketprint3d.com -> DNS -> edit the zone as text and paste the records below the NS lines.
+$ORIGIN pocketprint3d.com.
+$TTL 3600
+
+@       IN  SOA   ns1.your-server.de. postmaster.your-server.de. (
+                  2026093001 ; serial
+                  86400      ; refresh
+                  10800      ; retry
+                  3600000    ; expire
+                  3600 )     ; negative TTL
+
+@       IN  NS    ns1.your-server.de.
+@       IN  NS    ns.second-ns.com.
+@       IN  NS    ns3.second-ns.de.
+
+; --- GitHub Pages (apex domain) ---
+@       IN  A     185.199.108.153
+@       IN  A     185.199.109.153
+@       IN  A     185.199.110.153
+@       IN  A     185.199.111.153
+@       IN  AAAA  2606:50c0:8000::153
+@       IN  AAAA  2606:50c0:8001::153
+@       IN  AAAA  2606:50c0:8002::153
+@       IN  AAAA  2606:50c0:8003::153
+
+; --- www -> GitHub Pages (redirects to pocketprint3d.com) ---
+www     IN  CNAME halvar20000.github.io.
+
+; --- No e-mail on this domain yet: stop others from sending mail in its name ---
+; Remove these three records when you set up e-mail (e.g. kontakt@pocketprint3d.com)
+; and add the MX/SPF records of your mail provider instead.
+@       IN  MX    0 .
+@       IN  TXT   "v=spf1 -all"
+_dmarc  IN  TXT   "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s"
