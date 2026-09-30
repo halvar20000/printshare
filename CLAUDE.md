@@ -397,6 +397,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store
   the pulled presets as `profiles/` files (kind prefix) so everything above works unchanged.
 
+## Product decisions (Thomas, 2026-09-30)
+- **Cloud service** planned, run by Thomas on **Hetzner** (EU): slicing, search, accounts in the cloud; the **phone app
+  relays G-code to the printer on the home Wi-Fi** (nothing to install at home); remote access needs a **bridge**
+  with an outgoing connection: free where something runs already (HA/NAS/Docker server, Klipper/COSMOS plugin, later
+  an old Android phone), otherwise a Pi Zero 2 W image (~35 EUR), maybe an ESP32 stick (~10 EUR) later.
+  Tunnels (Cloudflare/Tailscale) to the printer rejected for normal users: printers have no auth, setup too hard.
+- **Everything free**, no subscriptions → the cloud needs limits (slices/day, model size, G-code cleanup, parallel jobs).
+- **Printables stays as it is** (server downloads for the user); in the cloud: clean User-Agent, rate limits, per-user
+  cache; phone download only as a fallback if Printables ever blocks.
+- **Self-hosted stays** (Unraid, Home Assistant, Docker): same software as the cloud, cloud mode on top; the local
+  server can later act as the bridge.
+- **iOS = Dominique's Swift app** (`iDomi94/printshare-ios`, suggested move to halvar20000); **Android = the Expo app**
+  in `mobile/`. The server API is the shared contract → keep it stable and documented (`docs/API.md` planned).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.
