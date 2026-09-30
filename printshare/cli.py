@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("kind", choices=["machine", "process", "filament"])
     pr.add_argument("--search", "-s", default="")
 
-    pa = sub.add_parser("pair", help="show a QR code that connects the PrintShare app to this server")
+    pa = sub.add_parser("pair", help="show a QR code that connects the PocketPrint3D app to this server")
     pa.add_argument("--url", required=True,
                     help="address the phone uses at home, e.g. http://192.168.1.10:8484")
     pa.add_argument("--remote-url", default="",
@@ -110,7 +110,7 @@ def print_pairing(url: str, token: str, remote: str = "") -> None:
             raise ValueError(f"{flag} must start with http:// or https://")
     import segno
     link = pairing_link(url, token, remote)
-    print("Scan this code in the PrintShare app (Settings → Connect server → Scan QR code):\n")
+    print("Scan this code in the PocketPrint3D app (Settings → Connect server → Scan QR code):\n")
     segno.make(link, error="m").terminal(compact=True)
     print(f"\nOr enter manually:\n  Server: {url.rstrip('/')}")
     if remote:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.13.1
+- New name: **PocketPrint3D** (formerly PrintShare) – the app, web page and add-on show the new name. Nothing
+  changes for existing installations: same add-on, image, settings and pairing.
+
 ## 0.13.0
 - Your own OrcaSlicer quality and material profiles: upload them like a printer profile (app: Settings →
   printer, or the web page); they appear first under "Own profiles" when preparing a print and are used for

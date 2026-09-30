@@ -1,4 +1,4 @@
-# PrintShare add-on
+# PocketPrint3D add-on
 
 Print Printables/Thingiverse models from your phone on Elegoo Centauri Carbon and Klipper printers –
 slicing with OrcaSlicer on your own Home Assistant server. See the **Documentation** tab.

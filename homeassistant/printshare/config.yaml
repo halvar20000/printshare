@@ -1,5 +1,5 @@
-name: PrintShare
-version: "0.13.0"
+name: PocketPrint3D
+version: "0.13.1"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the

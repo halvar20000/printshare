@@ -1,4 +1,4 @@
-# Tests, then builds the PrintShare image for amd64 + arm64 on native runners and publishes
+# Tests, then builds the PocketPrint3D image for amd64 + arm64 on native runners and publishes
 # ghcr.io/halvar20000/printshare with the tags :latest and :<version from pyproject.toml>.
 # The Unraid template and the Home Assistant add-on install this image.
 name: Docker image

@@ -110,14 +110,14 @@ def test_adjust_api_limits_and_confirmation(api, client):
 
 
 def test_temperature_log_for_printers_without_history(api, client, monkeypatch):
-    """Printers without their own history (Centauri): PrintShare records what the status queries saw."""
+    """Printers without their own history (Centauri): PocketPrint3D records what the status queries saw."""
     api.TEMP_LOG.clear()
     ticks = [1000.0, 1002.0, 1010.0, 1020.0]                     # 1002 is < 4 s after 1000: skipped
     monkeypatch.setattr(api.time, "time", lambda: ticks.pop(0) if len(ticks) > 1 else ticks[0])
     for actual in (20.0, 21.0, 25.0, 30.0):
         api._log_temperatures("dom", {"heaters": {"nozzle": {"actual": actual, "target": 200.0},
                                                   "chamber": {"actual": None, "target": None}}})
-    # the fake printer is not running -> no history from the printer -> PrintShare's own record
+    # the fake printer is not running -> no history from the printer -> PocketPrint3D's own record
     r = client.get("/api/printers/dom/temperatures", headers=H).json()
     assert r["source"] == "printshare"
     assert r["series"] == {"nozzle": [[-20, 20.0, 200.0], [-10, 25.0, 200.0], [0, 30.0, 200.0]]}

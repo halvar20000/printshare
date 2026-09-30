@@ -1,4 +1,4 @@
-// Fullscreen printer camera (issue #3): live MJPEG through the PrintShare server, or still images.
+// Fullscreen printer camera (issue #3): live MJPEG through the PocketPrint3D server, or still images.
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Platform, Text, View, useWindowDimensions } from "react-native";

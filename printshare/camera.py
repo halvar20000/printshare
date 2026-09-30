@@ -1,6 +1,6 @@
 """Printer cameras for the app (issue #3, spec DR-06).
 
-The app talks only to PrintShare, also away from home: the server fetches the camera image from the
+The app talks only to PocketPrint3D, also away from home: the server fetches the camera image from the
 printer in the LAN and passes it on - as a single (optionally scaled-down) JPEG or as the live MJPEG stream.
 Where a camera comes from is decided by the printer adapter (`adapter.camera()` -> Camera | None).
 """

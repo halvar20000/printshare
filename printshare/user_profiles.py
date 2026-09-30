@@ -245,7 +245,7 @@ def write_overlay(config_dir: str | Path, printer_id: str, overlay: dict[str, An
         return
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
-    tmp.write_text("# Set from the PrintShare app / web page - kept when config.yaml is regenerated.\n"
+    tmp.write_text("# Set from the PocketPrint3D app / web page - kept when config.yaml is regenerated.\n"
                    + yaml.safe_dump(overlay, sort_keys=False, allow_unicode=True), encoding="utf-8")
     tmp.chmod(0o600)
     tmp.replace(p)

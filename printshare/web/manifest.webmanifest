@@ -1,6 +1,6 @@
 {
-  "name": "PrintShare",
-  "short_name": "PrintShare",
+  "name": "PocketPrint3D",
+  "short_name": "PocketPrint",
   "description": "Printables- und Thingiverse-Modelle auf dem eigenen Drucker drucken",
   "id": "/",
   "start_url": "/",

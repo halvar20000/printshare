@@ -106,7 +106,7 @@ def test_auth_required(client):
 
 
 def test_app_shell_served(client):
-    assert "PrintShare" in client.get("/").text
+    assert "PocketPrint3D" in client.get("/").text
     m = client.get("/manifest.webmanifest")
     assert m.status_code == 200 and m.json()["share_target"]["action"] == "/"
     assert client.get("/sw.js").status_code == 200

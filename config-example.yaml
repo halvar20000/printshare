@@ -1,4 +1,4 @@
-# PrintShare configuration — copy to /mnt/user/appdata/printshare/config.yaml
+# PocketPrint3D configuration — copy to /mnt/user/appdata/printshare/config.yaml
 # Generate a token with:  openssl rand -hex 24
 api_token: "CHANGE-ME"
 

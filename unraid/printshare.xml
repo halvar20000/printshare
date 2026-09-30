@@ -7,14 +7,14 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/halvar20000/printshare/issues</Support>
   <Project>https://github.com/halvar20000/printshare</Project>
-  <Overview>Print Printables and Thingiverse models from your phone - like Bambu Handy, but self-hosted and for other printers. PrintShare downloads the model, slices it with OrcaSlicer on your server and sends it to an Elegoo Centauri Carbon (stock firmware) or a Klipper/Moonraker printer (e.g. OpenCentauri COSMOS). Use the PrintShare app for iOS/Android or the built-in web app.&#xD;
+  <Overview>Print Printables and Thingiverse models from your phone - like Bambu Handy, but self-hosted and for other printers. PocketPrint3D downloads the model, slices it with OrcaSlicer on your server and sends it to an Elegoo Centauri Carbon (stock firmware) or a Klipper/Moonraker printer (e.g. OpenCentauri COSMOS). Use the PocketPrint3D app for iOS/Android or the built-in web app.&#xD;
 &#xD;
 Setup: enter the printer's IP address and the server address, start the container and open the log - it shows the access token and a QR code to connect the app.</Overview>
   <Category>Tools: Productivity:</Category>
   <WebUI>http://[IP]:[PORT:8484]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/halvar20000/printshare/main/unraid/printshare.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/halvar20000/printshare/main/printshare/web/icons/icon-512.png</Icon>
-  <Config Name="Web UI / API port" Target="8484" Default="8484" Mode="tcp" Description="Port of the web app and the API used by the PrintShare app." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
+  <Config Name="Web UI / API port" Target="8484" Default="8484" Mode="tcp" Description="Port of the web app and the API used by the PocketPrint3D app." Type="Port" Display="always" Required="true" Mask="false">8484</Config>
   <Config Name="Printer name" Target="PRINTER_NAME" Default="Centauri Carbon" Mode="" Description="Name shown in the app." Type="Variable" Display="always" Required="false" Mask="false">Centauri Carbon</Config>
   <Config Name="Printer type" Target="PRINTER_TYPE" Default="elegoo_sdcp|moonraker|prusalink|octoprint" Mode="" Description="elegoo_sdcp = Elegoo Centauri Carbon with stock firmware. moonraker = Klipper printers (OpenCentauri COSMOS, Voron, Sovol, Qidi …). prusalink = Prusa MK4/MK4S, MK3.9, CORE One, MINI, XL. octoprint = printers driven by OctoPrint." Type="Variable" Display="always" Required="true" Mask="false">elegoo_sdcp</Config>
   <Config Name="Printer IP address" Target="PRINTER_ADDRESS" Default="" Mode="" Description="IP address of the printer (give it a fixed address in your router). Leave empty to configure printers in /config/config.yaml instead." Type="Variable" Display="always" Required="false" Mask="false"/>

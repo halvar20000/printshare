@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PrintShare",
+    "name": "PocketPrint3D",
     "slug": "printshare",
     "scheme": "printshare",
     "version": "0.1.0",
@@ -15,7 +15,7 @@
           "NSAllowsArbitraryLoads": true,
           "NSAllowsLocalNetworking": true
         },
-        "NSLocalNetworkUsageDescription": "PrintShare connects to your own PrintShare server in your home network.",
+        "NSLocalNetworkUsageDescription": "PocketPrint3D connects to your own PocketPrint3D server in your home network.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -51,7 +51,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PrintShare uses the camera only to scan the pairing QR code of your server.",
+          "cameraPermission": "PocketPrint3D uses the camera only to scan the pairing QR code of your server.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

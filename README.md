@@ -1,6 +1,6 @@
-# PrintShare
+# PocketPrint3D
 
-Send a **Printables** or **Thingiverse** link from your phone. PrintShare downloads the model, slices it with **OrcaSlicer** on your own server, uploads the G-code to your printer and starts the print. It's a self-hosted "Bambu Handy" for everyone else.
+Send a **Printables** or **Thingiverse** link from your phone. PocketPrint3D downloads the model, slices it with **OrcaSlicer** on your own server, uploads the G-code to your printer and starts the print. It's a self-hosted "Bambu Handy" for everyone else.
 
 Supported printers:
 
@@ -17,7 +17,7 @@ For Prusa and OctoPrint printers set `printer_profile` to the printer's name in 
 *Simulated* = tested against a fake printer built from the official API – reports from real printers welcome.
 
 ```
-Phone ──link──▶ PrintShare (Docker on Unraid) ──▶ Printables / Thingiverse
+Phone ──link──▶ PocketPrint3D (Docker on Unraid) ──▶ Printables / Thingiverse
                      │  OrcaSlicer (command line, same profiles as the desktop app)
                      └──▶ Centauri Carbon (SDCP)  /  Klipper (Moonraker)
 ```
@@ -34,20 +34,20 @@ address; on first start the container log shows the **access token** and a **QR 
 On the Unraid console (as root), load the template once:
 
 ```bash
-curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-PrintShare.xml \
+curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-PocketPrint3D.xml \
   https://raw.githubusercontent.com/halvar20000/printshare/main/unraid/printshare.xml
 ```
 
 Then **Docker → Add Container → Template: PrintShare**, fill in *Printer type*, *Printer IP address* and
 *Server address for the app* (e.g. `http://192.168.1.10:8484`), **Apply**. Open the container log
-(Docker tab → PrintShare icon → Logs) and scan the QR code in the app.
+(Docker tab → PocketPrint3D icon → Logs) and scan the QR code in the app.
 
 Updates: Docker tab → *Check for Updates* → *Apply update*. The configuration in `/mnt/user/appdata/printshare` stays.
 
 ### Home Assistant
 
 1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add `https://github.com/halvar20000/printshare`.
-2. Install **PrintShare**, then under **Configuration** add your printer:
+2. Install **PocketPrint3D**, then under **Configuration** add your printer:
    ```yaml
    - name: Centauri Carbon
      type: elegoo_sdcp        # or moonraker (Klipper / COSMOS)
@@ -159,7 +159,7 @@ docker exec printshare printshare pair --url http://<server-ip>:8484   # docker 
 
 **Web app (PWA)** — works in any browser without installing from a store:
 
-PrintShare is also a web app (PWA) served by the container: iPhone and Android, no app store.
+PocketPrint3D is also a web app (PWA) served by the container: iPhone and Android, no app store.
 Flow: share or paste a link → choose material, quality, plate, supports, brim, infill, walls →
 **Slice** → check time, filament, layers and the changed values → tick "the build plate is empty" →
 **Print** (or *Upload only*). Nothing starts without that confirmation. The *Printer* tab shows
@@ -180,9 +180,9 @@ Works from home and on the go (phone with Tailscale on); nothing is exposed to t
 Plain `http://<server>:8484` also works in the browser, but without install and share menu.
 
 * **Install:** iPhone (Safari): Share → *Add to Home Screen*. Android (Chrome): menu ⋮ → *Install app*.
-* **Android share menu:** once installed, *PrintShare* appears when you share a link from the Printables app or Chrome.
+* **Android share menu:** once installed, *PocketPrint3D* appears when you share a link from the Printables app or Chrome.
 * **iPhone share menu:** Shortcuts app → new Shortcut → *Show in Share Sheet* (URLs) → action *Open URLs*
-  with `https://<server>/?link=` + *Shortcut Input*. In Printables or Safari: Share → *PrintShare*.
+  with `https://<server>/?link=` + *Shortcut Input*. In Printables or Safari: Share → *PocketPrint3D*.
 
 API (header `Authorization: Bearer <token>`):
 
@@ -205,7 +205,7 @@ POST   /api/print  {"link", "printer", "file", "start"}   # one-shot slice + sen
 ## 5. Switch the printer on and off (optional, Home Assistant)
 
 If the printer hangs on a smart plug that Home Assistant knows (`switch.…`, `light.…` or `input_boolean.…`),
-PrintShare can switch it: open the web page → *Settings → Power*, enter the Home Assistant address (e.g.
+PocketPrint3D can switch it: open the web page → *Settings → Power*, enter the Home Assistant address (e.g.
 `http://192.168.1.5:8123`) and a long-lived access token (Home Assistant → your profile → *Security*), tap
 *Load list*, pick the plug, *Test*, *Save*. As Home Assistant add-on, address and token can stay empty.
 
@@ -215,7 +215,7 @@ switching off asks first and is refused while a print is running. The token stay
 
 ## Notes and limits (P0)
 
-* **Printables** has no official API. PrintShare uses the website's own endpoint (search, model details, download), only on the user's behalf; files are never stored for others. Paid and premium models are not shown.
+* **Printables** has no official API. PocketPrint3D uses the website's own endpoint (search, model details, download), only on the user's behalf; files are never stored for others. Paid and premium models are not shown.
 * **Thingiverse** (links and search in the app) needs an app token: thingiverse.com/developers → *Create an App* → copy the *App Token* into the Unraid field *Thingiverse app token*, the Home Assistant option `thingiverse_token` or `thingiverse_token:` in `config.yaml`, then restart.
 * Models with several files: the app asks which file to use; on the command line use `--file N`. A single 3MF is preferred automatically.
 * 3MF project files from Bambu Studio are sliced with *your* printer profile. Their plate layout is kept, but print settings saved inside the 3MF are not used.

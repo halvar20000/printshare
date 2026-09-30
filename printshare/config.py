@@ -1,4 +1,4 @@
-"""Configuration (config.yaml) for PrintShare."""
+"""Configuration (config.yaml) for PocketPrint3D."""
 from __future__ import annotations
 
 import copy

@@ -1,10 +1,10 @@
 "use strict";
-// PrintShare web app: link -> settings -> slice -> review -> confirm -> print.
+// PocketPrint3D web app: link -> settings -> slice -> review -> confirm -> print.
 // Plain JS, no build step. All user-visible text lives in I18N (German first, NF-11).
 
 const I18N = {
   de: {
-    title: "PrintShare", link: "Modell-Link", paste: "Einfügen", file: "Datei", printer: "Drucker",
+    title: "PocketPrint3D", link: "Modell-Link", paste: "Einfügen", file: "Datei", printer: "Drucker",
     material: "Material", quality: "Qualität", plate: "Druckplatte", supports: "Stützstrukturen",
     brim: "Brim", infill: "Füllung", walls: "Wände", slice: "Slicen", slicing: "Wird geslict …",
     back_to_form: "Zurück (läuft weiter)", print_time: "Druckzeit", layers: "Schichten",
@@ -15,7 +15,7 @@ const I18N = {
     own_profiles: "Eigene Profile",
     power_title: "Stromversorgung",
     power_hint: "Den Drucker über eine smarte Steckdose in Home Assistant ein- und ausschalten (App und Drucker-Tab). Das Token erstellst du in Home Assistant unter Profil → Sicherheit → Langlebige Zugangs-Token.",
-    power_addon: "PrintShare läuft als Home-Assistant-Add-on: Adresse und Token können leer bleiben, nur die Steckdose wählen.",
+    power_addon: "PocketPrint3D läuft als Home-Assistant-Add-on: Adresse und Token können leer bleiben, nur die Steckdose wählen.",
     power_url: "Home-Assistant-Adresse", power_token: "Langlebiges Zugangs-Token", power_entity: "Steckdose (Entität)",
     power_token_kept: "gespeichert (leer = behalten)",
     power_load: "Liste laden", power_test: "Testen", power_remove: "Entfernen",
@@ -39,7 +39,7 @@ const I18N = {
     profile_based_on: "basiert auf {name}", profile_own_start: "eigener Startcode", profile_in_use: "verwendet von {printers}",
     profile_kinds: { machine: "Drucker", process: "Qualität", filament: "Material", unknown: "unbekannt" },
     pair_title: "App verbinden",
-    pair_hint: "In der PrintShare-App unter Einstellungen → Server verbinden → QR-Code scannen. Der Code enthält das Zugangs-Token – nicht öffentlich zeigen.",
+    pair_hint: "In der PocketPrint3D-App unter Einstellungen → Server verbinden → QR-Code scannen. Der Code enthält das Zugangs-Token – nicht öffentlich zeigen.",
     pair_url: "Adresse zu Hause", pair_remote: "Adresse unterwegs (optional, z. B. Tailscale)",
     pair_show: "QR-Code anzeigen", pair_hide: "QR-Code verbergen",
     pair_manual: "Oder von Hand eingeben – Server: {url}{remote} · Token: {token}", pair_manual_remote: " · unterwegs: {remote}",
@@ -48,7 +48,7 @@ const I18N = {
     install_ios: "iPhone (Safari): Teilen → „Zum Home-Bildschirm“.",
     install_android: "Android (Chrome): Menü ⋮ → „App installieren“.",
     share_title: "Links teilen",
-    share_android: "Android: Nach der Installation steht PrintShare im Teilen-Menü (nur über HTTPS, z. B. Tailscale).",
+    share_android: "Android: Nach der Installation steht PocketPrint3D im Teilen-Menü (nur über HTTPS, z. B. Tailscale).",
     share_ios: "iPhone: Kurzbefehl anlegen – „Im Share-Sheet anzeigen“ (URLs), Aktion „URL öffnen“: {origin}/?link=[Kurzbefehleingabe].",
     tab_print: "Drucken", tab_jobs: "Aufträge", tab_printer: "Drucker", tab_settings: "Einstellungen",
     files_loading: "Dateien werden gesucht …", files_one: "Datei: {name}",
@@ -84,7 +84,7 @@ const I18N = {
           [/^Sending to printer/, "Wird gesendet"], [/^Done/, "Fertig"]],
   },
   en: {
-    title: "PrintShare", link: "Model link", paste: "Paste", file: "File", printer: "Printer",
+    title: "PocketPrint3D", link: "Model link", paste: "Paste", file: "File", printer: "Printer",
     material: "Material", quality: "Quality", plate: "Build plate", supports: "Supports",
     brim: "Brim", infill: "Infill", walls: "Walls", slice: "Slice", slicing: "Slicing …",
     back_to_form: "Back (keeps running)", print_time: "Print time", layers: "Layers",
@@ -95,7 +95,7 @@ const I18N = {
     own_profiles: "Own profiles",
     power_title: "Power",
     power_hint: "Switch the printer on and off with a smart plug in Home Assistant (app and printer tab). Create the token in Home Assistant under Profile → Security → Long-lived access tokens.",
-    power_addon: "PrintShare runs as a Home Assistant add-on: address and token can stay empty, just choose the plug.",
+    power_addon: "PocketPrint3D runs as a Home Assistant add-on: address and token can stay empty, just choose the plug.",
     power_url: "Home Assistant address", power_token: "Long-lived access token", power_entity: "Plug (entity)",
     power_token_kept: "stored (empty = keep)",
     power_load: "Load list", power_test: "Test", power_remove: "Remove",
@@ -119,7 +119,7 @@ const I18N = {
     profile_based_on: "based on {name}", profile_own_start: "own start code", profile_in_use: "used by {printers}",
     profile_kinds: { machine: "Printer", process: "Quality", filament: "Material", unknown: "unknown" },
     pair_title: "Connect the app",
-    pair_hint: "In the PrintShare app: Settings → Connect server → Scan QR code. The code contains the access token – don't show it publicly.",
+    pair_hint: "In the PocketPrint3D app: Settings → Connect server → Scan QR code. The code contains the access token – don't show it publicly.",
     pair_url: "Home address", pair_remote: "Away address (optional, e.g. Tailscale)",
     pair_show: "Show QR code", pair_hide: "Hide QR code",
     pair_manual: "Or enter by hand – server: {url}{remote} · token: {token}", pair_manual_remote: " · away: {remote}",
@@ -128,7 +128,7 @@ const I18N = {
     install_ios: "iPhone (Safari): Share → “Add to Home Screen”.",
     install_android: "Android (Chrome): menu ⋮ → “Install app”.",
     share_title: "Sharing links",
-    share_android: "Android: once installed, PrintShare shows up in the share menu (HTTPS only, e.g. Tailscale).",
+    share_android: "Android: once installed, PocketPrint3D shows up in the share menu (HTTPS only, e.g. Tailscale).",
     share_ios: "iPhone: create a Shortcut – “Show in Share Sheet” (URLs), action “Open URL”: {origin}/?link=[Shortcut Input].",
     tab_print: "Print", tab_jobs: "Jobs", tab_printer: "Printer", tab_settings: "Settings",
     files_loading: "Looking up files …", files_one: "File: {name}",

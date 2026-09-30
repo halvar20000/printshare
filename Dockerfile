@@ -45,12 +45,12 @@ RUN python3 -m venv /opt/venv && pip install --no-cache-dir .
 # Labels: OCI metadata + what Home Assistant expects from a pre-built add-on image
 ARG VERSION=dev
 ARG HASS_ARCH=amd64
-LABEL org.opencontainers.image.title="PrintShare" \
+LABEL org.opencontainers.image.title="PocketPrint3D" \
       org.opencontainers.image.description="Print Printables/Thingiverse models from your phone - self-hosted slicing with OrcaSlicer" \
       org.opencontainers.image.source="https://github.com/halvar20000/printshare" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}" \
-      io.hass.name="PrintShare" \
+      io.hass.name="PocketPrint3D" \
       io.hass.type="addon" \
       io.hass.version="${VERSION}" \
       io.hass.arch="${HASS_ARCH}"

@@ -1,4 +1,4 @@
-// Client for the PrintShare server API (see printshare/api.py).
+// Client for the PocketPrint3D server API (see printshare/api.py).
 import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
 import { Platform } from "react-native";

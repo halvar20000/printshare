@@ -1,7 +1,7 @@
-# PrintShare server API
+# PocketPrint3D server API
 
-The contract between the PrintShare server and its apps: the **iOS app (Swift, Dominique)**, the **Android app
-(Expo, `mobile/`)** and the **web page** (`printshare/web/`). Server version described here: **0.13.0**.
+The contract between the PocketPrint3D server and its apps: the **iOS app (Swift, Dominique)**, the **Android app
+(Expo, `mobile/`)** and the **web page** (`printshare/web/`). Server version described here: **0.13.1**.
 
 The examples were recorded from the server with the real OrcaSlicer 2.4.2 and simulated printers
 (`tests/fakes.py`), shortened with `…`; the search examples are illustrative (they need the internet). Ids, times
@@ -19,7 +19,7 @@ and values differ on your server.
 
 ```http
 GET /api/info
-→ 200 {"name": "PrintShare", "version": "0.13.0", "printers": 2}
+→ 200 {"name": "PrintShare", "version": "0.13.1", "printers": 2}      (the name stays "PrintShare" – technical id)
 
 GET /api/info            (no or wrong token)
 → 401 {"detail": "invalid token"}

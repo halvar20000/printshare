@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlparse
 import httpx
 
 SLICEABLE = (".stl", ".3mf", ".obj", ".step", ".stp")
-UA = "PrintShare/0.1 (+https://github.com/halvar20000/printshare)"
+UA = "PocketPrint3D/0.1 (+https://github.com/halvar20000/printshare)"
 PRINTABLES_GQL = "https://api.printables.com/graphql/"
 THINGIVERSE_API = "https://api.thingiverse.com"
 

@@ -18,7 +18,7 @@ class OctoPrintError(RuntimeError):
 
 
 def _state(printer: dict[str, Any] | None, job: dict[str, Any]) -> str:
-    """OctoPrint flags / state text -> the names the rest of PrintShare understands."""
+    """OctoPrint flags / state text -> the names the rest of PocketPrint3D understands."""
     if printer is None:
         return "offline"
     flags = (printer.get("state") or {}).get("flags") or {}

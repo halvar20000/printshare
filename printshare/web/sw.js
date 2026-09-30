@@ -1,4 +1,4 @@
-// PrintShare service worker: makes the app installable and keeps the shell available
+// PocketPrint3D service worker: makes the app installable and keeps the shell available
 // offline. Network first, so a new deploy is picked up on the next start; the API is
 // never cached.
 const CACHE = "printshare-shell-v1";

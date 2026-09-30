@@ -1,7 +1,7 @@
 """Power for printers (issue #9): switch a printer's smart plug on and off from outside the printer.
 
 Moonraker's own [power] can't do it on COSMOS or the stock Centauri - when the printer is off, so is its
-Moonraker - so the always-on PrintShare server switches the plug. Settings are made on the web page and
+Moonraker - so the always-on PocketPrint3D server switches the plug. Settings are made on the web page and
 stored per printer in <config dir>/printers.d/<id>.yaml under `power:` (kept in the "managed" mode).
 
 Adapters follow the printer adapters (NF-08); today only Home Assistant, later e.g. Shelly/Tasmota URLs.

@@ -1,4 +1,4 @@
-# PrintShare Cloud – concept
+# PocketPrint3D Cloud – concept
 
 Status: **draft for discussion** (Thomas, Dominique), 2026-09-30. Nothing of this is built yet.
 
@@ -32,7 +32,7 @@ can't run them itself, the setup is too hard, and an open printer can be heated 
 ## Architecture
 
 ```
-                 ┌──────────────────── PrintShare Cloud (Hetzner) ─────────────────────┐
+                 ┌──────────────────── PocketPrint3D Cloud (Hetzner) ─────────────────────┐
                  │  API (same server code, cloud mode)   accounts · printers · jobs     │
  Printables  ◀───┤  slicing workers (OrcaSlicer CLI, queue)   G-code storage (few days)  │
  Thingiverse ◀───┤  search · model details · Orca Cloud profile sync (#7)               │
@@ -77,11 +77,11 @@ The cloud sends it jobs ("download this G-code and start it", "status?", "pause"
 
 | Bridge | Cost for the user | Notes |
 |---|---|---|
-| Existing PrintShare server (Unraid, HA add-on, Docker) | 0 € | same software, "connect to PrintShare Cloud" switch + pairing code |
+| Existing PocketPrint3D server (Unraid, HA add-on, Docker) | 0 € | same software, "connect to PocketPrint3D Cloud" switch + pairing code |
 | Klipper/COSMOS plugin next to Moonraker | 0 € | runs on the printer itself, like Obico |
 | Old Android phone ("bridge mode" in the app) | 0 € | needs a permanent notification (Android background limits) |
 | Raspberry Pi Zero 2 W with a ready image | ~35 € | reuses the Python code almost unchanged; setup with Raspberry Pi Imager |
-| ESP32-S3 "PrintShare stick" | ~10 € | later, only with enough users: C++ rewrite, streaming, OTA updates |
+| ESP32-S3 "PocketPrint3D stick" | ~10 € | later, only with enough users: C++ rewrite, streaming, OTA updates |
 
 Pairing: the bridge shows a code (web page / display / log), the user confirms it in the app (like the Orca Cloud
 pairing). The bridge only ever talks to its own printers on the LAN.

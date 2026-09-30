@@ -1,4 +1,4 @@
-"""HTTP API + the PrintShare web app (PWA) on port 8484.
+"""HTTP API + the PocketPrint3D web app (PWA) on port 8484.
 
 App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token=`):
   GET  /api/info            server name/version (the app uses it to test the connection)
@@ -72,7 +72,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.13.0")
+app = FastAPI(title="PocketPrint3D", version="0.13.1")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -445,7 +445,7 @@ async def adjust(printer_id: str, req: Adjustment) -> dict[str, Any]:
 @app.get("/api/printers/{printer_id}/temperatures", dependencies=[Depends(auth)])
 async def temperatures(printer_id: str) -> dict[str, Any]:
     """Temperature history: from the printer where it keeps one (Moonraker, OctoPrint), else what
-    PrintShare saw in the last 30 minutes of status queries."""
+    PocketPrint3D saw in the last 30 minutes of status queries."""
     adapter = get_adapter(_printer(printer_id))
     if hasattr(adapter, "temperature_history"):
         try:
@@ -460,7 +460,7 @@ async def temperatures(printer_id: str) -> dict[str, Any]:
     return {"series": series, "source": "printshare"}
 
 
-# ---------- camera (issue #3, DR-06): the app only talks to PrintShare, also away from home ----------
+# ---------- camera (issue #3, DR-06): the app only talks to PocketPrint3D, also away from home ----------
 async def _camera(printer_id: str) -> cam.Camera:
     printer = _printer(printer_id)
     adapter = get_adapter(printer)

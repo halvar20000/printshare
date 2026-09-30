@@ -1,11 +1,11 @@
-# PrintShare app (iOS + Android)
+# PocketPrint3D app (iOS + Android)
 
-Native app for the PrintShare server, built with Expo (React Native). One code base for iPhone and
-Android. The app only talks to your own PrintShare server; the server downloads, slices and sends to the printer.
+Native app for the PocketPrint3D server, built with Expo (React Native). One code base for iPhone and
+Android. The app only talks to your own PocketPrint3D server; the server downloads, slices and sends to the printer.
 
 ## What it does (spec phase 2 – App MVP)
 - **Share → print:** share a Printables/Thingiverse link from Safari/Chrome, or an STL/3MF/OBJ/STEP file
-  from Files, to PrintShare (MQ-01, MQ-03). Paste a link or pick a file in the app as well.
+  from Files, to PocketPrint3D (MQ-01, MQ-03). Paste a link or pick a file in the app as well.
 - **Discover:** search Printables (and Thingiverse with a server token) in the app, sorted by relevance, popularity
   or most made; model page with images, author, license, the author's recommended settings → *Prepare print* (MQ-05/06).
 - **Prepare:** printer with online status, material, quality, build plate, supports, brim, infill, walls;
@@ -61,9 +61,9 @@ App Group for the share extension itself. iPhone testers (e.g. Thomas) are added
 Local build on a Mac with Xcode (instead of EAS):
 ```
 npx expo prebuild -p ios                  # generates ios/ (runs pod install; needs LANG=en_US.UTF-8)
-open ios/PrintShare.xcworkspace           # the .xcworkspace – the .xcodeproj alone lacks the Pods ("No such module 'Expo'")
+open ios/PocketPrint3D.xcworkspace           # the .xcworkspace – the .xcodeproj alone lacks the Pods ("No such module 'Expo'")
 ```
-Set your team under *Signing & Capabilities* for both targets (PrintShare, ShareExtension), then run.
+Set your team under *Signing & Capabilities* for both targets (PocketPrint3D, ShareExtension), then run.
 
 Bundle ID / package: `io.github.halvar20000.printshare` (change in `app.json` before the first store build if needed).
 

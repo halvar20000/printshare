@@ -1,4 +1,4 @@
-// Onboarding: pair with the PrintShare server by QR code, deep link or manual entry.
+// Onboarding: pair with the PocketPrint3D server by QR code, deep link or manual entry.
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";

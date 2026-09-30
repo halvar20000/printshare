@@ -1,6 +1,6 @@
-# PrintShare
+# PocketPrint3D
 
-Send a Printables or Thingiverse link from your phone – PrintShare downloads the model, slices it with
+Send a Printables or Thingiverse link from your phone – PocketPrint3D downloads the model, slices it with
 OrcaSlicer on your Home Assistant machine and sends it to your printer. Nothing starts without your
 confirmation in the app.
 
@@ -41,7 +41,7 @@ Moonraker (`moonraker`, e.g. OpenCentauri COSMOS, Voron, Sovol, Qidi), Prusa pri
    Give the printer a fixed IP address in your router. `printer_profile` is the printer name as shown in
    OrcaSlicer; quality and filament default to that printer's own OrcaSlicer defaults.
 2. Start the add-on and open the **Log** tab. It shows the access token and a QR code.
-3. In the PrintShare app: **Settings → Connect server → Scan QR code**. Without the app, open the
+3. In the PocketPrint3D app: **Settings → Connect server → Scan QR code**. Without the app, open the
    web app via **Open Web UI** and enter the token.
 
 ## Options

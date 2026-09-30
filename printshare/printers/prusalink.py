@@ -16,7 +16,7 @@ import httpx
 from ..camera import Camera
 from ..config import PrinterConfig
 
-# PrusaLink printer states -> the names the rest of PrintShare understands (api.printer_kind)
+# PrusaLink printer states -> the names the rest of PocketPrint3D understands (api.printer_kind)
 _STATES = {"IDLE": "standby", "READY": "standby", "BUSY": "busy", "PRINTING": "printing",
            "PAUSED": "paused", "FINISHED": "complete", "STOPPED": "cancelled", "ERROR": "error",
            "ATTENTION": "attention"}

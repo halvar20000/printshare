@@ -1,4 +1,4 @@
-# CLAUDE.md — PrintShare (project "3dprinting from Smartphone")
+# CLAUDE.md — PocketPrint3D, formerly PrintShare (project "3dprinting from Smartphone")
 
 Handover from the Claude Cowork session of 2026-09-26. Read this first, then
 `docs/ROADMAP.md` (status vs. requirements) and
@@ -411,6 +411,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - **iOS = Dominique's Swift app** (`iDomi94/printshare-ios`, suggested move to halvar20000); **Android = the Expo app**
   in `mobile/`. The server API is the shared contract → **`docs/API.md`** (keep it in sync: every new endpoint
   goes into it in the same commit; changes additive only). Cloud concept with steps, Hetzner, legal: **`docs/CLOUD.md`**.
+
+## Name: PocketPrint3D (decided 2026-09-30)
+- "PrintShare" sounded like paper printing (an established paper-printing app has that name) and "share" doesn't
+  describe the app. New brand **PocketPrint3D** ("the 3D printer in your pocket"); domain **pocketprint3d.com**
+  (Thomas registers it at Hetzner; .app/.de/.eu were free too).
+- Only the **visible** name changed (apps, web page, README, docs, HA add-on/repository display name, Unraid overview,
+  Printables User-Agent). **Kept on purpose:** Python package / CLI `printshare`, repo `halvar20000/printshare`,
+  image `ghcr.io/halvar20000/printshare`, HA slug `printshare`, Unraid container name `PrintShare`
+  (`docker exec PrintShare …`), Android package `io.github.halvar20000.printshare` (can't change after Play),
+  EAS slug, deep link `printshare://`, `/api/info` `"name": "PrintShare"` (API contract). The CHANGELOG history keeps the old name.
 
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).

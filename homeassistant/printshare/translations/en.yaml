@@ -23,4 +23,4 @@ configuration:
     name: Thingiverse app token
     description: Only needed for Thingiverse links (thingiverse.com/developers).
 network:
-  8484/tcp: Web app and API for the PrintShare app
+  8484/tcp: Web app and API for the PocketPrint3D app

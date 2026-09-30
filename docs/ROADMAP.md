@@ -9,7 +9,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | App technology | **Decided 2026-09-27: native app with Expo/React Native** (`mobile/`, iOS + Android, for public use), built with EAS on Dominique's Apple developer account. The PWA stays as a browser fallback. | Share extension (iOS) + share intent (Android) via `expo-share-intent`. |
 | Slice service | keep own `slicer.py` vs. base on AFKFelix/orca-slicer-api or escalopa/orcaslicer-api (spec) | Own implementation already works incl. preset flattening + COSMOS preset; switching only pays off if those projects handle arrange/thumbnails/multi-plate better. |
 | Profile source | Orca desktop user presets (PR-01) vs. bundled system presets (current) | Current P0 uses bundled system presets + overrides; PR-01/02/03 needs user-preset import with `inherits` resolution (`profiles.load_user_preset` exists). |
-| App name | "PrintShare" is the working name | — |
+| App name | "PocketPrint3D" is the working name | — |
 
 ## Phase 1 – Server MVP (spec: "URL in → print starts")
 | ID | Item | Status |
@@ -42,7 +42,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DR-11 | SDCP adapter | ✅ (tested against fake + real CC1) |
 | DR-06 | Camera | ✅ 0.9.0 (#3): server passes the camera through (snapshot, optionally scaled; live MJPEG); app thumbnail + fullscreen live/still; CC1, Moonraker webcams, OctoPrint, PrusaLink |
 | DR-12 | Printer power (smart plug) | ✅ 0.12.0 (#9): Home Assistant REST (`switch`/`light`/`input_boolean`, add-on via supervisor), settings on the web page (`printers.d/<id>.yaml`, token never returned), app "switch on" while offline / "switch off" in the control screen; off refused while printing (409). Only tested against a fake HA ⬜ real plug |
-| DR-10 | Printer control (temperatures, fans, light, speed) | ✅ 0.10.0 (#5): `/controls`, `/adjust` (limits, confirm while printing), `/temperatures` (Klipper temperature_store, OctoPrint history, else PrintShare log); app screen with history chart. Only tested against fakes – real CC1/COSMOS ⬜ |
+| DR-10 | Printer control (temperatures, fans, light, speed) | ✅ 0.10.0 (#5): `/controls`, `/adjust` (limits, confirm while printing), `/temperatures` (Klipper temperature_store, OctoPrint history, else PocketPrint3D log); app screen with history chart. Only tested against fakes – real CC1/COSMOS ⬜ |
 | DO-01 | Bed leveling on/off per print | 🟡 Centauri Carbon stock (SDCP `Calibration_switch`), remembered per printer in the app; COSMOS/Klipper, Prusa, OctoPrint do it in their start G-code ⬜ |
 | SL-06/07 | G-code layer viewer | ✅ server turns G-code into compact layer data (`/api/jobs/<id>/preview`, cached, gzip); app: top view per layer, line-type colours + legend toggles, previous layer faint, slider, model/plate view. 3D view ⬜ |
 | SL-10 | Export G-code | 🟡 `/api/jobs/<id>/gcode`; share button in the app ⬜ |

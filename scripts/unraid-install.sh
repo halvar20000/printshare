@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build and (re)start the PrintShare container on an Unraid host. Run as root:
+# Build and (re)start the PocketPrint3D container on an Unraid host. Run as root:
 #   bash /mnt/user/AI/Projects/3dprintinghandy/scripts/unraid-install.sh [printer-id]
 # The first run copies ./config.yaml (or config-example.yaml) to appdata; later runs keep it.
 set -euo pipefail

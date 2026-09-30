@@ -197,7 +197,7 @@ def build(gcode: Path, bed: tuple[float, float] | None = None) -> dict[str, Any]
     if cache.is_file() and cache.stat().st_mtime >= gcode.stat().st_mtime:
         data = json.loads(cache.read_text())
         if data.get("version") != VERSION:
-            data = None                    # made by an older PrintShare
+            data = None                    # made by an older PocketPrint3D
     if data is None:
         with gcode.open(encoding="utf-8", errors="replace") as fh:
             data = parse(fh)

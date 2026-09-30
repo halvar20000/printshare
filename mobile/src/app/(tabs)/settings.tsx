@@ -38,7 +38,7 @@ export default function Settings() {
     <Screen>
       <Section title={t("server")}>
         <Row icon="server-outline" label={server ? server.url.replace(/^https?:\/\//, "") : t("notConnected")}
-          sub={server && serverVersion ? [`PrintShare ${serverVersion}`, route ? t(route === "home" ? "routeHome" : "routeRemote") : null]
+          sub={server && serverVersion ? [`PocketPrint3D ${serverVersion}`, route ? t(route === "home" ? "routeHome" : "routeRemote") : null]
             .filter(Boolean).join(" · ") : undefined}
           right={server ? <Badge text={online === false ? t("offline") : online ? t("connected") : "…"}
             kind={online === false ? "error" : online ? "ok" : "neutral"} /> : null} />
@@ -73,7 +73,7 @@ export default function Settings() {
         <Divider />
         <Row icon="logo-github" label={t("sourceCode")} onPress={() => Linking.openURL("https://github.com/halvar20000/printshare")} />
       </Section>
-      <Text style={{ color: c.sub, textAlign: "center", fontSize: 12 }}>PrintShare · MIT</Text>
+      <Text style={{ color: c.sub, textAlign: "center", fontSize: 12 }}>PocketPrint3D · MIT</Text>
     </Screen>
   );
 }
