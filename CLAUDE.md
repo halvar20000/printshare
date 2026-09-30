@@ -62,9 +62,10 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
    instead of Elegoo's CANVAS `M6211`, ramming/parking moves 0, pause `PAUSE`. Dominique's profile used the
    legacy placeholders `[first_layer_temperature]`/`[first_layer_bed_temperature]`; we keep the Orca names.
    Preferred long-term: official COSMOS Orca profile (https://cloud.orcaslicer.com/b/3fad3c38f25f)
-   exported as JSON → `machine_file:`. `machine_preset: cosmos` only swaps start/end: no `TOOL=` for AFC,
-   `change_filament_gcode` stays Elegoo's `M6211 …`, `machine_pause_gcode` stays `M600` (see #6). With CANVAS/AFC
-   use the AFC COSMOS machine preset as `machine_file` (verified 2026-09-29, see below).
+   exported as JSON → `machine_file:`. Up to 0.5.0 `machine_preset: cosmos` only swapped start/end (no `TOOL=`,
+   Elegoo `M6211`/`M600` left in place, #6); since 0.6.0 it carries the AFC values above, so the built-in preset
+   and Dominique's AFC COSMOS preset as `machine_file` (verified on the printer 2026-09-29, see below) give the
+   same start/tool-change/pause code.
 8. Stock CC upload port is **80**, not 3030 as some docs claim (pycentauri verified live).
    Thomas' CC (192.168.86.144, FW V0.3.0-o) did NOT push Attributes (MainboardID) even when
    idle → adapter now gets it via unicast UDP discovery (`M99999` to host:3000) unless
