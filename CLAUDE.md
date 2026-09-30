@@ -449,6 +449,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Thomas lives in **France** (Kembs) → imprint = French "mentions légales" (LCEN: editor, contact, host), privacy
   authority CNIL. Privacy policy is a draft describing the self-hosted setup; extend it before a cloud service starts.
 
+## Cloud server on Hetzner (2026-09-30)
+- Hetzner Console project `pocketprint3d` (Cloud API token `.hetzner-token`, scoped to that project; SSH key
+  `.secrets/hetzner_ed25519`, user `deploy`). Server `pocketprint3d-1` CX33 nbg1 (49.13.172.173) with backups,
+  firewall `pocketprint3d-web`, DNS zone `pocketprint3d.com` managed via the Cloud API (`/v1/zones/1588152/rrsets`;
+  the zone is the migrated konsoleH zone, name servers stay ns1.your-server.de & co.).
+- `https://api.pocketprint3d.com`: Caddy (Let's Encrypt) → `ghcr.io/halvar20000/printshare:latest`, auto-pulled every
+  10 min; setup files and details in `deploy/cloud/`. Runs the single-household server (0 printers) – the cloud mode
+  (accounts, multi-user, limits) is the next development step (docs/CLOUD.md, order of work #2).
+- Prices checked live 2026-09-30: CX33 10.19 €, CAX21 12.59 € gross/month (older estimates in docs/CLOUD.md were low).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

@@ -103,7 +103,7 @@ inside the app. The app keeps a session token in Keychain / Keystore, as it keep
 ## Hetzner setup (start)
 | Part | Suggestion | Rough cost / month |
 |---|---|---|
-| Server | 1× Hetzner Cloud with dedicated vCPUs, e.g. CCX13 (2 vCPU, 8 GB) – API, relay, 1–2 slicing workers | ~15 € |
+| Server | 1× Hetzner Cloud CX33 (4 vCPU, 8 GB) – running since 2026-09-30 as `api.pocketprint3d.com` | 10.19 € + backups 2.04 € + IPv4 0.60 € |
 | Storage | Hetzner Object Storage for uploads/G-code (deleted after a few days) | ~5 € |
 | Database | PostgreSQL on the same server (backups to a Storage Box) | ~4 € |
 | TLS / domain | Caddy (Let's Encrypt), own domain | ~1 € |
