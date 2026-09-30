@@ -1,0 +1,24 @@
+# PocketPrint3D cloud server (Hetzner) - started by cloud-init, kept up to date by pocketprint3d-update.timer.
+# Caddy terminates HTTPS for api.pocketprint3d.com (Let's Encrypt) and forwards to the app container.
+services:
+  app:
+    image: ghcr.io/halvar20000/printshare:latest
+    restart: unless-stopped
+    environment:
+      PRINTSHARE_URL: https://api.pocketprint3d.com
+    volumes:
+      - /srv/pocketprint3d/config:/config
+      - /srv/pocketprint3d/data:/data
+    expose: ["8484"]
+    mem_limit: 6g                 # OrcaSlicer ~1-2 GB per job; keep the host responsive
+    logging: {driver: local, options: {max-size: "20m", max-file: "5"}}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/pocketprint3d/caddy/data:/data
+      - /srv/pocketprint3d/caddy/config:/config
+    logging: {driver: local, options: {max-size: "20m", max-file: "5"}}

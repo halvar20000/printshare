@@ -1,0 +1,50 @@
+#cloud-config
+# Hetzner CX33, Ubuntu 24.04: Docker, automatic security updates, key-only SSH, PocketPrint3D via compose.
+package_update: true
+package_upgrade: true
+packages: [ca-certificates, curl, unattended-upgrades, fail2ban, git]
+users:
+  - name: deploy
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - __SSH_PUBLIC_KEY__
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-pocketprint3d.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  - path: /etc/apt/apt.conf.d/52pocketprint3d-upgrades
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+  - path: /etc/systemd/system/pocketprint3d-update.service
+    content: |
+      [Unit]
+      Description=Pull and restart PocketPrint3D if a new image was published
+      After=docker.service
+      [Service]
+      Type=oneshot
+      WorkingDirectory=/opt/pocketprint3d
+      ExecStart=/usr/bin/docker compose pull --quiet
+      ExecStart=/usr/bin/docker compose up -d --remove-orphans
+      ExecStart=/usr/bin/docker image prune -f
+  - path: /etc/systemd/system/pocketprint3d-update.timer
+    content: |
+      [Unit]
+      Description=Check for a new PocketPrint3D image every 10 minutes
+      [Timer]
+      OnBootSec=2min
+      OnUnitActiveSec=10min
+      [Install]
+      WantedBy=timers.target
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker deploy
+  - mkdir -p /opt/pocketprint3d /srv/pocketprint3d/config /srv/pocketprint3d/data /srv/pocketprint3d/caddy
+  - systemctl restart ssh
+  - systemctl enable --now fail2ban
+  - systemctl daemon-reload
+  - systemctl enable pocketprint3d-update.timer

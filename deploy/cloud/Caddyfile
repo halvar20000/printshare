@@ -1,0 +1,20 @@
+{
+	email thomasherbrig@ipomme.fr
+}
+
+api.pocketprint3d.com {
+	encode zstd gzip
+	# uploads of models / profiles (the app limits files to 300 MB)
+	request_body {
+		max_size 310MB
+	}
+	reverse_proxy app:8484 {
+		flush_interval -1        # camera MJPEG and long-running responses stream through
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+}
