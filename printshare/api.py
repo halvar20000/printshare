@@ -21,6 +21,9 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   POST /api/jobs/{id}/send  {"start": true, "confirm": true}  -> upload (and start) after review
   DELETE /api/jobs/{id}
   GET  /api/printers/{id}/status   (+ "kind": idle|active|paused|done|stopped|error|unknown)
+  GET  /api/printers/{id}/power     smart plug state {available, state}; POST {"on": bool} (issue #9)
+  GET/PUT/DELETE /api/printers/{id}/power/config   Home Assistant URL / token (never returned) / entity
+  POST /api/printers/{id}/power/test | /power/entities   check the settings, list switchable entities
   GET  /api/printers/{id}/controls   heaters/fans/lights/speed the printer has (issue #5)
   POST /api/printers/{id}/adjust     {"kind": "heater"|"fan"|"light"|"speed", "id", "value", "confirm"}
   GET  /api/printers/{id}/temperatures   history {heater: [[seconds before now, actual, target], …]}
@@ -33,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import secrets
 import shutil
@@ -56,6 +60,7 @@ from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, fetch_model, inspect_model, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
 from . import lanes as lane_map
+from . import power as plug
 from . import user_profiles
 from .profiles import ProfileError, ProfileLibrary, load_user_preset
 from .search import Search
@@ -67,7 +72,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.11.0")
+app = FastAPI(title="PrintShare", version="0.12.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -182,7 +187,9 @@ def printer_kind(state: str | None) -> str:
 def printers() -> list[dict[str, Any]]:
     return [{"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine,
              # DO-01: the app shows the leveling switch only where it works per print
-             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None}
+             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
+             # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
+             "power": plug.load(settings.config_dir, p.id) is not None}
             for p in settings.printers]
 
 
@@ -250,6 +257,108 @@ def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
 
 
 # ---------- printer control (issue #5) ----------
+# ---------- power: smart plug through Home Assistant (issue #9) ----------
+class PowerSwitch(BaseModel):
+    on: bool
+
+
+class PowerSettings(BaseModel):
+    url: str = ""
+    token: str | None = None      # None = keep the stored token, "" = remove it
+    entity: str = ""
+
+
+def _power_cfg(printer_id: str, body: PowerSettings | None = None) -> plug.PowerConfig:
+    """Stored settings, or the ones being edited on the web page (token kept unless a new one is given)."""
+    _printer(printer_id)
+    stored = plug.load(settings.config_dir, printer_id)
+    if body is None:
+        if stored is None:
+            raise HTTPException(404, "no power switch set up for this printer")
+        return stored
+    token = body.token if body.token is not None else (stored.token if stored else "")
+    return plug.PowerConfig(url=body.url.strip().rstrip("/"), token=token.strip(), entity=body.entity.strip())
+
+
+async def _power_call(coro_fn):
+    try:
+        return await coro_fn()
+    except plug.PowerError as e:
+        raise HTTPException(502, str(e))
+
+
+@app.get("/api/printers/{printer_id}/power", dependencies=[Depends(auth)])
+async def power_state(printer_id: str) -> dict[str, Any]:
+    _printer(printer_id)
+    cfg = plug.load(settings.config_dir, printer_id)
+    if cfg is None:
+        return {"available": False, "state": None}
+    try:
+        state = await plug.get_power(cfg).state()
+        return {"available": True, "state": state, "error": None}
+    except plug.PowerError as e:
+        return {"available": True, "state": "unknown", "error": str(e)}
+
+
+@app.post("/api/printers/{printer_id}/power", dependencies=[Depends(auth)])
+async def power_switch(printer_id: str, req: PowerSwitch) -> dict[str, Any]:
+    cfg = _power_cfg(printer_id)
+    if not req.on:
+        # never cut the power of a running print - checked here, not only in the app
+        try:
+            state = (await get_adapter(_printer(printer_id)).status()).get("state")
+        except Exception:  # noqa: BLE001 - printer unreachable: it can't be printing
+            state = None
+        if printer_kind(state) in ("active", "paused"):
+            raise HTTPException(409, "the printer is printing - it can't be switched off now")
+    await _power_call(lambda: plug.get_power(cfg).turn(req.on))
+    return {"ok": True, "state": "on" if req.on else "off"}
+
+
+@app.get("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
+def power_config(printer_id: str) -> dict[str, Any]:
+    _printer(printer_id)
+    cfg = plug.load(settings.config_dir, printer_id)
+    return {"configured": cfg is not None, "addon": bool(os.environ.get("SUPERVISOR_TOKEN")),
+            **(cfg or plug.PowerConfig()).public()}
+
+
+@app.put("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
+async def set_power_config(printer_id: str, req: PowerSettings) -> dict[str, Any]:
+    cfg = _power_cfg(printer_id, req)
+    try:
+        plug.get_power(cfg)._domain()            # address, token and entity format checked before saving
+    except plug.PowerError as e:
+        raise HTTPException(400, str(e))
+    plug.save(settings.config_dir, printer_id, cfg)
+    return power_config(printer_id)
+
+
+@app.delete("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
+def delete_power_config(printer_id: str) -> dict[str, Any]:
+    _printer(printer_id)
+    plug.save(settings.config_dir, printer_id, None)
+    return power_config(printer_id)
+
+
+@app.post("/api/printers/{printer_id}/power/test", dependencies=[Depends(auth)])
+async def power_test(printer_id: str, req: PowerSettings) -> dict[str, Any]:
+    cfg = _power_cfg(printer_id, req)
+    try:
+        return {"ok": True, **(await plug.get_power(cfg).test())}
+    except plug.PowerError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/printers/{printer_id}/power/entities", dependencies=[Depends(auth)])
+async def power_entities(printer_id: str, req: PowerSettings) -> list[dict[str, Any]]:
+    cfg = _power_cfg(printer_id, req)
+    try:
+        return await plug.get_power(cfg).entities()
+    except plug.PowerError as e:
+        raise HTTPException(502, str(e))
+
+
 @app.get("/api/printers/{printer_id}/controls", dependencies=[Depends(auth)])
 async def printer_controls(printer_id: str) -> dict[str, Any]:
     adapter = get_adapter(_printer(printer_id))

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+- Switch the printer on and off through a smart plug in Home Assistant: set it up on the web page
+  (Settings → "Power"), then "Switch on" appears in the app and the printer tab while the printer is off.
+  Switching off asks first and is refused while a print is running. As add-on PrintShare now asks for
+  access to the Home Assistant API (`homeassistant_api`), so no address or token has to be entered.
+
 ## 0.11.0
 - AFC units (e.g. CANVAS on COSMOS): choose the **slot** for each colour already when preparing; the material
   profile for slicing follows the filament in that slot (can still be changed). Slots are shown in their physical

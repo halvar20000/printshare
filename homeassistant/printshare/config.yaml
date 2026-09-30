@@ -1,5 +1,5 @@
 name: PrintShare
-version: "0.11.0"
+version: "0.12.0"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
@@ -15,6 +15,8 @@ ports:
   8484/tcp: 8484
 webui: http://[HOST]:[PORT:8484]/
 hassio_api: true
+# issue #9: switch the printer's smart plug through Home Assistant without a token
+homeassistant_api: true
 map:
   - addon_config:rw
 options:

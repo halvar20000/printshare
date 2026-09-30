@@ -2,7 +2,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Platform, Pressable, RefreshControl, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 
 import { CameraImage } from "@/components/camera";
 
@@ -23,6 +23,8 @@ export default function Printers() {
   const [refreshing, setRefreshing] = useState(false);
   const [acting, setActing] = useState<string>("");
   const [cams, setCams] = useState<Record<string, boolean>>({});
+  const [starting, setStarting] = useState<Record<string, number>>({});   // issue #9: switched on at (ms)
+  const [now, setNow] = useState(() => Date.now());
   const router = useRouter();
 
   // which printers have a camera (asked once per visit, not with every status refresh)
@@ -44,6 +46,7 @@ export default function Printers() {
         catch (e) { return { printer: p, status: null, error: (e as Error).message }; }
       }));
       setEntries(list);
+      setNow(Date.now());
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -55,6 +58,16 @@ export default function Printers() {
     const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
   }, [load]));
+
+  const powerOn = async (p: Printer) => {
+    if (!api) return;
+    setActing(`${p.id}:power`);
+    try {
+      await api.setPower(p.id, true);
+      setStarting(st => ({ ...st, [p.id]: Date.now() }));
+    } catch (e) { setError((e as Error).message); }
+    finally { setActing(""); setTimeout(load, 3000); }
+  };
 
   const control = async (p: Printer, action: "pause" | "resume" | "cancel") => {
     if (!api) return;
@@ -145,6 +158,21 @@ export default function Printers() {
                 <Button kind="danger" title={t("cancelBtn")} icon="stop" onPress={() => control(p, "cancel")} style={{ flex: 1 }}
                   loading={acting === `${p.id}:cancel`} />
               </View>
+            ) : null}
+            {!s && p.power ? (
+              // issue #9: printer off -> switch its smart plug on; it needs ~30-60 s to answer
+              now - (starting[p.id] ?? 0) < 120000 ? (
+                <View style={{ flexDirection: "row", alignItems: "center", marginTop: 14 }}>
+                  <ActivityIndicator color={c.accent} />
+                  <Text style={{ color: c.sub, fontSize: 15, marginLeft: 10 }}>{t("powerStarting")}</Text>
+                </View>
+              ) : (
+                <>
+                  {starting[p.id] ? <Text style={{ color: c.sub, fontSize: 14, marginTop: 10 }}>{t("powerSlow")}</Text> : null}
+                  <Button title={t("powerOn")} icon="power" style={{ marginTop: 14 }} onPress={() => powerOn(p)}
+                    loading={acting === `${p.id}:power`} />
+                </>
+              )
             ) : null}
             {s ? (
               <Button kind="secondary" title={t("control")} icon="options-outline" style={{ marginTop: 14 }}

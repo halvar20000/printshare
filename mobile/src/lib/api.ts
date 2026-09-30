@@ -18,7 +18,8 @@ export type Controls = {
 export type TempHistory = { series: Record<string, [number, number, number | null][]>; source: string };
 export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolean; name: string | null };
 /** leveling: null = this printer can't switch bed leveling per print; else its default. */
-export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null };
+/** power: a smart plug is set up on the web page (issue #9) -> "switch on" while the printer is off. */
+export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null; power?: boolean };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
 export type Preview = {
@@ -267,6 +268,12 @@ export class Api {
     this.request<ModelDetail>(`/api/models/${source}/${encodeURIComponent(id)}`, { timeout: 30000 });
 
   profiles = () => this.request<UserProfile[]>("/api/profiles", { timeout: 30000 });
+  power = (printer: string) =>
+    this.request<{ available: boolean; state: "on" | "off" | "unavailable" | "unknown" | null; error?: string | null }>(
+      `/api/printers/${encodeURIComponent(printer)}/power`, { timeout: 20000 });
+  setPower = (printer: string, on: boolean) =>
+    this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/power`,
+      { method: "POST", body: { on }, timeout: 20000 });
   controls = (printer: string) =>
     this.request<Controls>(`/api/printers/${encodeURIComponent(printer)}/controls`, { timeout: 20000 });
   adjust = (printer: string, kind: "heater" | "fan" | "light" | "speed", id: string, value: number | boolean,

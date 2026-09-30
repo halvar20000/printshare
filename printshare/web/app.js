@@ -12,6 +12,18 @@ const I18N = {
     edit: "Einstellungen ändern", new_job: "Neues Modell", no_jobs: "Noch keine Aufträge.",
     token: "API-Token", save: "Speichern", language: "Sprache", lang_auto: "Automatisch",
     install_title: "Als App installieren", install: "Installieren",
+    power_title: "Stromversorgung",
+    power_hint: "Den Drucker über eine smarte Steckdose in Home Assistant ein- und ausschalten (App und Drucker-Tab). Das Token erstellst du in Home Assistant unter Profil → Sicherheit → Langlebige Zugangs-Token.",
+    power_addon: "PrintShare läuft als Home-Assistant-Add-on: Adresse und Token können leer bleiben, nur die Steckdose wählen.",
+    power_url: "Home-Assistant-Adresse", power_token: "Langlebiges Zugangs-Token", power_entity: "Steckdose (Entität)",
+    power_token_kept: "gespeichert (leer = behalten)",
+    power_load: "Liste laden", power_test: "Testen", power_remove: "Entfernen",
+    power_loaded: "{n} schaltbare Entitäten gefunden – im Feld „Steckdose“ antippen und auswählen.",
+    power_ok: "Verbindung OK: {name} ist {state}.", power_saved: "Gespeichert.", power_removed: "Entfernt.",
+    power_remove_q: "Stromversorgung für {printer} entfernen?",
+    power_on: "Einschalten", power_off: "Ausschalten", power_starting: "Drucker startet …",
+    power_off_q: "{printer} ausschalten? Die Steckdose wird abgeschaltet.",
+    power_states: { on: "an", off: "aus", unavailable: "nicht erreichbar", unknown: "unbekannt" },
     slots_title: "Slots", slot: "Slot", color_n: "Farbe {n}", slot_empty: "leer",
     slot_empty_warn: "{what}: {slot} ist leer – Filament laden oder einen anderen Slot wählen.",
     slot_material_warn: "{what}: Profil ist {want}, in {slot} ist {have}.",
@@ -79,6 +91,18 @@ const I18N = {
     edit: "Change settings", new_job: "New model", no_jobs: "No jobs yet.",
     token: "API token", save: "Save", language: "Language", lang_auto: "Automatic",
     install_title: "Install as app", install: "Install",
+    power_title: "Power",
+    power_hint: "Switch the printer on and off with a smart plug in Home Assistant (app and printer tab). Create the token in Home Assistant under Profile → Security → Long-lived access tokens.",
+    power_addon: "PrintShare runs as a Home Assistant add-on: address and token can stay empty, just choose the plug.",
+    power_url: "Home Assistant address", power_token: "Long-lived access token", power_entity: "Plug (entity)",
+    power_token_kept: "stored (empty = keep)",
+    power_load: "Load list", power_test: "Test", power_remove: "Remove",
+    power_loaded: "{n} switchable entities found – choose one in the “Plug” field.",
+    power_ok: "Connection OK: {name} is {state}.", power_saved: "Saved.", power_removed: "Removed.",
+    power_remove_q: "Remove the power switch for {printer}?",
+    power_on: "Switch on", power_off: "Switch off", power_starting: "Printer is starting …",
+    power_off_q: "Switch {printer} off? The plug will be turned off.",
+    power_states: { on: "on", off: "off", unavailable: "unreachable", unknown: "unknown" },
     slots_title: "Slots", slot: "Slot", color_n: "Colour {n}", slot_empty: "empty",
     slot_empty_warn: "{what}: {slot} is empty – load filament or choose another slot.",
     slot_material_warn: "{what}: the profile is {want}, {slot} holds {have}.",
@@ -206,7 +230,7 @@ function show(view) {
   });
   if (view === "jobs") loadJobs();
   if (view === "printer") pollPrinters();
-  if (view === "settings") { loadPairing(); loadProfiles(); }
+  if (view === "settings") { loadPairing(); loadProfiles(); loadPower(); }
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -604,7 +628,13 @@ function printerCard(p, s, err) {
       kind === "paused" ? btn("resume", "resume", "primary") : btn("pause", "pause"),
       btn("cancel", "cancel", "danger")) : null,
     s?.camera ? el("a", { href: s.camera, target: "_blank", rel: "noopener", class: "hint",
-      style: "display:inline-block;margin-top:12px" }, t("camera") + " ↗") : null);
+      style: "display:inline-block;margin-top:12px" }, t("camera") + " ↗") : null,
+    // issue #9: smart plug - "switch on" while the printer is off, "switch off" only when it isn't printing
+    p.power && !s ? (Date.now() - (S.starting?.[p.id] || 0) < 120000
+      ? el("p", { class: "hint" }, t("power_starting"))
+      : el("button", { type: "button", class: "primary", onclick: () => switchPower(p, true) }, t("power_on"))) : null,
+    p.power && s && !busy ? el("button", { type: "button", class: "ghost", onclick: () => switchPower(p, false) },
+      t("power_off")) : null);
 }
 async function control(id, action) {
   if (action === "cancel" && !confirm(t("cancel_confirm"))) return;
@@ -725,6 +755,85 @@ $("profile-file").onchange = () => {
   $("profile-file").value = "";          // the same file can be chosen again
   if (f) uploadProfile(f);
 };
+
+// ---------- power: smart plug through Home Assistant (issue #9) ----------
+const PW = { cfg: null };
+const powerBase = () => `/api/printers/${encodeURIComponent($("power-printer").value)}/power`;
+function powerMsg(text, error = false) {
+  $("power-msg").textContent = text || "";
+  $("power-msg").className = error ? "error" : "hint";
+  $("power-msg").hidden = !text;
+}
+function powerBody() {
+  const b = { url: $("power-url").value.trim(), entity: $("power-entity").value.trim() };
+  if ($("power-token").value.trim()) b.token = $("power-token").value.trim();   // empty = keep the stored token
+  return b;
+}
+async function loadPower() {
+  if (!store.get("ps_token")) { $("power-card").hidden = true; return; }
+  try { if (!S.printers.length) S.printers = await api("/api/printers"); } catch { return; }
+  if (!S.printers.length) { $("power-card").hidden = true; return; }
+  const sel = $("power-printer");
+  fillSelect(sel, S.printers.map(p => [p.id, p.name]), sel.value || store.get("ps_printer"));
+  $("power-printer-row").hidden = S.printers.length < 2;
+  $("power-card").hidden = false;
+  await loadPowerConfig();
+}
+async function loadPowerConfig() {
+  powerMsg("");
+  try { PW.cfg = await api(powerBase() + "/config"); } catch (e) { return powerMsg(e.message, true); }
+  $("power-url").value = PW.cfg.url || "";
+  $("power-entity").value = PW.cfg.entity || "";
+  $("power-token").value = "";
+  $("power-token").placeholder = PW.cfg.token_set ? t("power_token_kept") : "";
+  $("power-addon").hidden = !PW.cfg.addon;
+  $("power-remove").hidden = !PW.cfg.configured;
+}
+$("power-printer").onchange = loadPowerConfig;
+$("power-load").onclick = async () => {
+  powerMsg("");
+  try {
+    const list = await post(powerBase() + "/entities", powerBody());
+    $("power-entities").replaceChildren(...list.map(e => el("option", { value: e.entity }, `${e.name} (${e.state})`)));
+    powerMsg(t("power_loaded", { n: list.length }));
+    $("power-entity").focus();
+  } catch (e) { powerMsg(e.message, true); }
+};
+$("power-test").onclick = async () => {
+  powerMsg("");
+  try {
+    const r = await post(powerBase() + "/test", powerBody());
+    if (r.ok) powerMsg(t("power_ok", { name: r.name || $("power-entity").value, state: t("power_states")[r.state] || r.state }));
+    else powerMsg(r.error, true);
+  } catch (e) { powerMsg(e.message, true); }
+};
+$("power-save").onclick = async () => {
+  powerMsg("");
+  try {
+    await api(powerBase() + "/config", { method: "PUT", body: JSON.stringify(powerBody()) });
+    await loadPowerConfig();
+    S.printers = await api("/api/printers");          // "power" flag for the printer tab
+    powerMsg(t("power_saved"));
+  } catch (e) { powerMsg(e.message, true); }
+};
+$("power-remove").onclick = async () => {
+  const name = S.printers.find(p => p.id === $("power-printer").value)?.name || "";
+  if (!confirm(t("power_remove_q", { printer: name }))) return;
+  try {
+    await api(powerBase() + "/config", { method: "DELETE" });
+    await loadPowerConfig();
+    S.printers = await api("/api/printers");
+    powerMsg(t("power_removed"));
+  } catch (e) { powerMsg(e.message, true); }
+};
+async function switchPower(p, on) {
+  if (!on && !confirm(t("power_off_q", { printer: p.name }))) return;
+  try {
+    await post(`/api/printers/${encodeURIComponent(p.id)}/power`, { on });
+    if (on) S.starting = { ...(S.starting || {}), [p.id]: Date.now() };
+  } catch (e) { alert(e.message); }
+  setTimeout(pollPrinters, 1500);
+}
 
 // ---------- pairing code for the app (issue #10) ----------
 const P = { shown: false, timer: 0, edited: false };

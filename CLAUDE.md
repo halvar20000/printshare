@@ -370,6 +370,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Dominique writes a separate native iOS app in Swift (`iDomi94/printshare-ios`, outside this session's GitHub
   scope); decision Expo vs. Swift for iOS still open. He is a collaborator on the repo since 2026-09-30.
 
+## Printer power through Home Assistant (issue #9, 2026-09-30, 0.12.0)
+- `printshare/power/` (`PowerConfig`, `load/save` in `printers.d/<id>.yaml` under `power:` via
+  `user_profiles.write_overlay` (0600, atomic), `homeassistant.py`: `GET /api/`, `/api/states[/<e>]`,
+  `POST /api/services/<domain>/turn_on|off`; domains switch/light/input_boolean, entity checked with
+  `[a-z_]+\.[a-z0-9_]+` (goes into the URL). Add-on: `homeassistant_api: true`, empty URL + `SUPERVISOR_TOKEN` →
+  `http://supervisor/core/api`.
+- API `/api/printers/<id>/power` (GET state, POST {on}: off → 409 while active/paused, checked via adapter status),
+  `/power/config` (GET public incl. `token_set`/`addon`, PUT with token None = keep, DELETE), `/power/test`,
+  `/power/entities`; `/api/printers` has `power: bool`. Tests: `tests/test_power.py` + `FakeHomeAssistant`.
+- Web: Settings card "Stromversorgung" (datalist entity picker), printer tab Einschalten (offline) / Ausschalten.
+  App: printers tab "Einschalten" while offline → "Drucker startet …" for 2 min, then a hint + button again;
+  control screen section "Stromversorgung" (off with confirm, locked while printing). Not yet tried with a real plug.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

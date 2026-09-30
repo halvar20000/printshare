@@ -432,3 +432,54 @@ class FakeOctoPrint(_FakeHTTP):
                 "operational": True, "printing": bool(self.printing) and not self.paused, "paused": self.paused,
                 "pausing": False, "cancelling": False, "error": False, "ready": not self.printing,
                 "closedOrError": False}}})
+
+
+class FakeHomeAssistant(_FakeHTTP):
+    """Home Assistant REST API (developers.home-assistant.io/docs/api/rest) with one smart plug (issue #9)."""
+
+    def __init__(self, port: int = 8123, token: str = "ha-token") -> None:
+        self.port, self.token = port, token
+        self.states = {"switch.drucker": "off", "light.werkstatt": "on", "sensor.temp": "21.5",
+                       "switch.kaputt": "unavailable"}
+        self.names = {"switch.drucker": "Drucker-Steckdose", "light.werkstatt": "Werkstatt"}
+        self.calls: list[tuple[str, str]] = []
+
+    def routes(self, app: web.Application) -> None:
+        app.router.add_get("/api/", self.api_root)
+        app.router.add_get("/api/states", self.all_states)
+        app.router.add_get("/api/states/{entity}", self.one_state)
+        app.router.add_post("/api/services/{domain}/{service}", self.service)
+
+    def _ok(self, request: web.Request) -> bool:
+        return request.headers.get("Authorization") == f"Bearer {self.token}"
+
+    def _entity(self, e: str) -> dict:
+        return {"entity_id": e, "state": self.states[e], "attributes": {"friendly_name": self.names.get(e, e)}}
+
+    async def api_root(self, request: web.Request) -> web.Response:
+        if not self._ok(request):
+            return web.Response(status=401, text="401: Unauthorized")
+        return web.json_response({"message": "API running."})
+
+    async def all_states(self, request: web.Request) -> web.Response:
+        if not self._ok(request):
+            return web.Response(status=401)
+        return web.json_response([self._entity(e) for e in self.states])
+
+    async def one_state(self, request: web.Request) -> web.Response:
+        if not self._ok(request):
+            return web.Response(status=401)
+        e = request.match_info["entity"]
+        if e not in self.states:
+            return web.json_response({"message": "Entity not found."}, status=404)
+        return web.json_response(self._entity(e))
+
+    async def service(self, request: web.Request) -> web.Response:
+        if not self._ok(request):
+            return web.Response(status=401)
+        body = await request.json()
+        e, service = body["entity_id"], request.match_info["service"]
+        self.calls.append((service, e))
+        if e in self.states and self.states[e] != "unavailable":
+            self.states[e] = {"turn_on": "on", "turn_off": "off"}.get(service, self.states[e])
+        return web.json_response([self._entity(e)] if e in self.states else [])

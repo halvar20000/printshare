@@ -28,6 +28,7 @@ export default function Control() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [picker, setPicker] = useState<string | null>(null);
+  const [power, setPower] = useState<{ available: boolean; state: string | null } | null>(null);
 
   const loadStatus = useCallback(() => {
     if (!api) return;
@@ -40,6 +41,7 @@ export default function Control() {
   useFocusEffect(useCallback(() => {
     if (!api) return;
     api.controls(id).then(setCaps).catch(e => setError((e as Error).message));
+    api.power(id).then(setPower).catch(() => setPower(null));
     loadStatus();
     loadHistory();
     const s = setInterval(loadStatus, 3000);
@@ -212,6 +214,21 @@ export default function Control() {
               value={status?.speed != null ? String(status.speed) : null} labels={speedLabels}
               onChange={v => apply("speed", [{ kind: "speed", id: "speed", value: Number(v) }])} />
           </View>
+        </Section>
+      ) : null}
+
+      {power?.available ? (
+        <Section title={t("powerTitle")} footer={printing ? t("powerOffBusy") : undefined}>
+          <Row icon="power" label={t("powerOff")} danger={!printing}
+            value={power.state ? t.table.powerStates[power.state] ?? power.state : undefined}
+            onPress={printing ? undefined : async () => {
+              if (!api || !(await confirmAsync(t("powerOffQ", { printer: name ?? id }), t("powerOff"), t("cancelBtn")))) return;
+              setBusy("power");
+              try { await api.setPower(id, false); setPower(p => (p ? { ...p, state: "off" } : p)); setError(""); }
+              catch (e) { setError((e as Error).message); }
+              finally { setBusy(""); }
+            }}
+            right={busy === "power" ? <ActivityIndicator style={{ marginLeft: 8 }} /> : undefined} />
         </Section>
       ) : null}
 

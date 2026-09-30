@@ -149,6 +149,30 @@
       <p id="profiles-msg" class="hint" hidden></p>
       <ul id="profile-list" class="list profiles"></ul>
     </div>
+    <!-- smart plug through Home Assistant (issue #9) -->
+    <div class="card" id="power-card" hidden>
+      <h2 data-t="power_title">Stromversorgung</h2>
+      <p class="hint" data-t="power_hint"></p>
+      <div id="power-printer-row" hidden>
+        <label for="power-printer" data-t="printer">Drucker</label>
+        <select id="power-printer"></select>
+      </div>
+      <p id="power-addon" class="hint" data-t="power_addon" hidden></p>
+      <label for="power-url" data-t="power_url">Home-Assistant-Adresse</label>
+      <input id="power-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.5:8123">
+      <label for="power-token" data-t="power_token">Langlebiges Zugangs-Token</label>
+      <input id="power-token" type="password" autocomplete="off" spellcheck="false">
+      <label for="power-entity" data-t="power_entity">Steckdose (Entität)</label>
+      <input id="power-entity" list="power-entities" autocomplete="off" spellcheck="false" placeholder="switch.drucker_steckdose">
+      <datalist id="power-entities"></datalist>
+      <div class="row">
+        <button type="button" id="power-load" class="ghost" data-t="power_load">Liste laden</button>
+        <button type="button" id="power-test" class="ghost" data-t="power_test">Testen</button>
+      </div>
+      <p id="power-msg" class="hint" hidden></p>
+      <button type="button" id="power-save" class="primary" data-t="save">Speichern</button>
+      <button type="button" id="power-remove" class="danger" data-t="power_remove" hidden>Entfernen</button>
+    </div>
     <!-- pairing code for the native app (issue #10) -->
     <div class="card" id="pair-card" hidden>
       <h2 data-t="pair_title">App verbinden</h2>

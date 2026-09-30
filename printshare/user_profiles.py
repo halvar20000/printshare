@@ -173,7 +173,6 @@ def read_overlay(config_dir: str | Path, printer_id: str) -> dict[str, Any]:
 
 def assign_machine(config_dir: str | Path, printer_id: str, file: str | None, lib: ProfileLibrary) -> dict[str, Any]:
     """Use an uploaded printer preset for a printer (None = back to the configured / system preset)."""
-    p = overlay_path(config_dir, printer_id)
     overlay = read_overlay(config_dir, printer_id)
     slicing = dict(overlay.get("slicing") or {})
     for k in ("machine_file", "machine"):
@@ -190,13 +189,23 @@ def assign_machine(config_dir: str | Path, printer_id: str, file: str | None, li
         overlay["slicing"] = slicing
     else:
         overlay.pop("slicing", None)
-    if overlay:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("# Set from the PrintShare app - kept when config.yaml is regenerated.\n"
-                     + yaml.safe_dump(overlay, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    elif p.exists():
-        p.unlink()
+    write_overlay(config_dir, printer_id, overlay)
     return overlay
+
+
+def write_overlay(config_dir: str | Path, printer_id: str, overlay: dict[str, Any]) -> None:
+    """Store a printer's app settings (slicing, power); owner-only, it can hold the Home Assistant token."""
+    p = overlay_path(config_dir, printer_id)
+    if not overlay:
+        if p.exists():
+            p.unlink()
+        return
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text("# Set from the PrintShare app / web page - kept when config.yaml is regenerated.\n"
+                   + yaml.safe_dump(overlay, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(p)
 
 
 def delete(config_dir: str | Path, file: str, printer_ids: list[str]) -> None:

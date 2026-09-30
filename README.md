@@ -198,6 +198,17 @@ POST   /api/printers/<id>/control   {"action": "pause|resume|cancel", "confirm":
 POST   /api/print  {"link", "printer", "file", "start"}   # one-shot slice + send (CLI, shortcuts)
 ```
 
+## 5. Switch the printer on and off (optional, Home Assistant)
+
+If the printer hangs on a smart plug that Home Assistant knows (`switch.…`, `light.…` or `input_boolean.…`),
+PrintShare can switch it: open the web page → *Settings → Power*, enter the Home Assistant address (e.g.
+`http://192.168.1.5:8123`) and a long-lived access token (Home Assistant → your profile → *Security*), tap
+*Load list*, pick the plug, *Test*, *Save*. As Home Assistant add-on, address and token can stay empty.
+
+The app then shows *Switch on* while the printer is off, and *Switch off* in the printer's *Control* screen;
+switching off asks first and is refused while a print is running. The token stays on the server
+(`printers.d/<printer>.yaml`, readable only by the owner) and is never sent back to the app or browser.
+
 ## Notes and limits (P0)
 
 * **Printables** has no official API. PrintShare uses the website's own endpoint (search, model details, download), only on the user's behalf; files are never stored for others. Paid and premium models are not shown.
