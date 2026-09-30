@@ -274,6 +274,18 @@ def test_preview_and_gcode_download(api, client, monkeypatch, tmp_path):
     assert client.get("/api/jobs/nope/preview", headers=H).status_code == 404
 
 
+def test_model_file_for_the_3d_view(client):
+    stl = b"solid cube\nendsolid cube\n"
+    up = client.post("/api/uploads", headers=H, params={"name": "cube.stl"}, content=stl).json()
+    r = client.get("/api/model-file", headers=H, params={"link": up["link"]})
+    assert r.status_code == 200, r.text
+    assert r.content == stl
+    assert "cube.stl" in r.headers["content-disposition"]
+    assert client.get("/api/model-file", headers=H, params={"link": up["link"], "file": "7"}).status_code == 400
+    assert client.get("/api/model-file", headers=H, params={"link": "/etc/passwd"}).status_code == 400
+    assert client.get("/api/model-file", params={"link": up["link"]}).status_code == 401
+
+
 def test_inspect_colours_of_an_uploaded_3mf(client, tmp_path):
     from .test_multicolor import orca_3mf
     data = orca_3mf(tmp_path / "two.3mf", ["#FF0000", "#00AE42"], [1, 2]).read_bytes()

@@ -247,7 +247,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (JSON `filament_colour`) + `model_settings.config` (object/part `extruder`), PrusaSlicer
   `Slic3r_PE.config` (quoted `;`-lists, `extruder_colour` wins if set) + `Slic3r_PE_model.config`;
   `paint_color`/`mmu_segmentation` on triangles = painted → all filaments used. `/api/inspect`.
-- `pipeline.fetch_model`: download cache `work_dir/cache/<sha1>` (24 h) used by inspect + slicing.
+- `pipeline.fetch_model`: download cache `work_dir/cache/<sha1>` (24 h) used by inspect + slicing, and since 0.10.1 by
+  `GET /api/model-file?link=&file=` (the file itself, for the 3D view of the native iOS app).
 - Orca CLI (source v2.4.2 OrcaSlicer.cpp): `--load-filaments "f1;f2"` replaces the project's filaments
   **by position**; the 3MF's per-object/painted assignments stay. Slicer writes one preset per model
   colour with `filament_colour` = model colour; `JobOptions.filaments` = preset per colour (None = default).

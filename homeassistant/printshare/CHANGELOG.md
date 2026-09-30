@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.1
+- The app can show a model file in 3D before slicing (`/api/model-file`, served from the download cache).
+
 ## 0.10.0
 - Printer control in the app: set nozzle/bed/chamber temperatures (with PLA/PETG presets and cool down),
   temperature history chart, fans, light and print speed. Changes that could spoil a running print ask

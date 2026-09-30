@@ -7,6 +7,7 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
   GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
   GET  /api/inspect?link=...&file=...   colours/filaments of a model (downloads it, cached for a day)
+  GET  /api/model-file?link=...&file=... the model file itself, for the 3D view in the app (same cache)
   GET  /api/sources         model sources for search (Thingiverse only with a token)
   GET  /api/profiles        uploaded OrcaSlicer presets;  POST /api/profiles?filename=x.json (raw body)
   DELETE /api/profiles/{file}
@@ -50,7 +51,7 @@ from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_s
 from . import camera as cam
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
-from .pipeline import JobResult, inspect_model, prepare_job, run_job, send_job
+from .pipeline import JobResult, fetch_model, inspect_model, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
 from . import lanes as lane_map
 from . import user_profiles
@@ -64,7 +65,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.10.0")
+app = FastAPI(title="PrintShare", version="0.10.1")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -491,6 +492,20 @@ async def set_printer_profile(printer_id: str, req: ProfileAssignment) -> dict[s
         raise _profile_error(e)
     _reload_settings()
     return printer_profile(printer_id)
+
+
+@app.get("/api/model-file", dependencies=[Depends(auth)])
+async def model_file(link: str, file: str | None = None) -> FileResponse:
+    """One file of a model (index as in /api/files), so the app can show it in 3D before slicing (MQ-06).
+    Served from the download cache that inspect and slicing use; never re-hosted anywhere else."""
+    local = _resolve_link(link)
+    try:
+        chosen, path = await asyncio.to_thread(fetch_model, settings, local, file)
+    except FetchError as e:
+        raise HTTPException(400, str(e))
+    if path.stat().st_size > MAX_UPLOAD:
+        raise HTTPException(413, "model file too large for the 3D view")
+    return FileResponse(path, media_type="application/octet-stream", filename=Path(chosen.name).name)
 
 
 # ---------- search (MQ-05/06) ----------

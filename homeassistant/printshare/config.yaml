@@ -1,5 +1,5 @@
 name: PrintShare
-version: "0.10.0"
+version: "0.10.1"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
