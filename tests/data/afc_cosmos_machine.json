@@ -1,0 +1,23 @@
+{
+ "change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\n; FLUSH_START\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\n; FLUSH_END",
+ "cooling_tube_length": "0",
+ "cooling_tube_retraction": "0",
+ "extra_loading_move": "0",
+ "from": "User",
+ "host_type": "moonraker",
+ "inherits": "Elegoo Centauri Carbon 0.4 nozzle",
+ "machine_end_gcode": "PRINT_END",
+ "machine_pause_gcode": "PAUSE",
+ "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\n\nM140 S0\n\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\n\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature] TOOL={initial_tool}",
+ "name": "AFC COSMOS - Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+ "parking_pos_retraction": "0",
+ "printer_extruder_id": [
+  "1"
+ ],
+ "printer_extruder_variant": [
+  "Direct Drive Standard"
+ ],
+ "printer_settings_id": "AFC COSMOS - Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+ "support_multi_bed_types": "1",
+ "version": "2.4.0.2"
+}

@@ -93,7 +93,19 @@ docker build -t printshare:dev .          # ~5 min; downloads OrcaSlicer 2.4.2 f
 bash scripts/unraid-install.sh             # Unraid: build + run from a source checkout
 ```
 
-## 2. Configure your printer by hand (optional)
+## 2. Your own OrcaSlicer printer profile (optional)
+
+In the app: **Settings → your printer → Upload printer profile**. Export the profile in OrcaSlicer
+(File → Export → preset bundle `.zip`, or the profile's JSON file), pick it on the phone – the server
+checks it (valid preset, parent profile known to OrcaSlicer 2.4.2) and uses it for this printer right away.
+It is kept in `/config/profiles/` and assigned in `/config/printers.d/<printer>.yaml`, so it survives the
+Unraid template / Home Assistant add-on regenerating `config.yaml`. A profile with its own `PRINT_START`
+(e.g. COSMOS with AFC) is not overridden by the built-in COSMOS start code.
+
+API: `POST /api/profiles?filename=…` (raw body), `GET /api/profiles`, `DELETE /api/profiles/<file>`,
+`GET|PUT /api/printers/<id>/profile` `{"machine_file": "<file>" | null}`.
+
+## 2b. Configure your printer by hand (optional)
 
 Only needed without the form fields above. Edit `config.yaml`, keep only your own printer block:
 

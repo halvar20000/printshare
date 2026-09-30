@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+- Upload your own OrcaSlicer printer profile in the app (Settings → printer). It is checked, used right away
+  and kept when the add-on regenerates its configuration.
+
 ## 0.6.0
 - Multicolour groundwork: colours of 3MF projects are detected, the app lets you choose a material per colour,
   slicing uses one filament per colour, filament use per colour and a colour preview.

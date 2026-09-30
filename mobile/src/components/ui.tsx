@@ -38,17 +38,19 @@ export function Divider() {
 }
 
 /** A list row: label on the left, value / control on the right. */
-export function Row({ icon, label, value, sub, onPress, right, danger, chevron = !!onPress }: {
+export function Row({ icon, label, value, sub, onPress, onLongPress, right, danger, chevron = !!onPress }: {
   icon?: IconName; label: string; value?: string | null; sub?: string | null; onPress?: () => void;
-  right?: ReactNode; danger?: boolean; chevron?: boolean;
+  onLongPress?: () => void; right?: ReactNode; danger?: boolean; chevron?: boolean;
 }) {
   const c = useColors();
   return (
     <Pressable
       onPress={onPress ? () => { tap(); onPress(); } : undefined}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      style={({ pressed }) => [s.row, pressed && onPress ? { backgroundColor: c.input } : null]}
+      onLongPress={onLongPress ? () => { tap(); onLongPress(); } : undefined}
+      delayLongPress={500}
+      disabled={!onPress && !onLongPress}
+      accessibilityRole={onPress || onLongPress ? "button" : undefined}
+      style={({ pressed }) => [s.row, pressed && (onPress || onLongPress) ? { backgroundColor: c.input } : null]}
     >
       {icon ? <Ionicons name={icon} size={22} color={danger ? c.danger : c.accent} style={{ marginRight: 12 }} /> : null}
       <View style={{ flex: 1, minWidth: 0 }}>

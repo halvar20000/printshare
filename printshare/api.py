@@ -8,6 +8,9 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
   GET  /api/inspect?link=...&file=...   colours/filaments of a model (downloads it, cached for a day)
   GET  /api/sources         model sources for search (Thingiverse only with a token)
+  GET  /api/profiles        uploaded OrcaSlicer presets;  POST /api/profiles?filename=x.json (raw body)
+  DELETE /api/profiles/{file}
+  GET|PUT /api/printers/{id}/profile   {"machine_file": "<uploaded file>" | null}
   GET  /api/search?q=...&source=printables|thingiverse&page=1&sort=relevant|popular|makes
   GET  /api/models/{source}/{id}   details: images, description, license, author's settings, files
   POST /api/jobs            {"link", "printer", "file", "options": {...}}  -> download + slice only
@@ -43,7 +46,8 @@ from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, inspect_model, prepare_job, run_job, send_job
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
-from .profiles import ProfileError, ProfileLibrary
+from . import user_profiles
+from .profiles import ProfileError, ProfileLibrary, load_user_preset
 from .search import Search
 
 WEB = Path(__file__).parent / "web"
@@ -53,7 +57,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.6.0")
+app = FastAPI(title="PrintShare", version="0.7.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -265,6 +269,70 @@ async def inspect(link: str, file: str | None = None) -> dict[str, Any]:
         raise HTTPException(400, str(e))
 
 
+# ---------- own OrcaSlicer presets (issue #2) ----------
+def _reload_settings() -> None:
+    """Printer settings changed from the app: take effect without restarting the container."""
+    global settings
+    settings = load_settings()
+
+
+def _profile_error(e: Exception) -> HTTPException:
+    return HTTPException(400, str(e))
+
+
+@app.get("/api/profiles", dependencies=[Depends(auth)])
+async def profiles_list() -> list[dict[str, Any]]:
+    lib = await asyncio.to_thread(_library)
+    return await asyncio.to_thread(user_profiles.list_profiles, settings.config_dir, lib)
+
+
+@app.post("/api/profiles", dependencies=[Depends(auth)])
+async def profiles_upload(request: Request, filename: str = "profile.json") -> list[dict[str, Any]]:
+    """A preset exported from OrcaSlicer (JSON) or a preset bundle (zip); raw body."""
+    content = await request.body()
+    lib = await asyncio.to_thread(_library)
+    try:
+        return await asyncio.to_thread(user_profiles.store, settings.config_dir, filename, content, lib)
+    except user_profiles.ProfileUploadError as e:
+        raise _profile_error(e)
+
+
+@app.delete("/api/profiles/{file}", dependencies=[Depends(auth)])
+def profiles_delete(file: str) -> dict[str, Any]:
+    try:
+        user_profiles.delete(settings.config_dir, file, [p.id for p in settings.printers])
+    except user_profiles.ProfileUploadError as e:
+        raise _profile_error(e)
+    return {"deleted": file}
+
+
+@app.get("/api/printers/{printer_id}/profile", dependencies=[Depends(auth)])
+def printer_profile(printer_id: str) -> dict[str, Any]:
+    """Printer preset in use: an uploaded one (`machine_file`), one set by hand in config.yaml
+    (`config_file`), or the OrcaSlicer system preset `machine` (+ built-in `machine_preset`)."""
+    s = _printer(printer_id).slicing
+    uploaded = (user_profiles.read_overlay(settings.config_dir, printer_id).get("slicing") or {}).get("machine_file")
+    return {"machine": s.machine, "machine_file": uploaded,
+            "config_file": None if uploaded or not s.machine_file else Path(s.machine_file).name,
+            "machine_preset": s.machine_preset}
+
+
+class ProfileAssignment(BaseModel):
+    machine_file: str | None = None
+
+
+@app.put("/api/printers/{printer_id}/profile", dependencies=[Depends(auth)])
+async def set_printer_profile(printer_id: str, req: ProfileAssignment) -> dict[str, Any]:
+    _printer(printer_id)
+    lib = await asyncio.to_thread(_library)
+    try:
+        await asyncio.to_thread(user_profiles.assign_machine, settings.config_dir, printer_id, req.machine_file, lib)
+    except user_profiles.ProfileUploadError as e:
+        raise _profile_error(e)
+    _reload_settings()
+    return printer_profile(printer_id)
+
+
 # ---------- search (MQ-05/06) ----------
 def _search() -> Search:
     global _SEARCH
@@ -429,7 +497,7 @@ def _job_gcode(job_id: str) -> tuple[dict[str, Any], Path]:
 def _bed(printer_id: str) -> tuple[float, float] | None:
     try:
         s = settings.printer(printer_id).slicing
-        area = (json.loads(Path(s.machine_file).read_text()) if s.machine_file
+        area = (load_user_preset(Path(s.machine_file), None, _library(), "machine") if s.machine_file
                 else _library().resolve("machine", s.machine)).get("printable_area")
         return gcode_preview.bed_size(area)
     except Exception:  # noqa: BLE001 - the preview works without the bed outline

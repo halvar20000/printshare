@@ -270,3 +270,31 @@ def test_slice_two_colour_3mf_for_cosmos_afc(tmp_path):
     assert "M6211" not in gcode                           # Elegoo's CANVAS command is not for COSMOS
     assert "TOOL=0" in gcode and "M729" not in gcode
     assert len(res.filaments) == 2 and all(f["grams"] for f in res.filaments)
+
+
+@needs_orca
+def test_uploaded_afc_cosmos_preset_slices(tmp_path):
+    """Issue #2: Dominique's own COSMOS AFC printer preset, uploaded and assigned like from the app."""
+    from printshare import user_profiles
+    from printshare.config import load_settings
+    from printshare.profiles import ProfileLibrary
+    from printshare.slicer import Slicer
+    conf = tmp_path / "cfg"
+    conf.mkdir()
+    (conf / "config.yaml").write_text(
+        f"work_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\norca_binary: {ORCA_ROOT}/AppRun\n"
+        f"orca_profiles_dir: {ORCA_ROOT}/resources/profiles\nprinters:\n  - id: dom\n    type: moonraker\n"
+        "    url: http://127.0.0.1:7125\n    slicing:\n      machine_preset: cosmos\n")
+    lib = ProfileLibrary.cached(f"{ORCA_ROOT}/resources/profiles")
+    afc = Path(__file__).parent / "data" / "afc_cosmos_machine.json"
+    file = user_profiles.store(conf, afc.name, afc.read_bytes(), lib)[0]["file"]
+    user_profiles.assign_machine(conf, "dom", file, lib)
+    s = load_settings(conf / "config.yaml")
+    printer = s.printers[0]
+    assert printer.slicing.machine_preset is None
+    res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out")
+    gcode = res.gcode_path.read_text()
+    assert "PRINT_START EXTRUDER=2" in gcode and "BED=60" in gcode and "TOOL=0" in gcode, gcode[:3000]
+    code = "\n".join(line for line in gcode.splitlines() if not line.startswith(";"))  # without the settings dump
+    assert "[first_layer_temperature]" not in code and "SET_PRINT_STATS_INFO TOTAL_LAYER=" in code
+    assert "M729" not in gcode and "M6211" not in gcode

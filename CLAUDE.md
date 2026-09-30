@@ -277,6 +277,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Verified with the real Orca 2.4.2 (75/75 tests): two-colour project → CC stock `T1` + `M6211`,
   COSMOS `T1 PURGE_LENGTH=` without M6211 + `TOOL=0`, grams per colour, preview colours.
 
+## Own printer profile from the app (issue #2, 2026-09-30, 0.7.0)
+- `printshare/user_profiles.py`: upload (JSON or zip/.orca_printer bundle, 5 MB), kind detection, check that
+  `inherits` resolves in Orca 2.4.2, `print_host`/`printer_agent` stripped, stored as
+  `<config dir>/profiles/<kind>-<name>.json`. Assignment per printer in `<config dir>/printers.d/<id>.yaml`
+  (`slicing: {machine_file: <file>, machine: <system base>}`), applied by `config.load_settings` on every
+  start → survives the regenerated managed `config.yaml`. `Settings.config_dir` = folder of config.yaml.
+- `SlicingConfig`: `machine_preset` is dropped when `machine_file` already has `PRINT_START` (Dominique's point).
+- API `/api/profiles` (GET/POST/DELETE), `/api/printers/<id>/profile` (GET/PUT); PUT reloads `api.settings`
+  (no restart). App: Settings → printer → `printer/[id].tsx` (upload, choose, standard, long-press delete).
+- Real Orca test `test_uploaded_afc_cosmos_preset_slices` with Dominique's preset (`tests/data/afc_cosmos_machine.json`,
+  host removed): his legacy placeholders `[first_layer_temperature]` expand fine (EXTRUDER=210 … TOOL=0).
+- Not yet: choosing uploaded process/filament presets (stored and listed, not offered in the pickers).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

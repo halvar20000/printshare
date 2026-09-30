@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -59,12 +60,25 @@ class SlicingConfig:
 
     def __post_init__(self) -> None:
         self.process_overrides = {"curr_bed_type": self.bed_type, **self.process_overrides}
+        if self.machine_preset and self.machine_file and _has_print_start(self.machine_file):
+            # the user's own printer preset already has the Klipper start code (e.g. an AFC COSMOS preset):
+            # don't replace it with the built-in one (issue #2)
+            self.machine_preset = None
         if self.machine_preset:
             base = dict(PRESETS.get(self.machine_preset, {}))
             if not base:
                 raise ValueError(f"Unknown machine_preset {self.machine_preset!r}")
             base.update(self.machine_overrides)
             self.machine_overrides = base
+
+
+def _has_print_start(machine_file: str) -> bool:
+    try:
+        data = json.loads(Path(machine_file).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    start = data.get("machine_start_gcode") or ""
+    return "PRINT_START" in ("\n".join(start) if isinstance(start, list) else str(start))
 
 
 SUPPORT_TYPES = {"normal": "normal(auto)", "tree": "tree(auto)"}
@@ -136,6 +150,7 @@ class PrinterConfig:
 @dataclass
 class Settings:
     api_token: str = ""
+    config_dir: str = ""           # folder of config.yaml (profiles/ and printers.d/ live there)
     orca_binary: str = "/opt/orca/AppRun"
     orca_profiles_dir: str = "/opt/orca/resources/profiles"
     work_dir: str = "/data/work"
@@ -189,8 +204,18 @@ def load_settings(path: str | Path | None = None) -> Settings:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     printers = []
     profiles_dir = raw.get("orca_profiles_dir", Settings.orca_profiles_dir)
+    config_dir = path.parent
+    raw.setdefault("config_dir", str(config_dir))
     for p in raw.pop("printers", []) or []:
         sl = dict(p.pop("slicing", {}) or {})
+        # settings made in the app (printers.d/<id>.yaml) win over config.yaml, which the Unraid template /
+        # Home Assistant add-on may regenerate on every start
+        overlay_file = config_dir / "printers.d" / f"{p.get('id')}.yaml"
+        if overlay_file.is_file():
+            sl.update((yaml.safe_load(overlay_file.read_text(encoding="utf-8")) or {}).get("slicing") or {})
+        mf = sl.get("machine_file")
+        if mf and not Path(mf).is_absolute():
+            sl["machine_file"] = str(config_dir / "profiles" / mf)     # uploaded preset: stored by name
         _machine_defaults(sl, profiles_dir, p.get("id", "?"))
         printers.append(PrinterConfig(slicing=SlicingConfig(**sl), **p))
     s = Settings(printers=printers, **raw)

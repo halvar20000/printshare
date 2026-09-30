@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { Alert, Linking, Platform, Text, View } from "react-native";
 
 import { Badge, Divider, Row, Screen, Section, Segmented } from "@/components/ui";
+import type { Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -15,9 +16,11 @@ export default function Settings() {
   const [online, setOnline] = useState<boolean | null>(null);
   const [serverVersion, setServerVersion] = useState("");
   const [route, setRoute] = useState<"home" | "remote" | null>(null);
+  const [printers, setPrinters] = useState<Printer[]>([]);
 
   useFocusEffect(useCallback(() => {
     if (!api) { setOnline(null); return; }
+    api.printers().then(setPrinters).catch(() => setPrinters([]));
     api.info().then(i => { setOnline(true); setServerVersion(i.version); setRoute(api.route()); })
       .catch(() => { setOnline(false); setRoute(null); });
   }, [api]));
@@ -45,6 +48,18 @@ export default function Settings() {
         <Row icon="qr-code-outline" label={server ? t("changeServer") : t("connectNow")} onPress={() => router.push("/connect")} />
         {server ? <><Divider /><Row icon="log-out-outline" label={t("disconnect")} danger onPress={disconnect} /></> : null}
       </Section>
+
+      {server && printers.length ? (
+        <Section title={t("tabPrinters")}>
+          {printers.map((p, i) => (
+            <View key={p.id}>
+              {i ? <Divider /> : null}
+              <Row icon="print-outline" label={p.name} sub={t("printerProfile")}
+                onPress={() => router.push({ pathname: "/printer/[id]", params: { id: p.id } })} />
+            </View>
+          ))}
+        </Section>
+      ) : null}
 
       <Section title={t("language")}>
         <View style={{ padding: 12 }}>

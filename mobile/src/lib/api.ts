@@ -70,6 +70,14 @@ export type ModelDetail = ModelHit & {
   recommended: Partial<{ nozzle: string; layer_height: string; material: string; weight_g: number; print_hours: number }>;
   files: { name: string; size: number | null; sliceable: boolean }[];
 };
+/** An OrcaSlicer preset uploaded to the server (issue #2). */
+export type UserProfile = {
+  file: string; kind: "machine" | "process" | "filament" | "unknown"; name: string | null;
+  inherits: string | null; print_start?: boolean; error?: string;
+};
+export type PrinterProfile = {
+  machine: string; machine_file: string | null; config_file: string | null; machine_preset: string | null;
+};
 export type SearchPage = { results: ModelHit[]; total: number | null; page: number; has_more: boolean };
 
 /** Error with a friendly, translated message; `detail` keeps the server's original text. */
@@ -238,9 +246,24 @@ export class Api {
   model = (source: string, id: string) =>
     this.request<ModelDetail>(`/api/models/${source}/${encodeURIComponent(id)}`, { timeout: 30000 });
 
+  profiles = () => this.request<UserProfile[]>("/api/profiles", { timeout: 30000 });
+  deleteProfile = (file: string) =>
+    this.request<{ deleted: string }>(`/api/profiles/${encodeURIComponent(file)}`, { method: "DELETE" });
+  printerProfile = (printer: string) =>
+    this.request<PrinterProfile>(`/api/printers/${encodeURIComponent(printer)}/profile`);
+  setPrinterProfile = (printer: string, machineFile: string | null) =>
+    this.request<PrinterProfile>(`/api/printers/${encodeURIComponent(printer)}/profile`,
+      { method: "PUT", body: { machine_file: machineFile }, timeout: 30000 });
+  /** Upload an OrcaSlicer preset (JSON) or preset bundle (zip). */
+  uploadProfile = (uri: string, name: string) =>
+    this.rawUpload<UserProfile[]>(`/api/profiles?filename=${encodeURIComponent(name)}`, uri);
+
   /** Upload a local model file (document picker or share menu) as raw body. */
-  async upload(uri: string, name: string): Promise<Upload> {
-    const url = `${await this.base()}/api/uploads?name=${encodeURIComponent(name)}`;
+  upload = (uri: string, name: string) =>
+    this.rawUpload<Upload>(`/api/uploads?name=${encodeURIComponent(name)}`, uri);
+
+  private async rawUpload<R>(path: string, uri: string): Promise<R> {
+    const url = `${await this.base()}${path}`;
     const headers = { ...this.headers(false), "Content-Type": "application/octet-stream" };
     let res: Response;
     try {
@@ -258,6 +281,6 @@ export class Api {
       const detail = typeof body?.detail === "string" ? body.detail : `HTTP ${res.status}`;
       throw new ApiError(friendlyError(this.t, res.status, detail), res.status, detail);
     }
-    return body as Upload;
+    return body as R;
   }
 }
