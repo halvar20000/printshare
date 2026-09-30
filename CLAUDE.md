@@ -350,6 +350,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - PWA settings card "App verbinden": editable addresses (re-fetch after 500 ms), QR hidden until "anzeigen",
   a stale code is cleared on an error. PR #11 (Dominique, 0.10.1): `GET /api/model-file` for the iOS 3D view.
 
+## Printer profile in the web UI (2026-09-30, 0.10.3)
+- PWA settings card "Druckerprofil": one select per printer (standard / uploaded machine presets, PUT on change),
+  upload (`POST /api/profiles?filename=` raw body, then PUT for the chosen printer when a machine preset came back),
+  list of uploaded presets (kind, based on, own start code, used by) with delete (confirm; the server refuses
+  profiles in use). Same flow as the app's `printer/[id].tsx`; checked with Chromium against a mocked API.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

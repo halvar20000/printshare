@@ -129,6 +129,20 @@
         <option value="en">English</option>
       </select>
     </div>
+    <!-- own OrcaSlicer printer profile per printer (issue #2) -->
+    <div class="card" id="profiles-card" hidden>
+      <h2 data-t="profiles_title">Druckerprofil</h2>
+      <p class="hint" data-t="profiles_hint"></p>
+      <div id="profile-printers"></div>
+      <div id="profile-target-row" hidden>
+        <label for="profile-target" data-t="profile_for">Hochladen für</label>
+        <select id="profile-target"></select>
+      </div>
+      <input id="profile-file" type="file" accept=".json,.zip,.orca_printer,application/json,application/zip" hidden>
+      <button type="button" id="profile-upload" class="primary" data-t="profile_upload">Druckerprofil hochladen</button>
+      <p id="profiles-msg" class="hint" hidden></p>
+      <ul id="profile-list" class="list profiles"></ul>
+    </div>
     <!-- pairing code for the native app (issue #10) -->
     <div class="card" id="pair-card" hidden>
       <h2 data-t="pair_title">App verbinden</h2>
