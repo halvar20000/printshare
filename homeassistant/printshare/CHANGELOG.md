@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+- Printer control in the app: set nozzle/bed/chamber temperatures (with PLA/PETG presets and cool down),
+  temperature history chart, fans, light and print speed. Changes that could spoil a running print ask
+  for confirmation first. Centauri Carbon, Klipper/Moonraker and OctoPrint; PrusaLink shows temperatures.
+
 ## 0.9.1
 - AFC lanes: each lane is shown once (AFC 1.2 has several objects per lane and a unit with the same
   name as the first lane) – checked with data from a real COSMOS + CANVAS printer.

@@ -15,6 +15,14 @@ class PrinterAdapter(Protocol):
     async def status(self) -> dict[str, Any]: ...
     async def control(self, action: str) -> None: ...  # "pause" | "resume" | "cancel"
     async def camera(self) -> "Camera | None": ...      # where the camera image comes from (issue #3)
+    # Printer control (issue #5). controls() says what the printer has, so the app only shows that:
+    #   {"heaters": [{"id": "nozzle", "max": 300}, …], "fans": [{"id": "part"}, …],
+    #    "lights": [{"id": "light"}], "speed": {"modes": [50, 100, 130, 160]} | {"min": 10, "max": 300},
+    #    "history": bool}
+    # status() then also reports "heaters" {id: {"actual", "target"}}, "fans" {id: %}, "lights" {id: bool},
+    # "speed" (%). adjust(kind, id, value) with kind "heater" | "fan" | "light" | "speed".
+    async def controls(self) -> dict[str, Any]: ...
+    async def adjust(self, kind: str, target: str, value: Any) -> None: ...
 
 
 CONTROL_ACTIONS = ("pause", "resume", "cancel")

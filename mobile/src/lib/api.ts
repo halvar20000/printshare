@@ -9,8 +9,15 @@ import type { T } from "./i18n";
 export type Server = { url: string; token: string; remoteUrl?: string };
 export type Route = "home" | "remote";
 
-/** leveling: null = this printer can't switch bed leveling per print; else its default. */
+/** What a printer can be controlled with (issue #5). */
+export type Controls = {
+  heaters: { id: string; max: number }[]; fans: { id: string }[]; lights: { id: string }[];
+  speed: { modes?: number[]; min?: number; max?: number } | null; history: boolean;
+};
+/** {heater: [[seconds before now, actual, target | null], …]} */
+export type TempHistory = { series: Record<string, [number, number, number | null][]>; source: string };
 export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolean; name: string | null };
+/** leveling: null = this printer can't switch bed leveling per print; else its default. */
 export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
@@ -35,6 +42,10 @@ export type PrinterStatus = {
   nozzle?: number | null; nozzle_target?: number | null; bed?: number | null; bed_target?: number | null;
   camera?: string | null;
   lanes?: Lane[];
+  heaters?: Record<string, { actual: number | null; target: number | null }>;
+  fans?: Record<string, number | null>;
+  lights?: Record<string, boolean>;
+  speed?: number | null;
 };
 export type Defaults = {
   filament: string; process: string; bed_type: string; supports: string; brim: string;
@@ -256,6 +267,14 @@ export class Api {
     this.request<ModelDetail>(`/api/models/${source}/${encodeURIComponent(id)}`, { timeout: 30000 });
 
   profiles = () => this.request<UserProfile[]>("/api/profiles", { timeout: 30000 });
+  controls = (printer: string) =>
+    this.request<Controls>(`/api/printers/${encodeURIComponent(printer)}/controls`, { timeout: 20000 });
+  adjust = (printer: string, kind: "heater" | "fan" | "light" | "speed", id: string, value: number | boolean,
+            confirm = false) =>
+    this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/adjust`,
+      { method: "POST", body: { kind, id, value, confirm }, timeout: 20000 });
+  temperatures = (printer: string) =>
+    this.request<TempHistory>(`/api/printers/${encodeURIComponent(printer)}/temperatures`, { timeout: 20000 });
   cameraInfo = (printer: string) =>
     this.request<CameraInfo>(`/api/printers/${encodeURIComponent(printer)}/camera`, { timeout: 20000 });
 

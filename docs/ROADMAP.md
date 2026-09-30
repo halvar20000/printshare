@@ -41,6 +41,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | DR-05 | Pause/resume/cancel | ✅ API + app (cancel asks); untested on real printers |
 | DR-11 | SDCP adapter | ✅ (tested against fake + real CC1) |
 | DR-06 | Camera | ✅ 0.9.0 (#3): server passes the camera through (snapshot, optionally scaled; live MJPEG); app thumbnail + fullscreen live/still; CC1, Moonraker webcams, OctoPrint, PrusaLink |
+| DR-10 | Printer control (temperatures, fans, light, speed) | ✅ 0.10.0 (#5): `/controls`, `/adjust` (limits, confirm while printing), `/temperatures` (Klipper temperature_store, OctoPrint history, else PrintShare log); app screen with history chart. Only tested against fakes – real CC1/COSMOS ⬜ |
 | DO-01 | Bed leveling on/off per print | 🟡 Centauri Carbon stock (SDCP `Calibration_switch`), remembered per printer in the app; COSMOS/Klipper, Prusa, OctoPrint do it in their start G-code ⬜ |
 | SL-06/07 | G-code layer viewer | ✅ server turns G-code into compact layer data (`/api/jobs/<id>/preview`, cached, gzip); app: top view per layer, line-type colours + legend toggles, previous layer faint, slider, model/plate view. 3D view ⬜ |
 | SL-10 | Export G-code | 🟡 `/api/jobs/<id>/gcode`; share button in the app ⬜ |

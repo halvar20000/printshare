@@ -19,6 +19,9 @@ App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token
   POST /api/jobs/{id}/send  {"start": true, "confirm": true}  -> upload (and start) after review
   DELETE /api/jobs/{id}
   GET  /api/printers/{id}/status   (+ "kind": idle|active|paused|done|stopped|error|unknown)
+  GET  /api/printers/{id}/controls   heaters/fans/lights/speed the printer has (issue #5)
+  POST /api/printers/{id}/adjust     {"kind": "heater"|"fan"|"light"|"speed", "id", "value", "confirm"}
+  GET  /api/printers/{id}/temperatures   history {heater: [[seconds before now, actual, target], …]}
   GET  /api/printers/{id}/camera   {"available", "stream", …};  …/camera/snapshot?w=640 (JPEG);  …/camera/stream (MJPEG)
   POST /api/printers/{id}/control  {"action": "pause"|"resume"|"cancel", "confirm": true}
 One-shot (CLI / iOS Shortcut):
@@ -33,6 +36,7 @@ import secrets
 import shutil
 import time
 import uuid
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -60,10 +64,13 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.9.1")
+app = FastAPI(title="PrintShare", version="0.10.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
+# temperature history for printers that don't keep one (Centauri): filled from status queries
+TEMP_LOG: dict[str, deque] = {}
+TEMP_LOG_SECONDS = 30 * 60
 _SEARCH: Search | None = None
 _TASKS: set[asyncio.Task] = set()  # keep references so tasks are not garbage-collected
 
@@ -185,7 +192,102 @@ async def status(printer_id: str) -> dict[str, Any]:
         st = await get_adapter(printer).status()
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
+    _log_temperatures(printer_id, st)
     return {**st, "kind": printer_kind(st.get("state"))}
+
+
+def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
+    heaters = st.get("heaters") or {}
+    if not heaters:
+        return
+    log = TEMP_LOG.setdefault(printer_id, deque(maxlen=TEMP_LOG_SECONDS // 4))
+    now = time.time()
+    if log and now - log[-1][0] < 4:
+        return
+    log.append((now, {h: (v.get("actual"), v.get("target")) for h, v in heaters.items() if v.get("actual") is not None}))
+
+
+# ---------- printer control (issue #5) ----------
+@app.get("/api/printers/{printer_id}/controls", dependencies=[Depends(auth)])
+async def printer_controls(printer_id: str) -> dict[str, Any]:
+    adapter = get_adapter(_printer(printer_id))
+    if not hasattr(adapter, "controls"):
+        return {"heaters": [], "fans": [], "lights": [], "speed": None, "history": False}
+    try:
+        return await adapter.controls()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+
+
+class Adjustment(BaseModel):
+    kind: str                     # heater | fan | light | speed
+    id: str = ""
+    value: float | bool
+    confirm: bool = False
+
+
+@app.post("/api/printers/{printer_id}/adjust", dependencies=[Depends(auth)])
+async def adjust(printer_id: str, req: Adjustment) -> dict[str, Any]:
+    adapter = get_adapter(_printer(printer_id))
+    caps = await printer_controls(printer_id)
+    value = req.value
+    if req.kind == "heater":
+        heater = next((h for h in caps.get("heaters") or [] if h["id"] == req.id), None)
+        if heater is None:
+            raise HTTPException(400, f"no heater {req.id!r} on this printer")
+        if not 0 <= float(value) <= float(heater["max"]):
+            raise HTTPException(400, f"{req.id} target must be 0-{heater['max']:g} °C")
+    elif req.kind == "fan":
+        if not any(f["id"] == req.id for f in caps.get("fans") or []):
+            raise HTTPException(400, f"no fan {req.id!r} on this printer")
+        if not 0 <= float(value) <= 100:
+            raise HTTPException(400, "fan speed must be 0-100 %")
+    elif req.kind == "light":
+        if not any(li["id"] == req.id for li in caps.get("lights") or []):
+            raise HTTPException(400, f"no light {req.id!r} on this printer")
+        value = bool(value)
+    elif req.kind == "speed":
+        sp = caps.get("speed") or {}
+        v = int(value)
+        if not sp or (sp.get("modes") and v not in sp["modes"]) or \
+                (not sp.get("modes") and not sp.get("min", 10) <= v <= sp.get("max", 300)):
+            raise HTTPException(400, "speed not supported by this printer")
+    else:
+        raise HTTPException(400, "kind must be heater, fan, light or speed")
+    # NF-05 / issue #5: nothing that could spoil a running print without an explicit confirmation
+    risky = req.kind == "heater" or (req.kind == "fan" and float(value) == 0)
+    if risky and not req.confirm:
+        try:
+            state = (await adapter.status()).get("state")
+        except Exception:  # noqa: BLE001
+            state = None
+        if printer_kind(state) in ("active", "paused"):
+            raise HTTPException(409, "a print is running - confirm this change (confirm=true)")
+    try:
+        await adapter.adjust(req.kind, req.id, value)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    return {"ok": True}
+
+
+@app.get("/api/printers/{printer_id}/temperatures", dependencies=[Depends(auth)])
+async def temperatures(printer_id: str) -> dict[str, Any]:
+    """Temperature history: from the printer where it keeps one (Moonraker, OctoPrint), else what
+    PrintShare saw in the last 30 minutes of status queries."""
+    adapter = get_adapter(_printer(printer_id))
+    if hasattr(adapter, "temperature_history"):
+        try:
+            return {"series": await adapter.temperature_history(), "source": "printer"}
+        except Exception:  # noqa: BLE001 - fall back to our own record
+            pass
+    now = time.time()
+    series: dict[str, list] = {}
+    for t, heaters in TEMP_LOG.get(printer_id, ()):
+        for h, (actual, target) in heaters.items():
+            series.setdefault(h, []).append([round(t - now), actual, target])
+    return {"series": series, "source": "printshare"}
 
 
 # ---------- camera (issue #3, DR-06): the app only talks to PrintShare, also away from home ----------

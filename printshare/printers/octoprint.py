@@ -85,6 +85,43 @@ class OctoPrint:
             r = await client.post(f"{self.base}/api/job", json=body)
             self._check(r, action.capitalize())
 
+    # ---------- printer control (issue #5) ----------
+    async def controls(self) -> dict[str, Any]:
+        return {"heaters": [{"id": "nozzle", "max": 300}, {"id": "bed", "max": 120}], "fans": [{"id": "part"}],
+                "lights": [], "speed": {"min": 10, "max": 300}, "history": True}
+
+    async def adjust(self, kind: str, target: str, value: Any) -> None:
+        async with self._client() as client:
+            if kind == "heater" and target == "nozzle":
+                r = await client.post(f"{self.base}/api/printer/tool",
+                                      json={"command": "target", "targets": {"tool0": float(value)}})
+            elif kind == "heater" and target == "bed":
+                r = await client.post(f"{self.base}/api/printer/bed", json={"command": "target", "target": float(value)})
+            elif kind == "fan" and target == "part":
+                pct = max(0, min(100, int(value)))
+                r = await client.post(f"{self.base}/api/printer/command",
+                                      json={"commands": [f"M106 S{int(pct * 255 / 100 + 0.5)}" if pct else "M107"]})
+            elif kind == "speed":
+                r = await client.post(f"{self.base}/api/printer/command", json={"commands": [f"M220 S{int(value)}"]})
+            else:
+                raise ValueError(f"unknown control {kind}/{target}")
+            self._check(r, "Control")
+
+    async def temperature_history(self) -> dict[str, list]:
+        import time
+        async with self._client() as client:
+            r = await client.get(f"{self.base}/api/printer", params={"history": "true", "limit": 120})
+            self._check(r, "Temperature history")
+            hist = (r.json().get("temperature") or {}).get("history") or []
+        now = time.time()
+        out: dict[str, list] = {"nozzle": [], "bed": []}
+        for h in hist:
+            for hid, key in (("nozzle", "tool0"), ("bed", "bed")):
+                t = h.get(key) or {}
+                if t.get("actual") is not None:
+                    out[hid].append([round(h.get("time", now) - now), t.get("actual"), t.get("target")])
+        return {k: v for k, v in out.items() if v}
+
     async def camera(self) -> Camera | None:
         """Webcam from OctoPrint's settings; URLs may be relative or point to 127.0.0.1 of the Pi."""
         async with self._client() as client:
@@ -132,5 +169,8 @@ class OctoPrint:
             "time_remaining_s": progress.get("printTimeLeft"),
             "nozzle": tool.get("actual"), "nozzle_target": tool.get("target"),
             "bed": bed.get("actual"), "bed_target": bed.get("target"),
+            "heaters": {"nozzle": {"actual": tool.get("actual"), "target": tool.get("target")},
+                        "bed": {"actual": bed.get("actual"), "target": bed.get("target")}},
+            "fans": {"part": None}, "lights": {}, "speed": None,
             "camera": f"{self.base}/webcam/?action=stream",
         }

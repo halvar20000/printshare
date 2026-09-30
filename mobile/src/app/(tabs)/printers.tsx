@@ -1,4 +1,4 @@
-// Live status and control of every printer (DR-04, DR-05, DR-06).
+// Live status and control of every printer (DR-04, DR-05, DR-06); details in control/[id] (issue #5).
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
@@ -144,6 +144,10 @@ export default function Printers() {
                 <Button kind="danger" title={t("cancelBtn")} icon="stop" onPress={() => control(p, "cancel")} style={{ flex: 1 }}
                   loading={acting === `${p.id}:cancel`} />
               </View>
+            ) : null}
+            {s ? (
+              <Button kind="secondary" title={t("control")} icon="options-outline" style={{ marginTop: 14 }}
+                onPress={() => router.push({ pathname: "/control/[id]", params: { id: p.id, name: p.name } })} />
             ) : null}
             {cams[p.id] ? (
               <Pressable onPress={() => router.push({ pathname: "/camera/[id]", params: { id: p.id, name: p.name } })}

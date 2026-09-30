@@ -95,6 +95,29 @@ class ElegooSDCP:
             else:
                 raise ValueError(f"unknown action {action!r}")
 
+    # ---------- printer control (issue #5): SDCP Cmd 403, verified by pycentauri on V0.3.0-o ----------
+    _FANS = {"part": "model", "aux": "auxiliary", "chamber": "chamber"}
+    _FAN_KEYS = {"part": "ModelFan", "aux": "AuxiliaryFan", "chamber": "BoxFan"}
+    _MAX = {"nozzle": 300, "bed": 110, "chamber": 60}       # pycentauri's safety caps
+
+    async def controls(self) -> dict[str, Any]:
+        return {"heaters": [{"id": h, "max": m} for h, m in self._MAX.items()],
+                "fans": [{"id": f} for f in self._FANS], "lights": [{"id": "light"}],
+                "speed": {"modes": [50, 100, 130, 160]}, "history": False}
+
+    async def adjust(self, kind: str, target: str, value: Any) -> None:
+        async with await self._connect(enable_control=True) as p:
+            if kind == "heater" and target in self._MAX:
+                await p.set_temperatures(**{target: float(value)})
+            elif kind == "fan" and target in self._FANS:
+                await p.set_fan_speed(**{self._FANS[target]: int(value)})
+            elif kind == "light" and target == "light":
+                await p.set_light(bool(value))
+            elif kind == "speed":
+                await p.set_print_speed(int(value))
+            else:
+                raise ValueError(f"unknown control {kind}/{target}")
+
     async def camera(self) -> Camera:
         # the CC1 serves its webcam as MJPEG on :3031 (pycentauri camera module)
         return Camera(stream_url=f"http://{self.cfg.host}:3031/video", name="Centauri Carbon")
@@ -103,10 +126,17 @@ class ElegooSDCP:
         async with await self._connect() as p:
             st = await p.status()
         pi = st.print_info
+        fans = st.fan_speed or {}
+        light = st.light or {}
         out: dict[str, Any] = {
             "nozzle": st.temp_nozzle, "nozzle_target": st.temp_nozzle_target,
             "bed": st.temp_bed, "bed_target": st.temp_bed_target,
             "camera": f"http://{self.cfg.host}:3031/video",
+            "heaters": {"nozzle": {"actual": st.temp_nozzle, "target": st.temp_nozzle_target},
+                        "bed": {"actual": st.temp_bed, "target": st.temp_bed_target},
+                        "chamber": {"actual": st.temp_chamber, "target": st.temp_chamber_target}},
+            "fans": {f: fans.get(k) for f, k in self._FAN_KEYS.items() if k in fans},
+            "lights": {"light": bool(light.get("SecondLight"))} if "SecondLight" in light else {},
         }
         if pi is not None:
             raw = pi.model_dump() if hasattr(pi, "model_dump") else dict(pi)
@@ -116,6 +146,7 @@ class ElegooSDCP:
                 "file": raw.get("filename"),
                 "progress": raw.get("progress"),
                 "layer": raw.get("current_layer"), "layers": raw.get("total_layer"),
+                "speed": raw.get("print_speed"),
                 "raw": raw,
             })
         return out

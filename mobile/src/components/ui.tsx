@@ -3,7 +3,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import {
-  ActivityIndicator, Modal, Platform, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View,
   type StyleProp, type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,6 +15,15 @@ export type IconName = ComponentProps<typeof Ionicons>["name"];
 export const tap = () => {
   if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
 };
+
+/** Yes/no question as a native alert (browser confirm() on web). */
+export function confirmAsync(title: string, ok: string, cancel: string, destructive = true): Promise<boolean> {
+  if (Platform.OS === "web") return Promise.resolve(globalThis.confirm?.(title) ?? true);
+  return new Promise(resolve => Alert.alert(title, undefined, [
+    { text: cancel, style: "cancel", onPress: () => resolve(false) },
+    { text: ok, style: destructive ? "destructive" : "default", onPress: () => resolve(true) },
+  ], { cancelable: true, onDismiss: () => resolve(false) }));
+}
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const c = useColors();

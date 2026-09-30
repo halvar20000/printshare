@@ -322,6 +322,25 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   focused), printers tab thumbnail (5 s), `camera/[id].tsx` fullscreen Live (WebView `<img>` MJPEG) / Still;
   away (route "remote") defaults to still images. `react-native-webview` added (native → new app build).
 
+## Printer control (issue #5, 2026-09-30, 0.10.0)
+- Adapters: `controls()` → `{"heaters": [{id, max}], "fans": [{id}], "lights": [{id}], "speed": {"modes"} |
+  {"min","max"} | null, "history": bool}`, `adjust(kind, id, value)`, status adds `heaters` {id:{actual,target}},
+  `fans` {id: %}, `lights` {id: bool}, `speed` (%).
+- CC1 (SDCP Cmd 403 via pycentauri, `enable_control=True`): TempTargetNozzle/Hotbed/Box, TargetFanSpeed
+  ModelFan/AuxiliaryFan/BoxFan, LightStatus.SecondLight, PrintSpeedPct modes 50/100/130/160 (Silent/Normal/
+  Sport/Ludicrous). Status read live on Thomas' CC; **setting values not yet tried on the real printer.**
+- Moonraker: objects discovered (`extruder`, `heater_bed`, `heater_generic *chamber*` or a chamber
+  `temperature_sensor` = display only, `fan` via M106/M107 (PWM `int(pct*255/100+0.5)`), `fan_generic` via
+  SET_FAN_SPEED, `led/neopixel/dotstar` via SET_LED, M220), max temps from `configfile.settings`, history from
+  `/server/temperature_store`. Dominique's COSMOS objects: fan, fan_generic aux_fan/case_fan, led case/hotend,
+  temperature_sensor chamber. OctoPrint: tool/bed/command endpoints, `?history=true`. PrusaLink: read only.
+- API: `/api/printers/<id>/controls|adjust|temperatures`; adjust validates against controls; heater changes
+  and fan → 0 while printing need `confirm: true` (else 409). No printer history → server logs status temps
+  (`TEMP_LOG`, 30 min, polled by the app every 3 s while the screen is open).
+- App: `control/[id].tsx` (button "Steuerung" on the printers tab), `components/tempchart.tsx` (react-native-svg);
+  confirms during a print and for high targets (nozzle ≥ 260, bed ≥ 100). Pure JS → no new native build needed
+  beyond the regular release.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

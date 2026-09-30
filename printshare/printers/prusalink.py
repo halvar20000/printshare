@@ -98,6 +98,13 @@ class PrusaLink:
                 raise ValueError(f"unknown action {action!r}")
             self._check(r, action.capitalize())
 
+    async def controls(self) -> dict[str, Any]:
+        # PrusaLink v1 has no API for temperatures, fans or light
+        return {"heaters": [], "fans": [], "lights": [], "speed": None, "history": False}
+
+    async def adjust(self, kind: str, target: str, value: Any) -> None:
+        raise ValueError("PrusaLink can't be controlled this way")
+
     async def camera(self) -> Camera | None:
         """PrusaLink cameras (e.g. CORE One): snapshot only; Prusa Connect cameras are not local."""
         async with self._client() as client:
@@ -134,5 +141,8 @@ class PrusaLink:
             "time_remaining_s": sj.get("time_remaining", job.get("time_remaining")),
             "nozzle": pr.get("temp_nozzle"), "nozzle_target": pr.get("target_nozzle"),
             "bed": pr.get("temp_bed"), "bed_target": pr.get("target_bed"),
+            "heaters": {"nozzle": {"actual": pr.get("temp_nozzle"), "target": pr.get("target_nozzle")},
+                        "bed": {"actual": pr.get("temp_bed"), "target": pr.get("target_bed")}},
+            "speed": pr.get("speed"),
             "camera": None,
         }

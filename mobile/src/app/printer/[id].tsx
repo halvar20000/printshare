@@ -2,21 +2,13 @@
 import * as DocumentPicker from "expo-document-picker";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
-import { Banner, Button, Divider, Row, Screen, Section, tap } from "@/components/ui";
+import { Banner, Button, Divider, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
 import type { Printer, PrinterProfile, UserProfile } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { useColors } from "@/lib/theme";
-
-function confirmAsync(title: string, ok: string, cancel: string): Promise<boolean> {
-  if (Platform.OS === "web") return Promise.resolve(globalThis.confirm?.(title) ?? true);
-  return new Promise(resolve => Alert.alert(title, undefined, [
-    { text: cancel, style: "cancel", onPress: () => resolve(false) },
-    { text: ok, style: "destructive", onPress: () => resolve(true) },
-  ], { cancelable: true, onDismiss: () => resolve(false) }));
-}
 
 export default function PrinterSettings() {
   const { id } = useLocalSearchParams<{ id: string }>();

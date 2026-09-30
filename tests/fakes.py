@@ -21,16 +21,21 @@ class FakeCentauri:
         self.runners: list[web.AppRunner] = []
         # like the real CC1 right after an upload: acknowledge a start (Ack 0) but stay idle
         self.drop_starts = drop_starts
+        self.params: list[dict] = []          # Cmd 403 payloads (temperatures, fans, light, speed)
         self.rest_status = rest_status  # 0 idle, 8 stopped, 9 completed (after the previous print)
         self.printing: str | None = None
 
     def _status(self) -> str:
         if self.printing:
             st = {"CurrentStatus": [1], "PrintInfo": {"Status": 13, "Filename": self.printing,
-                  "Progress": 42, "CurrentLayer": 5, "TotalLayer": 100}}
+                  "Progress": 42, "CurrentLayer": 5, "TotalLayer": 100, "PrintSpeedPct": 100}}
         else:
             st = {"CurrentStatus": [0], "TempOfNozzle": 25.0, "TempTargetNozzle": 0, "TempOfHotbed": 24.0,
-                  "TempTargetHotbed": 0, "PrintInfo": {"Status": self.rest_status, "Filename": ""}}
+                  "TempTargetHotbed": 0, "PrintInfo": {"Status": self.rest_status, "Filename": "", "PrintSpeedPct": 100}}
+        # as seen live on Thomas' CC1 (V0.3.0-o, 2026-09-30)
+        st.update({"TempOfBox": 23.1, "TempTargetBox": 0,
+                   "CurrentFanSpeed": {"ModelFan": 0, "AuxiliaryFan": 0, "BoxFan": 0},
+                   "LightStatus": {"SecondLight": 1, "RgbLight": [0, 0, 0]}})
         return json.dumps({"Status": st, "MainboardID": MAINBOARD, "Topic": f"sdcp/status/{MAINBOARD}"})
 
     async def ws(self, request: web.Request) -> web.WebSocketResponse:
@@ -54,6 +59,8 @@ class FakeCentauri:
                     self.drop_starts -= 1
                 else:
                     started = True
+            elif inner["Cmd"] == 403:
+                self.params.append(inner["Data"])
             elif inner["Cmd"] == 258:
                 data["FileList"] = [{"name": f"/local/{n}", "FileSize": len(b), "TotalLayers": 100,
                                      "CreateTime": 0} for n, b in self.files.items()]
@@ -136,6 +143,7 @@ class FakeMoonraker:
         self.actions: list[str] = []
         self.state = "printing"
         self.afc = afc
+        self.scripts: list[str] = []
         self.webcams = [{"name": "cam", "enabled": True, "service": "mjpegstreamer-adaptive",
                          "stream_url": "/webcam/?action=stream", "snapshot_url": "/webcam/?action=snapshot"}]
         self.runner: web.AppRunner | None = None
@@ -161,6 +169,12 @@ class FakeMoonraker:
             "extruder": {"temperature": 210.1, "target": 210},
             "heater_bed": {"temperature": 60.0, "target": 60},
             "virtual_sdcard": {"progress": 0.03},
+            "gcode_move": {"speed_factor": 1.0},
+            "fan": {"speed": 0.5},
+            "fan_generic aux_fan": {"speed": 0.0},
+            "led case": {"color_data": [[1.0, 1.0, 1.0, 1.0]]},
+            "temperature_sensor chamber": {"temperature": 31.5},
+            "configfile": {"settings": {"extruder": {"max_temp": 320}, "heater_bed": {"max_temp": 110}}},
         }
         if self.recorded:
             objs.update({o: self.recorded["status"].get(o, {}) for o in self.recorded["objects"]})
@@ -168,6 +182,18 @@ class FakeMoonraker:
             objs["AFC"] = {"current_load": "lane1", "lanes": list(AFC_LANES), "units": ["CANVAS CANVAS_1"]}
             objs.update({f"AFC_stepper {name}": dict(ln, name=name) for name, ln in AFC_LANES.items()})
         return objs
+
+    async def gcode_script(self, request: web.Request) -> web.Response:
+        self.scripts.append(request.query["script"])
+        return web.json_response({"result": "ok"})
+
+    async def temperature_store(self, request: web.Request) -> web.Response:
+        # like Moonraker: one value per second, oldest first
+        n = 1200
+        return web.json_response({"result": {
+            "extruder": {"temperatures": [20 + i * 0.15 for i in range(n)], "targets": [200.0] * n},
+            "heater_bed": {"temperatures": [20 + i * 0.03 for i in range(n)], "targets": [60.0] * n},
+            "temperature_sensor chamber": {"temperatures": [25.0] * n}}})
 
     async def webcams_list(self, request: web.Request) -> web.Response:
         return web.json_response({"result": {"webcams": self.webcams}})
@@ -197,6 +223,8 @@ class FakeMoonraker:
         app.router.add_get("/printer/objects/query", self.query)
         app.router.add_get("/printer/objects/list", self.objects_list)
         app.router.add_get("/server/webcams/list", self.webcams_list)
+        app.router.add_post("/printer/gcode/script", self.gcode_script)
+        app.router.add_get("/server/temperature_store", self.temperature_store)
         app.router.add_get("/webcam/", self.webcam)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
@@ -315,6 +343,7 @@ class FakeOctoPrint(_FakeHTTP):
         self.commands: list[dict] = []
         self.printing: str | None = None
         self.paused = False
+        self.posts: list[tuple[str, dict]] = []
 
     @web.middleware
     async def auth(self, request: web.Request, handler):
@@ -330,6 +359,9 @@ class FakeOctoPrint(_FakeHTTP):
         app.router.add_post("/api/job", self.post_job)
         app.router.add_get("/api/printer", self.printer)
         app.router.add_get("/api/settings", self.settings)
+        app.router.add_post("/api/printer/tool", self.tool)
+        app.router.add_post("/api/printer/bed", self.bed)
+        app.router.add_post("/api/printer/command", self.command)
         app.router.add_get("/webcam/", self.webcam)
 
     async def upload(self, request: web.Request) -> web.Response:
@@ -362,6 +394,18 @@ class FakeOctoPrint(_FakeHTTP):
             self.paused = body.get("action") == "pause"
         return web.Response(status=204)
 
+    async def tool(self, request: web.Request) -> web.Response:
+        self.posts.append(("tool", await request.json()))
+        return web.Response(status=204)
+
+    async def bed(self, request: web.Request) -> web.Response:
+        self.posts.append(("bed", await request.json()))
+        return web.Response(status=204)
+
+    async def command(self, request: web.Request) -> web.Response:
+        self.posts.append(("command", await request.json()))
+        return web.Response(status=204)
+
     async def settings(self, request: web.Request) -> web.Response:
         # OctoPi default: stream relative, snapshot pointing at the Pi itself
         return web.json_response({"webcam": {"webcamEnabled": True, "streamUrl": "/webcam/?action=stream",
@@ -375,8 +419,15 @@ class FakeOctoPrint(_FakeHTTP):
     async def printer(self, request: web.Request) -> web.Response:
         if not self.connected:
             return web.Response(status=409, text="Printer is not operational")
+        import time
+        temps = {"tool0": {"actual": 214.8, "target": 215.0}, "bed": {"actual": 60.1, "target": 60.0}}
+        if request.query.get("history") == "true":
+            temps["history"] = [{"time": int(time.time()) - 20, "tool0": {"actual": 200.0, "target": 215.0},
+                                 "bed": {"actual": 58.0, "target": 60.0}},
+                                {"time": int(time.time()), "tool0": {"actual": 214.8, "target": 215.0},
+                                 "bed": {"actual": 60.1, "target": 60.0}}]
         return web.json_response({
-            "temperature": {"tool0": {"actual": 214.8, "target": 215.0}, "bed": {"actual": 60.1, "target": 60.0}},
+            "temperature": temps,
             "state": {"text": "Printing" if self.printing else "Operational", "flags": {
                 "operational": True, "printing": bool(self.printing) and not self.paused, "paused": self.paused,
                 "pausing": False, "cancelling": False, "error": False, "ready": not self.printing,
