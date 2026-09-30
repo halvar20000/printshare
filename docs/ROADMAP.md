@@ -74,7 +74,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 6. Printer control endpoints pause/resume/cancel (DR-05); Moonraker WebSocket status (DR-02/04).
 7. Thumbnails: run Orca under Xvfb + Mesa (llvmpipe) or render our own preview (SL-02).
 8. User-preset import (PR-01/02): ✅ printer preset upload in the app (#2, 0.7.0: JSON or bundle, checked, assigned per printer in
-   `printers.d/`, survives managed mode); process/filament presets are stored but not selectable yet; Orca Cloud sync (#7) ⬜.
+   `printers.d/`, survives managed mode); process/filament presets selectable as "own profiles" since 0.13.0; Orca Cloud sync (#7) ⬜ waiting for a `client_id` from the Orca Cloud team.
 9. COSMOS: AFC lane selection + lane data from Moonraker (MA-02, #6). `PRINT_START … TOOL={initial_tool}` loads the lane (verified 2026-09-29).
 10. ntfy / Home Assistant notifications (BE-06, DR-12).
 11. Printer camera in the app (#3); G-code preview (#4): layer viewer done in 0.5.0, open: 3D view, current

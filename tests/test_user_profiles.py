@@ -143,3 +143,62 @@ def test_profile_api(tmp_path, lib, monkeypatch):
         assert client.delete(f"/api/profiles/{file}", headers=h).status_code == 200
         assert client.put("/api/printers/dom/profile", headers=h, json={"machine_file": "../x.json"}).status_code == 400
     os.environ.pop("PRINTSHARE_CONFIG", None)
+
+
+def _own(name: str, inherits: str, **values) -> bytes:
+    """A process/filament preset as the OrcaSlicer GUI exports it (user preset, `from: User`)."""
+    key = "filament_settings_id" if "PLA" in inherits else "print_settings_id"
+    return json.dumps({"name": name, "inherits": inherits, "from": "User", "instantiation": "true",
+                       key: [name] if key.startswith("filament") else name, **values}).encode()
+
+
+def test_own_process_and_filament_presets(tmp_path, lib):
+    """Uploaded quality/material presets are offered and resolved like system presets (#2, groundwork for #7)."""
+    user_profiles.store(tmp_path, "pla.json", _own("Meine PLA", "Elegoo PLA @ECC", nozzle_temperature=["205"]), lib)
+    user_profiles.store(tmp_path, "std.json", _own("Mein Standard", "0.20mm Standard @Elegoo CC 0.4 nozzle",
+                                                    wall_loops="3"), lib)
+    user_profiles.store(tmp_path, "other.json", _own("Fremdes PLA", "Elegoo PLA @ECC",
+                                                     compatible_printers=["Some Other Printer"]), lib)
+    assert set(user_profiles.user_presets(tmp_path, "filament")) == {"Meine PLA", "Fremdes PLA"}
+    assert user_profiles.compatible_user_presets(lib, tmp_path, "filament", [CC]) == ["Meine PLA"]
+    # "Meine PLA" inherits the base's printer list, so it only fits the Centauri
+    assert user_profiles.compatible_user_presets(lib, tmp_path, "filament", ["Some Other Printer"]) == ["Fremdes PLA"]
+    f = user_profiles.resolve_preset(lib, tmp_path, "filament", "Meine PLA", {"filament_colour": ["#FF0000"]})
+    assert (f["name"], f["type"], f["from"], f["nozzle_temperature"], f["compatible_printers"]) == \
+        ("Meine PLA", "filament", "system", ["205"], [CC])       # inherits resolved, marked for the CLI
+    assert "inherits" not in f and f["filament_colour"] == ["#FF0000"]
+    p = user_profiles.resolve_preset(lib, tmp_path, "process", "Mein Standard")
+    assert p["wall_loops"] == "3" and p["compatible_printers"] == [CC]
+    # system presets still resolve, also without a config folder
+    assert user_profiles.resolve_preset(lib, None, "filament", "Elegoo PLA @ECC")["name"] == "Elegoo PLA @ECC"
+
+
+def test_own_presets_in_the_api(tmp_path, lib, monkeypatch):
+    import importlib
+    import os
+
+    from fastapi.testclient import TestClient
+    c = tmp_path / "cfg" / "config.yaml"
+    c.parent.mkdir()
+    c.write_text(f"api_token: t\nwork_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\n"
+                 f"orca_profiles_dir: {lib.profiles_dir}\nprinters:\n  - id: dom\n    type: moonraker\n"
+                 "    url: http://127.0.0.1:7125\n    slicing:\n      machine_preset: cosmos\n")
+    monkeypatch.setenv("PRINTSHARE_CONFIG", str(c))
+    api = importlib.reload(importlib.import_module("printshare.api"))
+    h = {"Authorization": "Bearer t"}
+    with TestClient(api.app) as client:
+        for name, body in (("pla.json", _own("Meine PLA", "Elegoo PLA @ECC")),
+                           ("std.json", _own("Mein Standard", "0.20mm Standard @Elegoo CC 0.4 nozzle", wall_loops="3"))):
+            assert client.post("/api/profiles", headers=h, params={"filename": name}, content=body).status_code == 200
+        o = client.get("/api/printers/dom/options", headers=h).json()
+        assert o["own"] == {"materials": ["Meine PLA"], "processes": ["Mein Standard"]}
+        assert o["materials"][0] == "Meine PLA" and "Elegoo PLA @ECC" in o["materials"]
+        assert o["processes"][0] == "Mein Standard"
+        d = client.get("/api/printers/dom/options", headers=h, params={"process": "Mein Standard"}).json()["defaults"]
+        assert d["process"] == "Mein Standard" and d["walls"] == 3          # defaults read from the own preset
+        opts = api._validate_options(api.settings.printers[0],
+                                     api.OptionsModel(filament="Meine PLA", process="Mein Standard", filaments=["Meine PLA"]))
+        assert opts.filament == "Meine PLA"
+        with pytest.raises(api.HTTPException):
+            api._validate_options(api.settings.printers[0], api.OptionsModel(filament="Unbekannt"))
+    os.environ.pop("PRINTSHARE_CONFIG", None)

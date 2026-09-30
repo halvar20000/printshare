@@ -289,7 +289,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (no restart). App: Settings → printer → `printer/[id].tsx` (upload, choose, standard, long-press delete).
 - Real Orca test `test_uploaded_afc_cosmos_preset_slices` with Dominique's preset (`tests/data/afc_cosmos_machine.json`,
   host removed): his legacy placeholders `[first_layer_temperature]` expand fine (EXTRUDER=210 … TOOL=0).
-- Not yet: choosing uploaded process/filament presets (stored and listed, not offered in the pickers).
+- Since 0.13.0 uploaded process/filament presets are offered too (see "Own quality/material presets" below).
 
 ## Lane selection for AFC (issue #6, 2026-09-30, 0.8.0)
 - AFC (now `AFCProject/AFC-Klipper-Add-On`): `AFC` object lists `lanes`, `current_load`; each lane is its own
@@ -382,6 +382,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Web: Settings card "Stromversorgung" (datalist entity picker), printer tab Einschalten (offline) / Ausschalten.
   App: printers tab "Einschalten" while offline → "Drucker startet …" for 2 min, then a hint + button again;
   control screen section "Stromversorgung" (off with confirm, locked while printing). Not yet tried with a real plug.
+
+## Own quality/material presets + Orca Cloud status (issue #7, 2026-09-30, 0.13.0)
+- `user_profiles.user_presets(config_dir, kind)` (uploaded `process-*/filament-*.json` by `name`),
+  `resolve_preset()` (uploaded → `load_user_preset` + name/type/instantiation, else system `lib.resolve`),
+  `compatible_user_presets()` (no printer list or one of the printer's machines incl. its uploaded printer preset).
+  Used by `slicer.build_presets`, `api._defaults`, `/options` (own first + `own: {materials, processes}`) and
+  `_validate_options` (lazy: the library is only loaded for non-configured presets). Real Orca test:
+  `test_slice_with_own_process_and_filament_presets` (205 °C, wall_loops 4 in the G-code).
+- App: pickers group own presets as "Eigene Profile"; Settings → printer lists uploaded quality/material presets
+  (long press = delete). Web: optgroup "Eigene Profile", own qualities marked ★.
+- **Orca Cloud sync itself is blocked:** it needs a `client_id` registered with the Orca Cloud team and their
+  (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow
+  (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store
+  the pulled presets as `profiles/` files (kind prefix) so everything above works unchanged.
 
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).

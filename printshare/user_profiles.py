@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from .profiles import ProfileError, ProfileLibrary
+from .profiles import ProfileError, ProfileLibrary, load_user_preset
 
 PROFILES_DIR = "profiles"
 OVERLAY_DIR = "printers.d"
@@ -152,6 +152,49 @@ def list_profiles(config_dir: str | Path, lib: ProfileLibrary) -> list[dict[str,
             info = {"file": f.name, "kind": "unknown", "error": str(e)}
         out.append(info)
     return out
+
+
+def user_presets(config_dir: str | Path | None, kind: str) -> dict[str, Path]:
+    """Uploaded presets of one kind by their name - process and filament presets are chosen by name in the
+    app like system presets (later also the ones synced from Orca Cloud, #7)."""
+    d = profiles_dir(config_dir) if config_dir else None
+    out: dict[str, Path] = {}
+    for f in sorted(d.glob(f"{kind}-*.json")) if d and d.is_dir() else []:
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if isinstance(data, dict) and detect_kind(data) == kind and data.get("name"):
+            out.setdefault(str(data["name"]), f)
+    return out
+
+
+def resolve_preset(lib: ProfileLibrary, config_dir: str | Path | None, kind: str, name: str,
+                   overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+    """A flattened preset: an uploaded one (its `inherits` resolved against the bundled system presets)
+    if one has that name, else the OrcaSlicer system preset."""
+    path = user_presets(config_dir, kind).get(name)
+    if path is None:
+        return lib.resolve(kind, name, overrides)
+    data = load_user_preset(path, None, lib, kind)
+    data.update(name=name, type=kind, instantiation="true")
+    if overrides:
+        data.update(overrides)
+    return data
+
+
+def compatible_user_presets(lib: ProfileLibrary, config_dir: str | Path | None, kind: str,
+                            machines: list[str]) -> list[str]:
+    """Uploaded process/filament presets usable on a printer: no printer list (= all) or one of `machines`."""
+    out = []
+    for name in user_presets(config_dir, kind):
+        try:
+            cp = resolve_preset(lib, config_dir, kind, name).get("compatible_printers")
+        except (ProfileError, ValueError):
+            continue                    # base not in OrcaSlicer 2.4.2: shown with its error in the list
+        if not cp or (isinstance(cp, list) and any(m in cp for m in machines)):
+            out.append(name)
+    return sorted(out, key=str.lower)
 
 
 def resolve_file(config_dir: str | Path, file: str) -> Path:

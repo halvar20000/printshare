@@ -12,6 +12,7 @@ from pathlib import Path
 from . import model_info
 from .config import PrinterConfig, Settings, SlicingConfig
 from .profiles import ProfileLibrary, load_user_preset, write_preset
+from .user_profiles import resolve_preset
 
 
 class SliceError(RuntimeError):
@@ -91,12 +92,13 @@ class Slicer:
             machine = load_user_preset(Path(s.machine_file), s.machine_overrides, lib, "machine")
         else:
             machine = lib.resolve("machine", s.machine, s.machine_overrides)
-        process = lib.resolve("process", s.process, s.process_overrides)
+        cfg_dir = self.settings.config_dir or None        # uploaded process/filament presets (#2, #7)
+        process = resolve_preset(lib, cfg_dir, "process", s.process, s.process_overrides)
         count = max(len(colors or []), len(s.filaments), 1)
         names = [(s.filaments[i] if i < len(s.filaments) else None) or s.filament for i in range(count)]
         filaments = []
         for i, name in enumerate(names):
-            f = lib.resolve("filament", name, s.filament_overrides)
+            f = resolve_preset(lib, cfg_dir, "filament", name, s.filament_overrides)
             if colors and i < len(colors):
                 f["filament_colour"] = [colors[i]]
             filaments.append(f)

@@ -55,6 +55,8 @@ export type Defaults = {
 export type Options = {
   printer: string; materials: string[]; processes: string[]; plates: string[];
   supports: string[]; brims: string[]; defaults: Defaults;
+  /** uploaded quality/material presets among materials/processes (#2, later Orca Cloud #7) */
+  own?: { materials: string[]; processes: string[] };
 };
 export type JobOptions = Partial<{
   filament: string; process: string; bed_type: string; supports: string; brim: string;

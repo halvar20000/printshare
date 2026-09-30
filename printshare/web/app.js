@@ -12,6 +12,7 @@ const I18N = {
     edit: "Einstellungen ändern", new_job: "Neues Modell", no_jobs: "Noch keine Aufträge.",
     token: "API-Token", save: "Speichern", language: "Sprache", lang_auto: "Automatisch",
     install_title: "Als App installieren", install: "Installieren",
+    own_profiles: "Eigene Profile",
     power_title: "Stromversorgung",
     power_hint: "Den Drucker über eine smarte Steckdose in Home Assistant ein- und ausschalten (App und Drucker-Tab). Das Token erstellst du in Home Assistant unter Profil → Sicherheit → Langlebige Zugangs-Token.",
     power_addon: "PrintShare läuft als Home-Assistant-Add-on: Adresse und Token können leer bleiben, nur die Steckdose wählen.",
@@ -91,6 +92,7 @@ const I18N = {
     edit: "Change settings", new_job: "New model", no_jobs: "No jobs yet.",
     token: "API token", save: "Save", language: "Language", lang_auto: "Automatic",
     install_title: "Install as app", install: "Install",
+    own_profiles: "Own profiles",
     power_title: "Power",
     power_hint: "Switch the printer on and off with a smart plug in Home Assistant (app and printer tab). Create the token in Home Assistant under Profile → Security → Long-lived access tokens.",
     power_addon: "PrintShare runs as a Home Assistant add-on: address and token can stay empty, just choose the plug.",
@@ -251,10 +253,10 @@ function fillSelect(sel, items, value) {
   sel.replaceChildren(...items.map(([v, label]) => new Option(label, v)));
   if (value != null && items.some(([v]) => String(v) === String(value))) sel.value = value;
 }
-function fillGrouped(sel, names, value) {
+function fillGrouped(sel, names, value, own = []) {
   const groups = new Map();
   for (const n of names) {
-    const g = n.split(" ")[0];
+    const g = own.includes(n) ? t("own_profiles") : n.split(" ")[0];     // uploaded presets first, as one group
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(n);
   }
@@ -292,8 +294,10 @@ async function loadOptions(keep = null) {
   const id = $("printer").value;
   S.options = await api(`/api/printers/${encodeURIComponent(id)}/options`);
   const prefs = keep || store.json("ps_prefs_" + id) || {};
-  fillGrouped($("filament"), S.options.materials, prefs.filament ?? S.options.defaults.filament);
-  fillSelect($("process"), S.options.processes.map(p => [p, short(p)]), prefs.process ?? S.options.defaults.process);
+  fillGrouped($("filament"), S.options.materials, prefs.filament ?? S.options.defaults.filament, S.options.own?.materials);
+  const ownP = S.options.own?.processes || [];
+  fillSelect($("process"), S.options.processes.map(p => [p, ownP.includes(p) ? `★ ${short(p)}` : short(p)]),
+             prefs.process ?? S.options.defaults.process);
   fillSelect($("bed_type"), S.options.plates.map(p => [p, plateName(p)]), prefs.bed_type ?? S.options.defaults.bed_type);
   await loadDefaults(keep || {});
 }

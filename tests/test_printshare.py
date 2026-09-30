@@ -305,3 +305,35 @@ def test_uploaded_afc_cosmos_preset_slices(tmp_path):
     code = "\n".join(line for line in gcode.splitlines() if not line.startswith(";"))  # without the settings dump
     assert "[first_layer_temperature]" not in code and "SET_PRINT_STATS_INFO TOTAL_LAYER=" in code
     assert "M729" not in gcode and "M6211" not in gcode
+
+
+@needs_orca
+def test_slice_with_own_process_and_filament_presets(tmp_path):
+    """Uploaded quality + material presets (#2, groundwork for Orca Cloud #7) are used by the real Orca."""
+    import json
+
+    from printshare import user_profiles
+    from printshare.config import JobOptions, load_settings
+    from printshare.profiles import ProfileLibrary
+    from printshare.slicer import Slicer
+    conf = tmp_path / "cfg"
+    conf.mkdir()
+    (conf / "config.yaml").write_text(
+        f"work_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\norca_binary: {ORCA_ROOT}/AppRun\n"
+        f"orca_profiles_dir: {ORCA_ROOT}/resources/profiles\nprinters:\n  - id: cc\n    type: elegoo_sdcp\n"
+        "    host: 127.0.0.1\n")
+    lib = ProfileLibrary.cached(f"{ORCA_ROOT}/resources/profiles")
+    own = [{"name": "Meine PLA", "inherits": "Elegoo PLA @ECC", "from": "User", "filament_settings_id": ["Meine PLA"],
+            "nozzle_temperature": ["205"], "nozzle_temperature_initial_layer": ["205"]},
+           {"name": "Mein Standard", "inherits": "0.20mm Standard @Elegoo CC 0.4 nozzle", "from": "User",
+            "print_settings_id": "Mein Standard", "wall_loops": "4"}]
+    for p in own:
+        user_profiles.store(conf, f"{p['name']}.json", json.dumps(p).encode(), lib)
+    s = load_settings(conf / "config.yaml")
+    Path(s.work_dir).mkdir(parents=True, exist_ok=True)
+    printer = s.printers[0]
+    slicing = JobOptions(filament="Meine PLA", process="Mein Standard").apply(printer.slicing)
+    res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out", slicing)
+    gcode = res.gcode_path.read_text()
+    assert "M104 S205" in gcode or "M109 S205" in gcode, "own filament temperature not used"
+    assert "; wall_loops = 4" in gcode and "; filament_settings_id = \"Meine PLA\"" in gcode

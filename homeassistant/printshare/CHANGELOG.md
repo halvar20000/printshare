@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.0
+- Your own OrcaSlicer quality and material profiles: upload them like a printer profile (app: Settings →
+  printer, or the web page); they appear first under "Own profiles" when preparing a print and are used for
+  slicing (based on the bundled OrcaSlicer 2.4.2 profiles). Groundwork for syncing profiles from Orca Cloud.
+
 ## 0.12.0
 - Switch the printer on and off through a smart plug in Home Assistant: set it up on the web page
   (Settings → "Power"), then "Switch on" appears in the app and the printer tab while the printer is off.

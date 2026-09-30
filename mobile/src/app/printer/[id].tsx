@@ -16,7 +16,9 @@ export default function PrinterSettings() {
   const c = useColors();
   const [printer, setPrinter] = useState<Printer | null>(null);
   const [current, setCurrent] = useState<PrinterProfile | null>(null);
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [allProfiles, setProfiles] = useState<UserProfile[]>([]);
+  const profiles = allProfiles.filter(p => p.kind === "machine");
+  const ownPresets = allProfiles.filter(p => p.kind === "process" || p.kind === "filament");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
@@ -29,7 +31,7 @@ export default function PrinterSettings() {
         if (!alive) return;
         setPrinter(ps.find(p => p.id === id) ?? null);
         setCurrent(cur);
-        setProfiles(list.filter(p => p.kind === "machine"));
+        setProfiles(list);
       })
       .catch(e => { if (alive) setError((e as Error).message); });
     return () => { alive = false; };
@@ -64,8 +66,10 @@ export default function PrinterSettings() {
         // the usual case: one printer preset -> use it for this printer right away (issue #2)
         setCurrent(await api.setPrinterProfile(id, machine.file));
         setDone(t("profileUploaded", { name: machine.name ?? machine.file, printer: printer?.name ?? id }));
+      } else if (stored.length) {
+        setDone(t("profileStoredOther", { names: stored.map(p => p.name ?? p.file).join(", ") }));
       }
-      setProfiles((await api.profiles()).filter(p => p.kind === "machine"));
+      setProfiles(await api.profiles());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -115,9 +119,23 @@ export default function PrinterSettings() {
         ) : <ActivityIndicator color={c.accent} style={{ margin: 16 }} />}
       </Section>
 
+      {ownPresets.length ? (
+        <Section title={t("ownPresetsTitle")} footer={t("ownPresetsHelp")}>
+          {ownPresets.map((p, i) => (
+            <View key={p.file}>
+              {i ? <Divider /> : null}
+              <Row icon={p.kind === "filament" ? "color-fill-outline" : "speedometer-outline"} label={p.name ?? p.file}
+                sub={[t.table.kindNames[p.kind] ?? p.kind, p.inherits ? t("basedOn", { name: p.inherits }) : null]
+                  .filter(Boolean).join(" · ")}
+                chevron={false} onLongPress={() => remove(p)} />
+            </View>
+          ))}
+        </Section>
+      ) : null}
+
       <Button title={t("uploadProfile")} icon="cloud-upload-outline" onPress={() => { tap(); upload(); }}
         loading={busy} disabled={!current} />
-      {profiles.length ? (
+      {allProfiles.length ? (
         <Text style={{ color: c.sub, fontSize: 12, textAlign: "center", marginTop: 10 }}>{t("longPressDelete")}</Text>
       ) : null}
     </Screen>

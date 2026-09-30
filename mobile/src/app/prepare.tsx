@@ -225,8 +225,10 @@ export default function Prepare() {
   };
   const choices: Record<Exclude<Sheet, null>, Choice[]> = {
     printer: printers.map(p => ({ value: p.id, label: p.name, sub: kindLabel(p.id) })),
-    filament: (opts?.materials ?? []).map(m => ({ value: m, label: shortName(m), group: brandOf(m) })),
-    process: (opts?.processes ?? []).map(p => ({ value: p, label: shortName(p) })),
+    filament: (opts?.materials ?? []).map(m => ({ value: m, label: shortName(m),
+      group: opts?.own?.materials.includes(m) ? t("ownProfiles") : brandOf(m) })),
+    process: (opts?.processes ?? []).map(p => ({ value: p, label: shortName(p),
+      group: opts?.own?.processes.includes(p) ? t("ownProfiles") : undefined })),
     plate: (opts?.plates ?? []).map(p => ({ value: p, label: plateName(t, p) })),
     file: (files ?? []).map(f => ({ value: String(f.index), label: f.name,
       sub: f.size ? `${(f.size / 1048576).toFixed(1)} MB` : undefined })),

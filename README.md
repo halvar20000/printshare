@@ -102,6 +102,10 @@ It is kept in `/config/profiles/` and assigned in `/config/printers.d/<printer>.
 Unraid template / Home Assistant add-on regenerating `config.yaml`. A profile with its own `PRINT_START`
 (e.g. COSMOS with AFC) is not overridden by the built-in COSMOS start code.
 
+**Own quality and material profiles** work the same way: upload them (a bundle may contain printer, quality
+and material profiles together) and they appear first under *Own profiles* when you prepare a print, on every
+printer they fit. Syncing them automatically from Orca Cloud is planned (#7).
+
 API: `POST /api/profiles?filename=…` (raw body), `GET /api/profiles`, `DELETE /api/profiles/<file>`,
 `GET|PUT /api/printers/<id>/profile` `{"machine_file": "<file>" | null}`.
 

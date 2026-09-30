@@ -72,7 +72,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PrintShare", version="0.12.0")
+app = FastAPI(title="PrintShare", version="0.13.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -195,7 +195,8 @@ def printers() -> list[dict[str, Any]]:
 
 def _defaults(printer: PrinterConfig, process: str) -> dict[str, Any]:
     s = printer.slicing
-    proc = _library().resolve("process", process, s.process_overrides if process == s.process else None)
+    proc = user_profiles.resolve_preset(_library(), settings.config_dir or None, "process", process,
+                                        s.process_overrides if process == s.process else None)
     support = "off"
     if str(proc.get("enable_support", "0")) == "1":
         support = "tree" if str(proc.get("support_type", "")).startswith("tree") else "normal"
@@ -213,6 +214,17 @@ def _defaults(printer: PrinterConfig, process: str) -> dict[str, Any]:
             "layer_height": proc.get("layer_height")}
 
 
+def _own_presets(printer: PrinterConfig, kind: str, lib: ProfileLibrary) -> list[str]:
+    """Uploaded presets of `kind` that fit this printer (its system base or its own uploaded printer preset)."""
+    machines = [printer.slicing.machine]
+    if printer.slicing.machine_file:
+        try:
+            machines.append(json.loads(Path(printer.slicing.machine_file).read_text(encoding="utf-8")).get("name"))
+        except (OSError, ValueError):
+            pass
+    return user_profiles.compatible_user_presets(lib, settings.config_dir or None, kind, [m for m in machines if m])
+
+
 @app.get("/api/printers/{printer_id}/options", dependencies=[Depends(auth)])
 async def options(printer_id: str, process: str | None = None) -> dict[str, Any]:
     printer = _printer(printer_id)
@@ -221,6 +233,12 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
     materials, processes = await asyncio.gather(
         asyncio.to_thread(lib.compatible, "filament", machine),
         asyncio.to_thread(lib.compatible, "process", machine))
+    # uploaded quality/material presets (#2, later Orca Cloud #7) come first, marked as own
+    own_m, own_p = await asyncio.gather(
+        asyncio.to_thread(_own_presets, printer, "filament", lib),
+        asyncio.to_thread(_own_presets, printer, "process", lib))
+    materials = own_m + [m for m in materials if m not in own_m]
+    processes = own_p + [p for p in processes if p not in own_p]
     # configured presets are always offered, even if Orca doesn't list them as compatible
     for name, names in ((printer.slicing.filament, materials), (printer.slicing.process, processes)):
         if name not in names:
@@ -230,6 +248,7 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
     except ProfileError as e:
         raise HTTPException(400, str(e))
     return {"printer": printer.id, "materials": materials, "processes": processes,
+            "own": {"materials": own_m, "processes": own_p},
             "plates": PLATES, "supports": ["off", *SUPPORT_TYPES], "brims": list(BRIM_TYPES),
             "defaults": defaults}
 
@@ -720,13 +739,16 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     if opts.bed_type and opts.bed_type not in PLATES:
         raise HTTPException(400, f"unknown plate {opts.bed_type!r}")
     s = printer.slicing
+
+    def fits(kind: str, name: str) -> bool:        # only looked up for presets other than the configured ones
+        lib = _library()
+        return name in _own_presets(printer, kind, lib) or name in lib.compatible(kind, s.machine)
     for f in [opts.filament, *(opts.filaments or [])]:
-        if f and f != s.filament and f not in _library().compatible("filament", s.machine):
+        if f and f != s.filament and not fits("filament", f):
             raise HTTPException(400, f"material {f!r} does not fit {printer.name or printer.id}")
     if opts.filaments and len(opts.filaments) > 16:
         raise HTTPException(400, "at most 16 filaments")
-    if opts.process and opts.process != s.process and \
-            opts.process not in _library().compatible("process", s.machine):
+    if opts.process and opts.process != s.process and not fits("process", opts.process):
         raise HTTPException(400, f"quality {opts.process!r} does not fit {printer.name or printer.id}")
     return opts
 
