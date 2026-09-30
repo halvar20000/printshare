@@ -415,7 +415,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 ## Name: PocketPrint3D (decided 2026-09-30)
 - "PrintShare" sounded like paper printing (an established paper-printing app has that name) and "share" doesn't
   describe the app. New brand **PocketPrint3D** ("the 3D printer in your pocket"); domain **pocketprint3d.com**
-  (Thomas registers it at Hetzner; .app/.de/.eu were free too).
+  (registered by Thomas at Hetzner, 2026-09-30; .app/.de/.eu were free too).
 - Only the **visible** name changed (apps, web page, README, docs, HA add-on/repository display name, Unraid overview,
   Printables User-Agent). **Kept on purpose:** Python package / CLI `printshare`, repo `halvar20000/printshare`,
   image `ghcr.io/halvar20000/printshare`, HA slug `printshare`, Unraid container name `PrintShare`
