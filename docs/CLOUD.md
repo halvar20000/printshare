@@ -125,9 +125,9 @@ minutes). Prices are estimates – check hetzner.com.
 ## Order of work (suggestion)
 | # | What | Size |
 |---|---|---|
-| 1 | `docs/API.md` as contract (done), API kept stable | S |
-| 2 | Server: cloud mode – accounts, per-account data, limits, login | L |
-| 3 | Hetzner: server, domain, TLS, database, backups, monitoring | M |
+| 1 | `docs/API.md` as contract, API kept stable | S – done |
+| 2 | Server: cloud mode – accounts, per-account data, limits, login | L – stage 1 done (0.15.0); job persistence open |
+| 3 | Hetzner: server, domain, TLS, database, backups, monitoring | M – running (api.pocketprint3d.com); monitoring open |
 | 4 | Apps: account login, cloud server as default, printer discovery on the Wi-Fi | M (×2 apps) |
 | 5 | Apps: printer protocols for SDCP + Moonraker (send, start, status, control) | L (×2 apps) |
 | 6 | Impressum, privacy policy, store listings, beta with a few users | M |

@@ -2,6 +2,11 @@
 
 App flow (all /api endpoints need `Authorization: Bearer <api_token>` or `?token=`):
   GET  /api/info            server name/version (the app uses it to test the connection)
+  GET  /api/server          public: {"cloud": bool, "login": "token"|"email"} (no login needed)
+Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
+  POST /api/auth/code {"email", "lang"} -> login code by e-mail;  POST /api/auth/login {"email", "code", "device"}
+  GET /api/auth/me · POST /api/auth/logout · DELETE /api/auth/account?confirm=true · GET /api/admin/stats (operator)
+  POST /api/printers · PATCH|DELETE /api/printers/{id}   the account's printers (no addresses)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -35,6 +40,7 @@ One-shot (CLI / iOS Shortcut):
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import os
 import re
@@ -43,6 +49,7 @@ import shutil
 import time
 import uuid
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -53,12 +60,14 @@ from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, load_settings
+from .cloud import accounts
+from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
+from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, fetch_model, inspect_model, prepare_job, run_job, send_job
-from .printers import CONTROL_ACTIONS, LEVELING_TYPES, get_adapter
+from .printers import CONTROL_ACTIONS, LEVELING_TYPES, PRINTER_TYPES, get_adapter
 from . import lanes as lane_map
 from . import power as plug
 from . import user_profiles
@@ -72,7 +81,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.14.0")
+app = FastAPI(title="PocketPrint3D", version="0.15.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -83,18 +92,81 @@ _SEARCH: Search | None = None
 _TASKS: set[asyncio.Task] = set()  # keep references so tasks are not garbage-collected
 
 
-def auth(request: Request) -> None:
-    if not settings.api_token:
-        return  # no token configured (only acceptable on a trusted LAN)
+@dataclass
+class Account:
+    """Who is asking. Single household: "local" with the server's own configuration. Cloud mode: one user with
+    their own printers, profiles, uploads, downloads and G-code (a per-user copy of the settings)."""
+    id: str
+    settings: Settings
+    user: accounts.User | None = None
+    token: str | None = None
+
+    @property
+    def cloud(self) -> bool:
+        return self.user is not None
+
+
+ACCOUNTS: accounts.Accounts | None = None
+MAILER: Mailer | None = None
+
+
+def _cloud_setup() -> None:
+    global ACCOUNTS, MAILER
+    if not settings.cloud:
+        ACCOUNTS = MAILER = None
+        return
+    ACCOUNTS = accounts.Accounts(settings.cloud_db)
+    MAILER = BrevoMailer(settings.brevo_api_key) if settings.mail == "brevo" else LogMailer()
+
+
+def _user_account(user: accounts.User, token: str) -> Account:
+    base = settings
+    cfg_dir = Path(base.config_dir or "/config") / "users" / user.id
+    work, gcode = Path(base.work_dir) / "users" / user.id, Path(base.gcode_dir) / "users" / user.id
+    for d in (cfg_dir, work, gcode):
+        d.mkdir(parents=True, exist_ok=True)
+    printers = []
+    for p in ACCOUNTS.printers(user.id):
+        try:
+            printers.append(printer_from_config(p, cfg_dir, base.orca_profiles_dir))
+        except (TypeError, ValueError):      # a stored printer that no longer loads: leave it out, don't lock the user out
+            continue
+    view = dataclasses.replace(base, printers=printers, config_dir=str(cfg_dir), work_dir=str(work),
+                               gcode_dir=str(gcode), api_token="")
+    return Account(user.id, view, user, token)
+
+
+_cloud_setup()
+
+
+def _token(request: Request) -> str:
     header = request.headers.get("authorization", "")
-    token = header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
-    if not secrets.compare_digest(token, settings.api_token):
+    return header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
+
+
+def auth(request: Request) -> Account:
+    token = _token(request)
+    if settings.cloud:
+        user = ACCOUNTS.user_for_token(token) if token else None
+        if user is not None:
+            return _user_account(user, token)
+        if settings.api_token and token and secrets.compare_digest(token, settings.api_token):
+            return Account("admin", dataclasses.replace(settings, printers=[]))   # operator: stats only
+        raise HTTPException(401, "please log in")
+    if settings.api_token and not secrets.compare_digest(token, settings.api_token):
         raise HTTPException(401, "invalid token")
+    return Account("local", settings)       # no token configured: only acceptable on a trusted LAN
 
 
-def _printer(printer_id: str | None) -> PrinterConfig:
+def _local_only(acct: Account) -> None:
+    """In the cloud the printer is on the user's home network: the app talks to it, not the server."""
+    if acct.cloud or acct.id == "admin":
+        raise HTTPException(409, "the printer is reached through the app on your home network")
+
+
+def _printer(acct: "Account", printer_id: str | None) -> PrinterConfig:
     try:
-        return settings.printer(printer_id)
+        return acct.settings.printer(printer_id)
     except KeyError as e:
         raise HTTPException(404, str(e).strip("'\""))
 
@@ -109,27 +181,215 @@ def _spawn(coro) -> None:
     task.add_done_callback(_TASKS.discard)
 
 
-def _new_job(kind: str, state: str, request: dict[str, Any]) -> dict[str, Any]:
+def _new_job(kind: str, state: str, request: dict[str, Any], owner: str = "local") -> dict[str, Any]:
     # forget the oldest finished jobs (in memory only; G-code cleanup is BE-05)
     for old in sorted(JOBS.values(), key=lambda j: j["created"])[:max(0, len(JOBS) - MAX_JOBS + 1)]:
         if old["state"] not in ("slicing", "sending", "running"):
             JOBS.pop(old["id"], None)
     job = {"id": uuid.uuid4().hex[:10], "kind": kind, "state": state, "log": [], "result": None,
-           "error": None, "created": time.time(), "request": request}
+           "error": None, "created": time.time(), "request": request, "owner": owner}
     JOBS[job["id"]] = job
     return job
 
 
-@app.get("/api/info", dependencies=[Depends(auth)])
-def info() -> dict[str, Any]:
-    return {"name": "PrintShare", "version": app.version, "printers": len(settings.printers)}
+@app.get("/api/info")
+def info(acct: Account = Depends(auth)) -> dict[str, Any]:
+    return {"name": "PrintShare", "version": app.version, "printers": len(acct.settings.printers),
+            "cloud": settings.cloud}
 
 
-@app.get("/api/pairing", dependencies=[Depends(auth)])
-async def pairing(request: Request, url: str | None = None, remote: str | None = None) -> dict[str, Any]:
+@app.get("/api/server")
+def server_info() -> dict[str, Any]:
+    """Public (no login): what kind of server this is, so an app knows whether to ask for a token or an e-mail."""
+    return {"name": "PrintShare", "version": app.version, "cloud": settings.cloud,
+            "login": "email" if settings.cloud else "token"}
+
+
+# ---------- cloud mode: accounts (docs/CLOUD.md) ----------
+def _cloud_only() -> accounts.Accounts:
+    if not settings.cloud or ACCOUNTS is None:
+        raise HTTPException(404, "this server has no accounts - it uses an access token")
+    return ACCOUNTS
+
+
+def _client_ip(request: Request) -> str | None:
+    """Behind Caddy the client address comes in X-Forwarded-For (only trusted from a private proxy address)."""
+    peer = request.client.host if request.client else None
+    fwd = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if fwd and peer and re.match(r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|::1|fd)", peer):
+        return fwd
+    return peer
+
+
+class CodeRequest(BaseModel):
+    email: str
+    lang: str = "en"
+
+
+class LoginRequest(BaseModel):
+    email: str
+    code: str
+    device: str | None = None       # e.g. "Pixel 8" - shown later in a list of logged-in devices
+
+
+@app.post("/api/auth/code")
+async def auth_code(req: CodeRequest, request: Request) -> dict[str, Any]:
+    """Step 1: send a 6-digit login code by e-mail (creates the account on the first login)."""
+    db = _cloud_only()
+    try:
+        email = accounts.normalize_email(req.email)
+        code = await asyncio.to_thread(db.request_code, email, _client_ip(request))
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+    try:
+        await asyncio.to_thread(MAILER.send_code, email, code, "de" if req.lang.lower().startswith("de") else "en")
+    except MailError as e:
+        raise HTTPException(502, str(e))
+    return {"sent": True, "email": email}
+
+
+@app.post("/api/auth/login")
+async def auth_login(req: LoginRequest) -> dict[str, Any]:
+    """Step 2: the code from the e-mail -> a session token for this device (send it as `Authorization: Bearer`)."""
+    db = _cloud_only()
+    try:
+        user, token = await asyncio.to_thread(db.verify_code, req.email, req.code, req.device)
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+    return {"token": token, "user": {"id": user.id, "email": user.email}}
+
+
+@app.get("/api/auth/me")
+def auth_me(acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(404, "not logged in with an account")
+    return {"id": acct.user.id, "email": acct.user.email, "printers": len(acct.settings.printers),
+            "limits": {"slices_per_day": settings.limit_slices_per_day,
+                       "slices_today": ACCOUNTS.usage_today(acct.id), "upload_mb": settings.limit_upload_mb}}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(acct: Account = Depends(auth)) -> dict[str, Any]:
+    if acct.cloud:
+        ACCOUNTS.logout(acct.token)
+    return {"ok": True}
+
+
+@app.delete("/api/auth/account")
+def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Delete the account and everything of it: printers, profiles, uploads, G-code, jobs (Apple/Google require
+    this in the app). Needs ?confirm=true."""
+    if not acct.cloud:
+        raise HTTPException(404, "not logged in with an account")
+    if not confirm:
+        raise HTTPException(400, "deleting the account needs confirm=true")
+    for jid in [j["id"] for j in JOBS.values() if j.get("owner") == acct.id]:
+        JOBS.pop(jid, None)
+    for d in (acct.settings.config_dir, acct.settings.work_dir, acct.settings.gcode_dir):
+        shutil.rmtree(d, ignore_errors=True)
+    ACCOUNTS.delete_user(acct.id)
+    return {"deleted": True}
+
+
+@app.get("/api/admin/stats")
+def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
+    if acct.id != "admin":
+        raise HTTPException(403, "operator only")
+    return {**ACCOUNTS.stats(), "jobs_in_memory": len(JOBS),
+            "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
+
+
+# ---------- cloud mode: the account's printers (no addresses - the app reaches them at home) ----------
+MAX_PRINTERS = 10
+
+
+class PrinterSettings(BaseModel):
+    name: str | None = None
+    type: str | None = None             # elegoo_sdcp | moonraker | prusalink | octoprint
+    machine: str | None = None          # OrcaSlicer printer preset; required for Prusa/OctoPrint
+    cosmos: bool | None = None          # Centauri Carbon with OpenCentauri COSMOS (Klipper)
+    auto_leveling: bool | None = None
+
+
+def _printer_config(pid: str, req: PrinterSettings, old: dict[str, Any] | None = None) -> dict[str, Any]:
+    old = old or {}
+    name = (req.name if req.name is not None else old.get("name", "")).strip()
+    ptype = req.type or old.get("type")
+    if not 1 <= len(name) <= 60:
+        raise HTTPException(400, "the printer needs a name (up to 60 characters)")
+    if ptype not in PRINTER_TYPES:
+        raise HTTPException(400, f"type must be one of {', '.join(PRINTER_TYPES)}")
+    sl = dict(old.get("slicing") or {})
+    if req.machine is not None:
+        sl["machine"] = req.machine
+    if req.cosmos is not None:
+        if req.cosmos:
+            sl["machine_preset"] = "cosmos"
+        else:
+            sl.pop("machine_preset", None)
+    if ptype in ("prusalink", "octoprint") and not sl.get("machine"):
+        raise HTTPException(400, "choose the printer model (OrcaSlicer printer profile) for this printer")
+    if sl.get("machine"):
+        try:
+            _library().resolve("machine", sl["machine"])
+        except ProfileError as e:
+            raise HTTPException(400, str(e))
+    cfg = {"id": pid, "name": name, "type": ptype,
+           "auto_leveling": req.auto_leveling if req.auto_leveling is not None else old.get("auto_leveling", True),
+           "slicing": sl}
+    return cfg
+
+
+@app.post("/api/printers")
+def add_printer(req: PrinterSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(409, "printers are set up in the server's configuration")
+    if len(acct.settings.printers) >= MAX_PRINTERS:
+        raise HTTPException(400, f"at most {MAX_PRINTERS} printers per account")
+    pid = re.sub(r"[^a-z0-9]+", "-", (req.name or "printer").lower()).strip("-")[:24] or "printer"
+    if any(p.id == pid for p in acct.settings.printers):
+        pid = f"{pid}-{uuid.uuid4().hex[:4]}"
+    cfg = _printer_config(pid, req)
+    try:
+        printer_from_config(cfg, Path(acct.settings.config_dir), settings.orca_profiles_dir)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    ACCOUNTS.save_printer(acct.id, cfg)
+    return _printer_json(_user_account(acct.user, acct.token), pid)
+
+
+@app.patch("/api/printers/{printer_id}")
+def update_printer(printer_id: str, req: PrinterSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(409, "printers are set up in the server's configuration")
+    old = next((p for p in ACCOUNTS.printers(acct.id) if p["id"] == printer_id), None)
+    if old is None:
+        raise HTTPException(404, f"Unknown printer {printer_id!r}")
+    cfg = _printer_config(printer_id, req, old)
+    try:
+        printer_from_config(cfg, Path(acct.settings.config_dir), settings.orca_profiles_dir)
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, str(e))
+    ACCOUNTS.save_printer(acct.id, cfg)
+    return _printer_json(_user_account(acct.user, acct.token), printer_id)
+
+
+@app.delete("/api/printers/{printer_id}")
+def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(409, "printers are set up in the server's configuration")
+    if not ACCOUNTS.delete_printer(acct.id, printer_id):
+        raise HTTPException(404, f"Unknown printer {printer_id!r}")
+    user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})     # its profile/power settings too
+    return {"deleted": printer_id}
+
+
+@app.get("/api/pairing")
+async def pairing(request: Request, url: str | None = None, remote: str | None = None, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Pairing code for the app (issue #10), so nobody needs the command line or the container log.
     Addresses: query > PRINTSHARE_URL / HA server_url (remote: PRINTSHARE_REMOTE_URL / HA remote_url) >
     the address this page was opened with. Needs the token like every /api endpoint - the code contains it."""
+    _local_only(acct)
     import segno
 
     from . import bootstrap
@@ -158,9 +418,9 @@ async def pairing(request: Request, url: str | None = None, remote: str | None =
         warnings.append("localhost")          # the phone can't reach the server's own loopback address
     if request.headers.get("x-ingress-path") or "/api/hassio_ingress/" in home:
         warnings.append("ingress")            # Home Assistant ingress: not reachable for the app
-    link = pairing_link(home, settings.api_token, away)
+    link = pairing_link(home, acct.settings.api_token, away)
     svg = segno.make(link, error="m").svg_inline(scale=5, border=2, light="#fff", omitsize=True)  # viewBox: scales in CSS
-    return {"link": link, "svg": svg, "url": home, "remote_url": away, "token": settings.api_token,
+    return {"link": link, "svg": svg, "url": home, "remote_url": away, "token": acct.settings.api_token,
             "configured": bool(configured), "warnings": warnings}
 
 
@@ -183,19 +443,24 @@ def printer_kind(state: str | None) -> str:
     return "active"
 
 
-@app.get("/api/printers", dependencies=[Depends(auth)])
-def printers() -> list[dict[str, Any]]:
-    return [{"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine,
-             # DO-01: the app shows the leveling switch only where it works per print
-             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
-             # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
-             "power": plug.load(settings.config_dir, p.id) is not None}
-            for p in settings.printers]
+@app.get("/api/printers")
+def printers(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    return [_printer_json(acct, p.id) for p in acct.settings.printers]
 
 
-def _defaults(printer: PrinterConfig, process: str) -> dict[str, Any]:
+def _printer_json(acct: Account, printer_id: str) -> dict[str, Any]:
+    p = _printer(acct, printer_id)
+    return {"id": p.id, "name": p.name or p.id, "type": p.type, "machine": p.slicing.machine,
+            # DO-01: the app shows the leveling switch only where it works per print
+            "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
+            # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
+            "power": plug.load(acct.settings.config_dir, p.id) is not None,
+            "cosmos": p.slicing.machine_preset == "cosmos"}
+
+
+def _defaults(acct: "Account", printer: PrinterConfig, process: str) -> dict[str, Any]:
     s = printer.slicing
-    proc = user_profiles.resolve_preset(_library(), settings.config_dir or None, "process", process,
+    proc = user_profiles.resolve_preset(_library(), acct.settings.config_dir or None, "process", process,
                                         s.process_overrides if process == s.process else None)
     support = "off"
     if str(proc.get("enable_support", "0")) == "1":
@@ -214,7 +479,7 @@ def _defaults(printer: PrinterConfig, process: str) -> dict[str, Any]:
             "layer_height": proc.get("layer_height")}
 
 
-def _own_presets(printer: PrinterConfig, kind: str, lib: ProfileLibrary) -> list[str]:
+def _own_presets(acct: "Account", printer: PrinterConfig, kind: str, lib: ProfileLibrary) -> list[str]:
     """Uploaded presets of `kind` that fit this printer (its system base or its own uploaded printer preset)."""
     machines = [printer.slicing.machine]
     if printer.slicing.machine_file:
@@ -222,12 +487,12 @@ def _own_presets(printer: PrinterConfig, kind: str, lib: ProfileLibrary) -> list
             machines.append(json.loads(Path(printer.slicing.machine_file).read_text(encoding="utf-8")).get("name"))
         except (OSError, ValueError):
             pass
-    return user_profiles.compatible_user_presets(lib, settings.config_dir or None, kind, [m for m in machines if m])
+    return user_profiles.compatible_user_presets(lib, acct.settings.config_dir or None, kind, [m for m in machines if m])
 
 
-@app.get("/api/printers/{printer_id}/options", dependencies=[Depends(auth)])
-async def options(printer_id: str, process: str | None = None) -> dict[str, Any]:
-    printer = _printer(printer_id)
+@app.get("/api/printers/{printer_id}/options")
+async def options(printer_id: str, process: str | None = None, acct: Account = Depends(auth)) -> dict[str, Any]:
+    printer = _printer(acct, printer_id)
     lib = await asyncio.to_thread(_library)
     machine = printer.slicing.machine
     materials, processes = await asyncio.gather(
@@ -235,8 +500,8 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
         asyncio.to_thread(lib.compatible, "process", machine))
     # uploaded quality/material presets (#2, later Orca Cloud #7) come first, marked as own
     own_m, own_p = await asyncio.gather(
-        asyncio.to_thread(_own_presets, printer, "filament", lib),
-        asyncio.to_thread(_own_presets, printer, "process", lib))
+        asyncio.to_thread(_own_presets, acct, printer, "filament", lib),
+        asyncio.to_thread(_own_presets, acct, printer, "process", lib))
     materials = own_m + [m for m in materials if m not in own_m]
     processes = own_p + [p for p in processes if p not in own_p]
     # configured presets are always offered, even if Orca doesn't list them as compatible
@@ -244,7 +509,7 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
         if name not in names:
             names.insert(0, name)
     try:
-        defaults = await asyncio.to_thread(_defaults, printer, process or printer.slicing.process)
+        defaults = await asyncio.to_thread(_defaults, acct, printer, process or printer.slicing.process)
     except ProfileError as e:
         raise HTTPException(400, str(e))
     return {"printer": printer.id, "materials": materials, "processes": processes,
@@ -253,9 +518,10 @@ async def options(printer_id: str, process: str | None = None) -> dict[str, Any]
             "defaults": defaults}
 
 
-@app.get("/api/printers/{printer_id}/status", dependencies=[Depends(auth)])
-async def status(printer_id: str) -> dict[str, Any]:
-    printer = _printer(printer_id)
+@app.get("/api/printers/{printer_id}/status")
+async def status(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    printer = _printer(acct, printer_id)
     try:
         st = await get_adapter(printer).status()
     except Exception as e:  # noqa: BLE001
@@ -287,10 +553,10 @@ class PowerSettings(BaseModel):
     entity: str = ""
 
 
-def _power_cfg(printer_id: str, body: PowerSettings | None = None) -> plug.PowerConfig:
+def _power_cfg(acct: "Account", printer_id: str, body: PowerSettings | None = None) -> plug.PowerConfig:
     """Stored settings, or the ones being edited on the web page (token kept unless a new one is given)."""
-    _printer(printer_id)
-    stored = plug.load(settings.config_dir, printer_id)
+    _printer(acct, printer_id)
+    stored = plug.load(acct.settings.config_dir, printer_id)
     if body is None:
         if stored is None:
             raise HTTPException(404, "no power switch set up for this printer")
@@ -306,10 +572,11 @@ async def _power_call(coro_fn):
         raise HTTPException(502, str(e))
 
 
-@app.get("/api/printers/{printer_id}/power", dependencies=[Depends(auth)])
-async def power_state(printer_id: str) -> dict[str, Any]:
-    _printer(printer_id)
-    cfg = plug.load(settings.config_dir, printer_id)
+@app.get("/api/printers/{printer_id}/power")
+async def power_state(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    _printer(acct, printer_id)
+    cfg = plug.load(acct.settings.config_dir, printer_id)
     if cfg is None:
         return {"available": False, "state": None}
     try:
@@ -319,13 +586,14 @@ async def power_state(printer_id: str) -> dict[str, Any]:
         return {"available": True, "state": "unknown", "error": str(e)}
 
 
-@app.post("/api/printers/{printer_id}/power", dependencies=[Depends(auth)])
-async def power_switch(printer_id: str, req: PowerSwitch) -> dict[str, Any]:
-    cfg = _power_cfg(printer_id)
+@app.post("/api/printers/{printer_id}/power")
+async def power_switch(printer_id: str, req: PowerSwitch, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    cfg = _power_cfg(acct, printer_id)
     if not req.on:
         # never cut the power of a running print - checked here, not only in the app
         try:
-            state = (await get_adapter(_printer(printer_id)).status()).get("state")
+            state = (await get_adapter(_printer(acct, printer_id)).status()).get("state")
         except Exception:  # noqa: BLE001 - printer unreachable: it can't be printing
             state = None
         if printer_kind(state) in ("active", "paused"):
@@ -334,53 +602,59 @@ async def power_switch(printer_id: str, req: PowerSwitch) -> dict[str, Any]:
     return {"ok": True, "state": "on" if req.on else "off"}
 
 
-@app.get("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
-def power_config(printer_id: str) -> dict[str, Any]:
-    _printer(printer_id)
-    cfg = plug.load(settings.config_dir, printer_id)
+@app.get("/api/printers/{printer_id}/power/config")
+def power_config(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    _printer(acct, printer_id)
+    cfg = plug.load(acct.settings.config_dir, printer_id)
     return {"configured": cfg is not None, "addon": bool(os.environ.get("SUPERVISOR_TOKEN")),
             **(cfg or plug.PowerConfig()).public()}
 
 
-@app.put("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
-async def set_power_config(printer_id: str, req: PowerSettings) -> dict[str, Any]:
-    cfg = _power_cfg(printer_id, req)
+@app.put("/api/printers/{printer_id}/power/config")
+async def set_power_config(printer_id: str, req: PowerSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    cfg = _power_cfg(acct, printer_id, req)
     try:
         plug.get_power(cfg)._domain()            # address, token and entity format checked before saving
     except plug.PowerError as e:
         raise HTTPException(400, str(e))
-    plug.save(settings.config_dir, printer_id, cfg)
-    return power_config(printer_id)
+    plug.save(acct.settings.config_dir, printer_id, cfg)
+    return power_config(printer_id, acct)
 
 
-@app.delete("/api/printers/{printer_id}/power/config", dependencies=[Depends(auth)])
-def delete_power_config(printer_id: str) -> dict[str, Any]:
-    _printer(printer_id)
-    plug.save(settings.config_dir, printer_id, None)
-    return power_config(printer_id)
+@app.delete("/api/printers/{printer_id}/power/config")
+def delete_power_config(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    _printer(acct, printer_id)
+    plug.save(acct.settings.config_dir, printer_id, None)
+    return power_config(printer_id, acct)
 
 
-@app.post("/api/printers/{printer_id}/power/test", dependencies=[Depends(auth)])
-async def power_test(printer_id: str, req: PowerSettings) -> dict[str, Any]:
-    cfg = _power_cfg(printer_id, req)
+@app.post("/api/printers/{printer_id}/power/test")
+async def power_test(printer_id: str, req: PowerSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    cfg = _power_cfg(acct, printer_id, req)
     try:
         return {"ok": True, **(await plug.get_power(cfg).test())}
     except plug.PowerError as e:
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/api/printers/{printer_id}/power/entities", dependencies=[Depends(auth)])
-async def power_entities(printer_id: str, req: PowerSettings) -> list[dict[str, Any]]:
-    cfg = _power_cfg(printer_id, req)
+@app.post("/api/printers/{printer_id}/power/entities")
+async def power_entities(printer_id: str, req: PowerSettings, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    _local_only(acct)
+    cfg = _power_cfg(acct, printer_id, req)
     try:
         return await plug.get_power(cfg).entities()
     except plug.PowerError as e:
         raise HTTPException(502, str(e))
 
 
-@app.get("/api/printers/{printer_id}/controls", dependencies=[Depends(auth)])
-async def printer_controls(printer_id: str) -> dict[str, Any]:
-    adapter = get_adapter(_printer(printer_id))
+@app.get("/api/printers/{printer_id}/controls")
+async def printer_controls(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
     if not hasattr(adapter, "controls"):
         return {"heaters": [], "fans": [], "lights": [], "speed": None, "history": False}
     try:
@@ -396,10 +670,11 @@ class Adjustment(BaseModel):
     confirm: bool = False
 
 
-@app.post("/api/printers/{printer_id}/adjust", dependencies=[Depends(auth)])
-async def adjust(printer_id: str, req: Adjustment) -> dict[str, Any]:
-    adapter = get_adapter(_printer(printer_id))
-    caps = await printer_controls(printer_id)
+@app.post("/api/printers/{printer_id}/adjust")
+async def adjust(printer_id: str, req: Adjustment, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
+    caps = await printer_controls(printer_id, acct)
     value = req.value
     if req.kind == "heater":
         heater = next((h for h in caps.get("heaters") or [] if h["id"] == req.id), None)
@@ -442,11 +717,12 @@ async def adjust(printer_id: str, req: Adjustment) -> dict[str, Any]:
     return {"ok": True}
 
 
-@app.get("/api/printers/{printer_id}/temperatures", dependencies=[Depends(auth)])
-async def temperatures(printer_id: str) -> dict[str, Any]:
+@app.get("/api/printers/{printer_id}/temperatures")
+async def temperatures(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Temperature history: from the printer where it keeps one (Moonraker, OctoPrint), else what
     PocketPrint3D saw in the last 30 minutes of status queries."""
-    adapter = get_adapter(_printer(printer_id))
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
     if hasattr(adapter, "temperature_history"):
         try:
             return {"series": await adapter.temperature_history(), "source": "printer"}
@@ -461,8 +737,8 @@ async def temperatures(printer_id: str) -> dict[str, Any]:
 
 
 # ---------- camera (issue #3, DR-06): the app only talks to PocketPrint3D, also away from home ----------
-async def _camera(printer_id: str) -> cam.Camera:
-    printer = _printer(printer_id)
+async def _camera(acct: "Account", printer_id: str) -> cam.Camera:
+    printer = _printer(acct, printer_id)
     adapter = get_adapter(printer)
     try:
         source = await adapter.camera() if hasattr(adapter, "camera") else None
@@ -473,20 +749,22 @@ async def _camera(printer_id: str) -> cam.Camera:
     return source
 
 
-@app.get("/api/printers/{printer_id}/camera", dependencies=[Depends(auth)])
-async def camera_info(printer_id: str) -> dict[str, Any]:
+@app.get("/api/printers/{printer_id}/camera")
+async def camera_info(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
     try:
-        return (await _camera(printer_id)).info()
+        return (await _camera(acct, printer_id)).info()
     except HTTPException as e:
         if e.status_code == 404:
             return {"available": False, "stream": False, "snapshot": False, "name": None}
         raise
 
 
-@app.get("/api/printers/{printer_id}/camera/snapshot", dependencies=[Depends(auth)])
-async def camera_snapshot(printer_id: str, w: int | None = None) -> Response:
+@app.get("/api/printers/{printer_id}/camera/snapshot")
+async def camera_snapshot(printer_id: str, w: int | None = None, acct: Account = Depends(auth)) -> Response:
     """Current camera image; `w` scales it down (thumbnails, mobile data)."""
-    source = await _camera(printer_id)
+    _local_only(acct)
+    source = await _camera(acct, printer_id)
     try:
         jpeg = await cam.snapshot(source)
         if w:
@@ -496,10 +774,11 @@ async def camera_snapshot(printer_id: str, w: int | None = None) -> Response:
     return Response(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
-@app.get("/api/printers/{printer_id}/camera/stream", dependencies=[Depends(auth)])
-async def camera_stream(printer_id: str) -> StreamingResponse:
+@app.get("/api/printers/{printer_id}/camera/stream")
+async def camera_stream(printer_id: str, acct: Account = Depends(auth)) -> StreamingResponse:
     """Live MJPEG from the printer, passed through (ends when the app closes the view)."""
-    source = await _camera(printer_id)
+    _local_only(acct)
+    source = await _camera(acct, printer_id)
     try:
         content_type, chunks, close = await cam.open_stream(source)
     except cam.CameraError as e:
@@ -520,9 +799,10 @@ class ControlRequest(BaseModel):
     confirm: bool = False
 
 
-@app.post("/api/printers/{printer_id}/control", dependencies=[Depends(auth)])
-async def control(printer_id: str, req: ControlRequest) -> dict[str, Any]:
-    printer = _printer(printer_id)
+@app.post("/api/printers/{printer_id}/control")
+async def control(printer_id: str, req: ControlRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    printer = _printer(acct, printer_id)
     if req.action not in CONTROL_ACTIONS:
         raise HTTPException(400, f"action must be one of {', '.join(CONTROL_ACTIONS)}")
     if req.action == "cancel" and not req.confirm:
@@ -535,15 +815,15 @@ async def control(printer_id: str, req: ControlRequest) -> dict[str, Any]:
 
 
 # ---------- models ----------
-def _uploads() -> Path:
-    return Path(settings.work_dir) / "uploads"
+def _uploads(acct: "Account") -> Path:
+    return Path(acct.settings.work_dir) / "uploads"
 
 
-def _resolve_link(link: str) -> str:
+def _resolve_link(acct: "Account", link: str) -> str:
     """Only http(s) links and files uploaded through /api/uploads; never arbitrary server paths."""
     if link.startswith(UPLOAD_PREFIX):
         uid = link[len(UPLOAD_PREFIX):]
-        d = _uploads() / uid
+        d = _uploads(acct) / uid
         found = [f for f in d.iterdir() if f.is_file()] if re.fullmatch(r"[0-9a-f]{12}", uid) and d.is_dir() else []
         if not found:
             raise HTTPException(404, "uploaded file not found - please choose it again")
@@ -553,22 +833,23 @@ def _resolve_link(link: str) -> str:
     return link
 
 
-@app.post("/api/uploads", dependencies=[Depends(auth)])
-async def upload(request: Request, name: str) -> dict[str, Any]:
+@app.post("/api/uploads")
+async def upload(request: Request, name: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Model file from the phone (Files app, share menu); body = raw file content."""
     safe = re.sub(r"[^\w.\- ]+", "_", Path(name).name).strip()
     if not safe.lower().endswith(SLICEABLE):
         raise HTTPException(400, f"unsupported file type - use {', '.join(SLICEABLE)}")
     uid = uuid.uuid4().hex[:12]
-    d = _uploads() / uid
+    d = _uploads(acct) / uid
     d.mkdir(parents=True)
     size = 0
+    limit = settings.limit_upload_mb * 1048576 if acct.cloud else MAX_UPLOAD
     try:
         with open(d / safe, "wb") as fh:
             async for chunk in request.stream():
                 size += len(chunk)
-                if size > MAX_UPLOAD:
-                    raise HTTPException(413, f"file too large (max {MAX_UPLOAD // 1048576} MB)")
+                if size > limit:
+                    raise HTTPException(413, f"file too large (max {limit // 1048576} MB)")
                 fh.write(chunk)
         if size == 0:
             raise HTTPException(400, "empty file")
@@ -578,23 +859,23 @@ async def upload(request: Request, name: str) -> dict[str, Any]:
     return {"id": uid, "link": UPLOAD_PREFIX + uid, "name": safe, "size": size}
 
 
-@app.get("/api/files", dependencies=[Depends(auth)])
-async def files(link: str) -> list[dict[str, Any]]:
-    local = _resolve_link(link)
+@app.get("/api/files")
+async def files(link: str, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    local = _resolve_link(acct, link)
     try:
-        listed = await asyncio.to_thread(Fetcher(settings.thingiverse_token).list_files, local)
+        listed = await asyncio.to_thread(Fetcher(acct.settings.thingiverse_token).list_files, local)
         fl = [f for f in listed if f.sliceable]
     except FetchError as e:
         raise HTTPException(400, str(e))
     return [{"index": i, "name": f.name, "size": f.size} for i, f in enumerate(fl, 1)]
 
 
-@app.get("/api/inspect", dependencies=[Depends(auth)])
-async def inspect(link: str, file: str | None = None) -> dict[str, Any]:
+@app.get("/api/inspect")
+async def inspect(link: str, file: str | None = None, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Filaments (colours) of a model, so the app can offer a material per colour (MA-04)."""
-    local = _resolve_link(link)
+    local = _resolve_link(acct, link)
     try:
-        return await asyncio.to_thread(inspect_model, settings, local, file)
+        return await asyncio.to_thread(inspect_model, acct.settings, local, file)
     except FetchError as e:
         raise HTTPException(400, str(e))
 
@@ -610,38 +891,38 @@ def _profile_error(e: Exception) -> HTTPException:
     return HTTPException(400, str(e))
 
 
-@app.get("/api/profiles", dependencies=[Depends(auth)])
-async def profiles_list() -> list[dict[str, Any]]:
+@app.get("/api/profiles")
+async def profiles_list(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     lib = await asyncio.to_thread(_library)
-    return await asyncio.to_thread(user_profiles.list_profiles, settings.config_dir, lib)
+    return await asyncio.to_thread(user_profiles.list_profiles, acct.settings.config_dir, lib)
 
 
-@app.post("/api/profiles", dependencies=[Depends(auth)])
-async def profiles_upload(request: Request, filename: str = "profile.json") -> list[dict[str, Any]]:
+@app.post("/api/profiles")
+async def profiles_upload(request: Request, filename: str = "profile.json", acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     """A preset exported from OrcaSlicer (JSON) or a preset bundle (zip); raw body."""
     content = await request.body()
     lib = await asyncio.to_thread(_library)
     try:
-        return await asyncio.to_thread(user_profiles.store, settings.config_dir, filename, content, lib)
+        return await asyncio.to_thread(user_profiles.store, acct.settings.config_dir, filename, content, lib)
     except user_profiles.ProfileUploadError as e:
         raise _profile_error(e)
 
 
-@app.delete("/api/profiles/{file}", dependencies=[Depends(auth)])
-def profiles_delete(file: str) -> dict[str, Any]:
+@app.delete("/api/profiles/{file}")
+def profiles_delete(file: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     try:
-        user_profiles.delete(settings.config_dir, file, [p.id for p in settings.printers])
+        user_profiles.delete(acct.settings.config_dir, file, [p.id for p in acct.settings.printers])
     except user_profiles.ProfileUploadError as e:
         raise _profile_error(e)
     return {"deleted": file}
 
 
-@app.get("/api/printers/{printer_id}/profile", dependencies=[Depends(auth)])
-def printer_profile(printer_id: str) -> dict[str, Any]:
+@app.get("/api/printers/{printer_id}/profile")
+def printer_profile(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Printer preset in use: an uploaded one (`machine_file`), one set by hand in config.yaml
     (`config_file`), or the OrcaSlicer system preset `machine` (+ built-in `machine_preset`)."""
-    s = _printer(printer_id).slicing
-    uploaded = (user_profiles.read_overlay(settings.config_dir, printer_id).get("slicing") or {}).get("machine_file")
+    s = _printer(acct, printer_id).slicing
+    uploaded = (user_profiles.read_overlay(acct.settings.config_dir, printer_id).get("slicing") or {}).get("machine_file")
     return {"machine": s.machine, "machine_file": uploaded,
             "config_file": None if uploaded or not s.machine_file else Path(s.machine_file).name,
             "machine_preset": s.machine_preset}
@@ -651,25 +932,29 @@ class ProfileAssignment(BaseModel):
     machine_file: str | None = None
 
 
-@app.put("/api/printers/{printer_id}/profile", dependencies=[Depends(auth)])
-async def set_printer_profile(printer_id: str, req: ProfileAssignment) -> dict[str, Any]:
-    _printer(printer_id)
+@app.put("/api/printers/{printer_id}/profile")
+async def set_printer_profile(printer_id: str, req: ProfileAssignment, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _printer(acct, printer_id)
     lib = await asyncio.to_thread(_library)
     try:
-        await asyncio.to_thread(user_profiles.assign_machine, settings.config_dir, printer_id, req.machine_file, lib)
+        await asyncio.to_thread(user_profiles.assign_machine, acct.settings.config_dir, printer_id, req.machine_file, lib)
     except user_profiles.ProfileUploadError as e:
         raise _profile_error(e)
-    _reload_settings()
-    return printer_profile(printer_id)
+    if acct.cloud:
+        acct = _user_account(acct.user, acct.token)      # the printer view now includes the new profile
+    else:
+        _reload_settings()
+        acct = Account("local", settings)
+    return printer_profile(printer_id, acct)
 
 
-@app.get("/api/model-file", dependencies=[Depends(auth)])
-async def model_file(link: str, file: str | None = None) -> FileResponse:
+@app.get("/api/model-file")
+async def model_file(link: str, file: str | None = None, acct: Account = Depends(auth)) -> FileResponse:
     """One file of a model (index as in /api/files), so the app can show it in 3D before slicing (MQ-06).
     Served from the download cache that inspect and slicing use; never re-hosted anywhere else."""
-    local = _resolve_link(link)
+    local = _resolve_link(acct, link)
     try:
-        chosen, path = await asyncio.to_thread(fetch_model, settings, local, file)
+        chosen, path = await asyncio.to_thread(fetch_model, acct.settings, local, file)
     except FetchError as e:
         raise HTTPException(400, str(e))
     if path.stat().st_size > MAX_UPLOAD:
@@ -690,21 +975,21 @@ def _search_error(e: FetchError) -> HTTPException:
     return HTTPException(404 if "not found" in msg else 502 if "API error" in msg else 400, msg)
 
 
-@app.get("/api/sources", dependencies=[Depends(auth)])
-def sources() -> list[dict[str, Any]]:
+@app.get("/api/sources")
+def sources(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     return _search().list_sources()
 
 
-@app.get("/api/search", dependencies=[Depends(auth)])
-async def search(q: str, source: str = "printables", page: int = 1, sort: str = "relevant") -> dict[str, Any]:
+@app.get("/api/search")
+async def search(q: str, source: str = "printables", page: int = 1, sort: str = "relevant", acct: Account = Depends(auth)) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(_search().search, source, q, page, sort)
     except FetchError as e:
         raise _search_error(e)
 
 
-@app.get("/api/models/{source}/{model_id}", dependencies=[Depends(auth)])
-async def model_detail(source: str, model_id: str) -> dict[str, Any]:
+@app.get("/api/models/{source}/{model_id}")
+async def model_detail(source: str, model_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     try:
         return await asyncio.to_thread(_search().detail, source, model_id)
     except FetchError as e:
@@ -735,7 +1020,7 @@ class JobRequest(BaseModel):
     options: OptionsModel = Field(default_factory=OptionsModel)
 
 
-def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
+def _validate_options(acct: "Account", printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     opts = JobOptions(**o.model_dump())
     try:
         opts.process_overrides()
@@ -748,7 +1033,7 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
 
     def fits(kind: str, name: str) -> bool:        # only looked up for presets other than the configured ones
         lib = _library()
-        return name in _own_presets(printer, kind, lib) or name in lib.compatible(kind, s.machine)
+        return name in _own_presets(acct, printer, kind, lib) or name in lib.compatible(kind, s.machine)
     for f in [opts.filament, *(opts.filaments or [])]:
         if f and f != s.filament and not fits("filament", f):
             raise HTTPException(400, f"material {f!r} does not fit {printer.name or printer.id}")
@@ -759,17 +1044,25 @@ def _validate_options(printer: PrinterConfig, o: OptionsModel) -> JobOptions:
     return opts
 
 
-@app.post("/api/jobs", dependencies=[Depends(auth)])
-async def create_job(req: JobRequest) -> dict[str, Any]:
-    source = _resolve_link(req.link)
-    printer = _printer(req.printer)
-    opts = await asyncio.to_thread(_validate_options, printer, req.options)
-    job = _new_job("prepare", "slicing", req.model_dump())
+@app.post("/api/jobs")
+async def create_job(req: JobRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    source = _resolve_link(acct, req.link)
+    printer = _printer(acct, req.printer)
+    opts = await asyncio.to_thread(_validate_options, acct, printer, req.options)
+    if acct.cloud:
+        # free service: one slicing job at a time per account and a daily limit (docs/CLOUD.md)
+        if any(j.get("owner") == acct.id and j["state"] == "slicing" for j in JOBS.values()):
+            raise HTTPException(429, "another model of yours is being sliced - please wait until it is done")
+        try:
+            ACCOUNTS.count_slice(acct.id, settings.limit_slices_per_day)
+        except accounts.AccountError as e:
+            raise HTTPException(e.status, str(e))
+    job = _new_job("prepare", "slicing", req.model_dump(), owner=acct.id)
     job["printer"] = printer.id
 
     async def worker() -> None:
         try:
-            res = await prepare_job(settings, source, printer.id, req.file, opts, out_name=job["id"],
+            res = await prepare_job(acct.settings, source, printer.id, req.file, opts, out_name=job["id"],
                                     progress=lambda m: job["log"].append(m))
             job.update(state="sliced", result=res.as_dict())
         except Exception as e:  # noqa: BLE001 - report every failure to the phone
@@ -779,9 +1072,9 @@ async def create_job(req: JobRequest) -> dict[str, Any]:
     return {"job": job["id"]}
 
 
-@app.get("/api/jobs", dependencies=[Depends(auth)])
-def list_jobs() -> list[dict[str, Any]]:
-    jobs = sorted(JOBS.values(), key=lambda j: j["created"], reverse=True)
+@app.get("/api/jobs")
+def list_jobs(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    jobs = sorted((j for j in JOBS.values() if j.get("owner", "local") == acct.id), key=lambda j: j["created"], reverse=True)
     return [{k: j.get(k) for k in ("id", "kind", "state", "error", "created", "printer")}
             | {"link": j["request"].get("link"),
                "file": (j["result"] or {}).get("source_file"),
@@ -790,11 +1083,9 @@ def list_jobs() -> list[dict[str, Any]]:
             for j in jobs]
 
 
-@app.get("/api/jobs/{job_id}", dependencies=[Depends(auth)])
-def job(job_id: str) -> dict[str, Any]:
-    if job_id not in JOBS:
-        raise HTTPException(404, "unknown job")
-    return JOBS[job_id]
+@app.get("/api/jobs/{job_id}")
+def job(job_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    return _own_job(acct, job_id)
 
 
 class SendRequest(BaseModel):
@@ -805,11 +1096,10 @@ class SendRequest(BaseModel):
     lanes: dict[str, int] | None = None
 
 
-@app.post("/api/jobs/{job_id}/send", dependencies=[Depends(auth)])
-async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
-    job = JOBS.get(job_id)
-    if job is None:
-        raise HTTPException(404, "unknown job")
+@app.post("/api/jobs/{job_id}/send")
+async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    job = _own_job(acct, job_id)
     if req.start and not req.confirm:
         raise HTTPException(400, "starting a print needs confirm=true")  # NF-05
     if job["state"] not in ("sliced", "uploaded"):
@@ -822,7 +1112,7 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     if tools:
         # the chosen lanes must exist and hold filament (DR-03)
         try:
-            lanes = (await get_adapter(_printer(result.printer)).status()).get("lanes") or []
+            lanes = (await get_adapter(_printer(acct, result.printer)).status()).get("lanes") or []
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, f"printer not reachable: {e}")
         by_tool = {ln.get("tool"): ln for ln in lanes}
@@ -835,7 +1125,7 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     if req.start:
         # DR-03: never start on a printer that is still busy (an unreachable printer fails in send_job)
         try:
-            state = (await get_adapter(_printer(result.printer)).status()).get("state")
+            state = (await get_adapter(_printer(acct, result.printer)).status()).get("state")
         except Exception:  # noqa: BLE001
             state = None
         if printer_kind(state) in ("active", "paused"):
@@ -844,7 +1134,7 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
 
     async def worker() -> None:
         try:
-            await send_job(settings, result, req.start, progress=lambda m: job["log"].append(m),
+            await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
                            leveling=req.leveling, tools=tools)
             job["leveling"] = req.leveling
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
@@ -856,19 +1146,25 @@ async def send(job_id: str, req: SendRequest) -> dict[str, Any]:
     return {"job": job_id}
 
 
-def _job_gcode(job_id: str) -> tuple[dict[str, Any], Path]:
+def _own_job(acct: Account, job_id: str) -> dict[str, Any]:
+    """A job of this account (other accounts' jobs don't exist for it)."""
     job = JOBS.get(job_id)
-    if job is None:
+    if job is None or job.get("owner", "local") != acct.id:
         raise HTTPException(404, "unknown job")
+    return job
+
+
+def _job_gcode(acct: "Account", job_id: str) -> tuple[dict[str, Any], Path]:
+    job = _own_job(acct, job_id)
     gcode = Path((job.get("result") or {}).get("gcode") or "")
     if not gcode.name or not gcode.is_file():
         raise HTTPException(404, "no G-code for this job (yet)")
     return job, gcode
 
 
-def _bed(printer_id: str) -> tuple[float, float] | None:
+def _bed(acct: "Account", printer_id: str) -> tuple[float, float] | None:
     try:
-        s = settings.printer(printer_id).slicing
+        s = acct.settings.printer(printer_id).slicing
         area = (load_user_preset(Path(s.machine_file), None, _library(), "machine") if s.machine_file
                 else _library().resolve("machine", s.machine)).get("printable_area")
         return gcode_preview.bed_size(area)
@@ -876,34 +1172,32 @@ def _bed(printer_id: str) -> tuple[float, float] | None:
         return None
 
 
-@app.get("/api/jobs/{job_id}/preview", dependencies=[Depends(auth)])
-async def preview(job_id: str, format: int = 1) -> dict[str, Any]:
+@app.get("/api/jobs/{job_id}/preview")
+async def preview(job_id: str, format: int = 1, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Layer data for the G-code viewer (SL-06/07). Apps ask for the format they understand
     (?format=2 adds the filament per line); without it, app builds from before 0.6.0 keep working."""
-    job, gcode = _job_gcode(job_id)
-    bed = await asyncio.to_thread(_bed, job["result"]["printer"])
+    job, gcode = _job_gcode(acct, job_id)
+    bed = await asyncio.to_thread(_bed, acct, job["result"]["printer"])
     data = await asyncio.to_thread(gcode_preview.build, gcode, bed)
     return gcode_preview.as_version(data, format)
 
 
-@app.get("/api/jobs/{job_id}/gcode", dependencies=[Depends(auth)])
-def download_gcode(job_id: str) -> FileResponse:
+@app.get("/api/jobs/{job_id}/gcode")
+def download_gcode(job_id: str, acct: Account = Depends(auth)) -> FileResponse:
     """The sliced G-code itself (SL-10)."""
-    job, gcode = _job_gcode(job_id)
+    job, gcode = _job_gcode(acct, job_id)
     name = Path((job.get("result") or {}).get("source_file") or gcode.stem).stem + ".gcode"
     return FileResponse(gcode, media_type="text/x.gcode", filename=name)
 
 
-@app.delete("/api/jobs/{job_id}", dependencies=[Depends(auth)])
-def delete_job(job_id: str) -> dict[str, Any]:
-    job = JOBS.get(job_id)
-    if job is None:
-        raise HTTPException(404, "unknown job")
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    job = _own_job(acct, job_id)
     if job["state"] in ("slicing", "sending", "running"):
         raise HTTPException(409, "job is still running")
     JOBS.pop(job_id)
     if job.get("kind") == "prepare" and job.get("printer"):
-        shutil.rmtree(Path(settings.gcode_dir) / job["printer"] / job_id, ignore_errors=True)
+        shutil.rmtree(Path(acct.settings.gcode_dir) / job["printer"] / job_id, ignore_errors=True)
     return {"deleted": job_id}
 
 
@@ -915,14 +1209,15 @@ class PrintRequest(BaseModel):
     start: bool = True
 
 
-@app.post("/api/print", dependencies=[Depends(auth)])
-async def print_(req: PrintRequest) -> dict[str, Any]:
-    source = _resolve_link(req.link)
-    job = _new_job("oneshot", "running", req.model_dump())
+@app.post("/api/print")
+async def print_(req: PrintRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    source = _resolve_link(acct, req.link)
+    job = _new_job("oneshot", "running", req.model_dump(), owner=acct.id)
 
     async def worker() -> None:
         try:
-            res = await run_job(settings, source, req.printer, req.file, send=True, start=req.start,
+            res = await run_job(acct.settings, source, req.printer, req.file, send=True, start=req.start,
                                 progress=lambda m: job["log"].append(m))
             job.update(state="done", result=res.as_dict())
         except Exception as e:  # noqa: BLE001 - report every failure to the phone

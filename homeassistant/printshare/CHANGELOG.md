@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.0
+- Groundwork for the hosted PocketPrint3D service (cloud mode, off by default): login with an e-mail code,
+  separate printers, profiles, uploads and jobs per account, limits for the free service. Nothing changes for
+  your own server (Unraid, Home Assistant, Docker).
+
 ## 0.14.0
 - Plate options when preparing a print: **several copies** (as many as fit are arranged on the plate; the review
   says if fewer fit), **tilt** the model by 90° steps onto another side, **size** in percent and **lay flat

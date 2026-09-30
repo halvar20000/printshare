@@ -459,6 +459,21 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (accounts, multi-user, limits) is the next development step (docs/CLOUD.md, order of work #2).
 - Prices checked live 2026-09-30: CX33 10.19 €, CAX21 12.59 € gross/month (older estimates in docs/CLOUD.md were low).
 
+## Cloud mode, stage 1 (2026-09-30, 0.15.0)
+- `settings.cloud` (config `cloud: true` or env `PRINTSHARE_CLOUD=1`); `printshare/cloud/accounts.py` (SQLite
+  `cloud_db`, default /data/cloud.db: users, login_codes, sessions, printers, usage; codes + session tokens stored as
+  SHA-256; rate limits 3 codes/address/15 min, 10/IP/hour, 5 attempts, 10 min TTL) and `cloud/mail.py`
+  (`BrevoMailer` via `https://api.brevo.com/v3/smtp/email`, sender no-reply@pocketprint3d.com; `LogMailer` for tests).
+- `api.Account` per request (`auth` returns it): home server = `Account("local", settings)`, cloud user = a
+  `dataclasses.replace(settings, …)` view with the user's printers (from the DB, via `config.printer_from_config`)
+  and own dirs `config/users/<id>`, `work/users/<id>` (uploads + download cache per user), `gcode/users/<id>`.
+  Every endpoint takes `acct: Account = Depends(auth)`; jobs carry `owner`; `_local_only(acct)` → 409 for
+  status/control/camera/power/adjust/send/print in the cloud (the app relays at home). Operator token in the cloud =
+  `Account("admin")`: only `/api/admin/stats`.
+- Limits: `limit_slices_per_day` (30), one slicing job per account, `limit_upload_mb` (100). Tests `tests/test_cloud.py`.
+- Not yet: web page login, app login + LAN relay (Android: me, iOS: Dominique per docs/API.md), job persistence
+  (jobs are still in memory), Brevo key on the server (cloud mode stays off there until then).
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

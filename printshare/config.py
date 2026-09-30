@@ -191,6 +191,13 @@ class Settings:
     max_parallel_slices: int = 1   # BE-01: further slice jobs wait in a queue
     keep_work_files: bool = False
     printers: list[PrinterConfig] = field(default_factory=list)
+    # cloud mode (hosted service, docs/CLOUD.md): accounts instead of one token, printers per user
+    cloud: bool = False
+    cloud_db: str = "/data/cloud.db"
+    mail: str = "log"                  # "brevo" sends login codes; "log" only for development/tests
+    brevo_api_key: str = ""
+    limit_slices_per_day: int = 30
+    limit_upload_mb: int = 100
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
         if not self.printers:
@@ -230,6 +237,22 @@ def _machine_defaults(sl: dict[str, Any], profiles_dir: str, printer_id: str) ->
             sl[key] = value
 
 
+def printer_from_config(p: dict[str, Any], config_dir: Path, profiles_dir: str) -> PrinterConfig:
+    """One printer from config.yaml (or, in cloud mode, from the account database)."""
+    p = dict(p)
+    sl = dict(p.pop("slicing", {}) or {})
+    # settings made in the app (printers.d/<id>.yaml) win over config.yaml, which the Unraid template /
+    # Home Assistant add-on may regenerate on every start
+    overlay_file = config_dir / "printers.d" / f"{p.get('id')}.yaml"
+    if overlay_file.is_file():
+        sl.update((yaml.safe_load(overlay_file.read_text(encoding="utf-8")) or {}).get("slicing") or {})
+    mf = sl.get("machine_file")
+    if mf and not Path(mf).is_absolute():
+        sl["machine_file"] = str(config_dir / "profiles" / mf)     # uploaded preset: stored by name
+    _machine_defaults(sl, profiles_dir, p.get("id", "?"))
+    return PrinterConfig(slicing=SlicingConfig(**sl), **p)
+
+
 def load_settings(path: str | Path | None = None) -> Settings:
     path = Path(path or os.environ.get("PRINTSHARE_CONFIG", "/config/config.yaml"))
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -238,21 +261,15 @@ def load_settings(path: str | Path | None = None) -> Settings:
     config_dir = path.parent
     raw.setdefault("config_dir", str(config_dir))
     for p in raw.pop("printers", []) or []:
-        sl = dict(p.pop("slicing", {}) or {})
-        # settings made in the app (printers.d/<id>.yaml) win over config.yaml, which the Unraid template /
-        # Home Assistant add-on may regenerate on every start
-        overlay_file = config_dir / "printers.d" / f"{p.get('id')}.yaml"
-        if overlay_file.is_file():
-            sl.update((yaml.safe_load(overlay_file.read_text(encoding="utf-8")) or {}).get("slicing") or {})
-        mf = sl.get("machine_file")
-        if mf and not Path(mf).is_absolute():
-            sl["machine_file"] = str(config_dir / "profiles" / mf)     # uploaded preset: stored by name
-        _machine_defaults(sl, profiles_dir, p.get("id", "?"))
-        printers.append(PrinterConfig(slicing=SlicingConfig(**sl), **p))
+        printers.append(printer_from_config(p, config_dir, profiles_dir))
     s = Settings(printers=printers, **raw)
     # empty variables (e.g. unused fields of the Unraid template) must not clear the token
     s.api_token = os.environ.get("PRINTSHARE_API_TOKEN") or s.api_token
     s.thingiverse_token = os.environ.get("THINGIVERSE_TOKEN") or s.thingiverse_token
+    if os.environ.get("PRINTSHARE_CLOUD", "").lower() in ("1", "true", "yes"):
+        s.cloud = True
+    s.brevo_api_key = os.environ.get("BREVO_API_KEY") or s.brevo_api_key
+    s.mail = os.environ.get("PRINTSHARE_MAIL") or s.mail
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

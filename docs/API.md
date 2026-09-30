@@ -37,6 +37,63 @@ map the common ones to their own texts (see `friendlyError` in `mobile/src/lib/a
 - `/api/info` → `version` (the pyproject version) tells an app what the server can do.
 - Every new endpoint is added to this file in the same pull request.
 
+## Two kinds of server: home server and cloud
+
+`GET /api/server` needs **no login** and tells the app which kind it talks to:
+
+```http
+GET /api/server
+→ 200 {"name": "PrintShare", "version": "0.15.0", "cloud": false, "login": "token"}     home server (Unraid, HA, Docker)
+→ 200 {"name": "PrintShare", "version": "0.15.0", "cloud": true,  "login": "email"}     https://api.pocketprint3d.com
+```
+
+| | Home server (`login: token`) | Cloud (`login: email`) |
+|---|---|---|
+| Login | pairing QR code / token (below) | e-mail code → session token per device ([Cloud accounts](#cloud-accounts)) |
+| Printers | from the server's configuration | each account adds its own (`POST /api/printers`), **no addresses** |
+| Printer status, control, camera, temperatures, power, `/send` | through the server | **`409`** `"the printer is reached through the app on your home network"` – the app talks to the printer itself on the Wi-Fi (docs/CLOUD.md) |
+| Slicing, search, uploads, jobs, preview, G-code, profiles | ✅ | ✅, separate per account, with limits |
+
+## Cloud accounts
+
+Only on a cloud server (`/api/server` → `cloud: true`); a home server answers these with `404`.
+
+```http
+POST /api/auth/code   {"email": "anna@example.com", "lang": "de"}
+→ 200 {"sent": true, "email": "anna@example.com"}        a 6-digit code is e-mailed (valid 10 min, 5 attempts)
+→ 400 invalid address · 429 too many codes (3 per address per 15 min, 10 per network per hour) · 502 mail not sent
+
+POST /api/auth/login  {"email": "anna@example.com", "code": "123456", "device": "Pixel 8"}
+→ 200 {"token": "pp3d_…", "user": {"id": "4f2c…", "email": "anna@example.com"}}
+→ 401 "wrong code" / "the code has expired - please request a new one"
+```
+The first login creates the account. Store the token in the Keychain / Keystore and send it like the home
+server's token: `Authorization: Bearer pp3d_…`. It stays valid until logout or account deletion.
+
+| | |
+|---|---|
+| `GET /api/auth/me` | `{"id", "email", "printers": 2, "limits": {"slices_per_day": 30, "slices_today": 3, "upload_mb": 100}}` |
+| `POST /api/auth/logout` | ends this device's session → `{"ok": true}` |
+| `DELETE /api/auth/account?confirm=true` | deletes the account with all printers, profiles, uploads, G-code and jobs (required by Apple/Google in the app; ask the user first) → `{"deleted": true}` |
+
+**Limits of the free service** (answer `429` with a message to show): 30 slices per day and account, one slicing
+job at a time per account, uploads up to 100 MB (`413`). Values may change – read them from `/api/auth/me`.
+
+### Printers of an account (cloud)
+```http
+POST /api/printers   {"name": "Werkstatt CC", "type": "elegoo_sdcp"}
+POST /api/printers   {"name": "COSMOS", "type": "moonraker", "cosmos": true}
+POST /api/printers   {"name": "MK4", "type": "prusalink", "machine": "Prusa MK4S 0.4 nozzle"}
+→ 200 {"id": "werkstatt-cc", "name": "Werkstatt CC", "type": "elegoo_sdcp", "machine": "Elegoo Centauri Carbon 0.4 nozzle",
+       "leveling": true, "power": false, "cosmos": false}
+
+PATCH  /api/printers/{id}   any of {"name", "type", "machine", "cosmos", "auto_leveling"}  → the printer as above
+DELETE /api/printers/{id}   → {"deleted": "werkstatt-cc"}
+```
+`machine` (OrcaSlicer printer profile) is required for `prusalink` / `octoprint`; the Centauri profile is the default
+otherwise. At most 10 printers per account. The address of the printer stays in the app (it finds the printer on
+the Wi-Fi) – the server never stores or needs it.
+
 ## Connecting the app (pairing)
 
 The server shows a QR code (web page → Settings → "App verbinden", `printshare pair` on the command line, or the

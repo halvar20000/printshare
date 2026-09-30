@@ -196,9 +196,10 @@ def test_own_presets_in_the_api(tmp_path, lib, monkeypatch):
         assert o["processes"][0] == "Mein Standard"
         d = client.get("/api/printers/dom/options", headers=h, params={"process": "Mein Standard"}).json()["defaults"]
         assert d["process"] == "Mein Standard" and d["walls"] == 3          # defaults read from the own preset
-        opts = api._validate_options(api.settings.printers[0],
+        acct = api.Account("local", api.settings)
+        opts = api._validate_options(acct, api.settings.printers[0],
                                      api.OptionsModel(filament="Meine PLA", process="Mein Standard", filaments=["Meine PLA"]))
         assert opts.filament == "Meine PLA"
         with pytest.raises(api.HTTPException):
-            api._validate_options(api.settings.printers[0], api.OptionsModel(filament="Unbekannt"))
+            api._validate_options(acct, api.settings.printers[0], api.OptionsModel(filament="Unbekannt"))
     os.environ.pop("PRINTSHARE_CONFIG", None)
