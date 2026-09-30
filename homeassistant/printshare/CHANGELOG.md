@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.0
+- Plate options when preparing a print: **several copies** (as many as fit are arranged on the plate; the review
+  says if fewer fit), **tilt** the model by 90° steps onto another side, **size** in percent and **lay flat
+  automatically** per print. Works for STL, 3MF (also multicolour projects) and OBJ.
+
 ## 0.13.1
 - New name: **PocketPrint3D** (formerly PrintShare) – the app, web page and add-on show the new name. Nothing
   changes for existing installations: same add-on, image, settings and pairing.

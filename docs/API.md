@@ -1,7 +1,7 @@
 # PocketPrint3D server API
 
 The contract between the PocketPrint3D server and its apps: the **iOS app (Swift, Dominique)**, the **Android app
-(Expo, `mobile/`)** and the **web page** (`printshare/web/`). Server version described here: **0.13.1**.
+(Expo, `mobile/`)** and the **web page** (`printshare/web/`). Server version described here: **0.14.0**.
 
 The examples were recorded from the server with the real OrcaSlicer 2.4.2 and simulated printers
 (`tests/fakes.py`), shortened with `…`; the search examples are illustrative (they need the internet). Ids, times
@@ -19,7 +19,7 @@ and values differ on your server.
 
 ```http
 GET /api/info
-→ 200 {"name": "PrintShare", "version": "0.13.1", "printers": 2}      (the name stays "PrintShare" – technical id)
+→ 200 {"name": "PrintShare", "version": "0.14.0", "printers": 2}      (the name stays "PrintShare" – technical id)
 
 GET /api/info            (no or wrong token)
 → 401 {"detail": "invalid token"}
@@ -246,11 +246,21 @@ per colour.
 {"link": "upload:ec1563762709", "printer": "cosmos", "file": null,
  "options": {"filament": "Elegoo PLA @ECC", "process": null, "bed_type": null,
              "supports": "off", "brim": null, "infill": 20, "walls": null,
-             "filaments": null}}
+             "filaments": null,
+             "copies": 4, "rotate_x": 90, "rotate_y": null, "scale": 100, "orient": null}}
 → 200 {"job": "843289d5b2"}
 ```
 `null` / missing = the printer's default. `filaments`: multicolour, one preset per model filament (by index,
 `null` = default). `400` if a material/quality doesn't fit the printer.
+
+Plate options (since 0.14.0; older servers ignore them silently, so check `/api/info` `version` first):
+- `copies` 1–50: copies of the model on the plate, arranged by OrcaSlicer. If they don't all fit, it puts as
+  many as fit – `result.copies` says how many.
+- `rotate_x`, `rotate_y` −360…360: tilt in degrees before slicing (e.g. 90 = lay on another side). Each object
+  turns about its own centre and stays on the bed. No rotation about Z: the arrangement turns objects anyway.
+  STL, 3MF and OBJ only (STEP → job `error`).
+- `scale` 10–1000: size in percent.
+- `orient` `true`/`false`: lay flat automatically (null = printer setting). Not together with `rotate_x/y` (`400`).
 
 ### `GET /api/jobs/{job}`
 ```json
@@ -261,13 +271,15 @@ per colour.
             "profiles": {"machine": "Elegoo Centauri Carbon 0.4 nozzle", "process": "0.20mm Standard @Elegoo CC 0.4 nozzle",
                          "filament": "Elegoo PLA @ECC", "bed_type": "Textured PEI Plate"},
             "overrides": {"enable_support": "0", "sparse_infill_density": "20%"},
-            "sent": {}, "filaments": []},
+            "sent": {}, "filaments": [], "copies_requested": null, "copies": null},
  "error": null, "created": 1790778079.45, "request": {"link": "…", "printer": "cosmos", "file": null, "options": {…}}}
 ```
 - **`state`**: `slicing` → `sliced` | `error`; after `/send`: `sending` → `uploaded` | `started`
   (a failed send goes back to `sliced` with `error` set, so the user can try again).
 - `log`: progress lines (English; the apps translate the known ones).
 - `result.filaments` (multicolour): `[{"index", "color", "preset", "grams"}]`.
+- `result.copies_requested` / `result.copies` (0.14.0): copies asked for and copies on the plate; both `null`
+  for one copy. `copies < copies_requested` → show "only N of M fit". Times and grams are for the whole plate.
 - `result.overrides`: values that differ from the profile, to show as "changed values".
 - `result.sent` after sending: `{"uploaded": "cube.gcode", "started": false, "tools": {"0": 0}}`.
 

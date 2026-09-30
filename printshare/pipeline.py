@@ -52,6 +52,9 @@ class JobResult:
     sent: dict[str, Any] = field(default_factory=dict)
     # multicolour: [{"index", "color", "preset", "grams"}] per filament of the model (empty = one colour)
     filaments: list[dict[str, Any]] = field(default_factory=list)
+    # plate options: copies asked for and copies that fit (None when only one was asked for)
+    copies_requested: int | None = None
+    copies: int | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -137,12 +140,15 @@ async def prepare_job(settings: Settings, link: str, printer_id: str | None = No
     # blocking work runs in a thread so the web server stays responsive
     result = await asyncio.to_thread(_slice_queued, settings, say, model, printer, out_dir, slicing)
     say(f"Sliced: {result.print_time or '?'} / {result.filament_g or '?'} g")
+    if slicing.copies > 1 and result.copies is not None and result.copies < slicing.copies:
+        say(f"Only {result.copies} of {slicing.copies} copies fit on the plate")
     profiles = {"machine": slicing.machine_file or slicing.machine, "process": slicing.process,
                 "filament": slicing.filament, "bed_type": slicing.bed_type}
     overrides = (options or JobOptions()).process_overrides()
     return JobResult(printer.id, chosen.name, str(result.gcode_path), result.print_time,
                      result.filament_g, result.filament_m, result.layers, profiles, overrides,
-                     filaments=result.filaments)
+                     filaments=result.filaments,
+                     copies_requested=slicing.copies if slicing.copies > 1 else None, copies=result.copies)
 
 
 async def send_job(settings: Settings, result: JobResult, start: bool,

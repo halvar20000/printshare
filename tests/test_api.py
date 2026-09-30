@@ -117,7 +117,8 @@ def test_slice_review_confirm_send(api, client, monkeypatch, tmp_path):
     seen = _fake_prepare(api, monkeypatch, tmp_path)
     r = client.post("/api/jobs", headers=H, json={
         "link": "https://www.printables.com/model/3161-3d-benchy", "printer": "dom",
-        "options": {"supports": "tree", "brim": "off", "infill": 20, "walls": 3}})
+        "options": {"supports": "tree", "brim": "off", "infill": 20, "walls": 3, "copies": 3, "rotate_x": 90,
+                    "scale": 120}})
     job_id = r.json()["job"]
     j = _wait(client, job_id, "sliced", "error")
     assert j["state"] == "sliced", j
@@ -126,6 +127,7 @@ def test_slice_review_confirm_send(api, client, monkeypatch, tmp_path):
                                         "brim_type": "no_brim", "sparse_infill_density": "20%",
                                         "wall_loops": "3"}
     assert seen["options"].supports == "tree"
+    assert (seen["options"].copies, seen["options"].rotate_x, seen["options"].scale) == (3, 90, 120)
     assert client.get("/api/jobs", headers=H).json()[0]["id"] == job_id
 
     # NF-05: no start without explicit confirmation
@@ -164,7 +166,8 @@ def test_upload_only_then_send_failure_keeps_job(api, client, monkeypatch, tmp_p
 
 
 def test_invalid_options_rejected(client):
-    for opts in ({"supports": "everywhere"}, {"infill": 150}, {"bed_type": "Glass"}):
+    for opts in ({"supports": "everywhere"}, {"infill": 150}, {"bed_type": "Glass"}, {"copies": 99},
+                 {"scale": 1}, {"rotate_x": 90, "orient": True}):
         r = client.post("/api/jobs", headers=H, json={"link": "https://x.y/a.stl", "options": opts})
         assert r.status_code == 400, opts
     assert client.post("/api/jobs", headers=H, json={"link": "file:///etc/passwd"}).status_code == 400

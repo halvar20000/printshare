@@ -61,6 +61,17 @@
         </div>
       </div>
 
+      <div class="card">
+        <span class="label" data-t="arrange">Auf der Platte</span>
+        <div class="two">
+          <div><label for="copies" data-t="copies">Anzahl</label>
+            <input id="copies" type="number" min="1" max="50" step="1" value="1" inputmode="numeric"></div>
+          <div><label for="scale" data-t="size">Größe</label><select id="scale"></select></div>
+        </div>
+        <label for="tilt" data-t="tilt">Lage</label>
+        <select id="tilt"></select>
+      </div>
+
       <button type="submit" id="slice" class="primary" data-t="slice">Slicen</button>
     </form>
 

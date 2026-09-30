@@ -11,11 +11,12 @@ import type { JobOptions, Lane, ModelColors, ModelFile, Options, Printer, Printe
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
 import { brandOf, comboWarnings, jobName, plateName, shortName } from "@/lib/format";
 import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
+import { MAX_COPIES, plateOptions, TILT_LABELS, TILTS, tiltOf, type Tilt } from "@/lib/plate";
 import { useColors } from "@/lib/theme";
 
 type Params = { link?: string; fileUri?: string; fileName?: string; edit?: string };
 type Edit = { printer?: string; file?: string | null; options?: JobOptions; name?: string; slots?: Record<number, number> };
-type Sheet = "printer" | "filament" | "process" | "plate" | "file" | null;
+type Sheet = "printer" | "filament" | "process" | "plate" | "file" | "tilt" | null;
 
 export default function Prepare() {
   const { api, t } = useApp();
@@ -43,6 +44,10 @@ export default function Prepare() {
   const [brim, setBrim] = useState("auto");
   const [infill, setInfill] = useState<number | null>(null);  // null = profile default
   const [walls, setWalls] = useState<number | null>(null);
+  // plate: kept when the printer changes, taken over when editing a job
+  const [copies, setCopies] = useState<number>(edit.options?.copies ?? 1);
+  const [tilt, setTilt] = useState<Tilt>(tiltOf(edit.options));
+  const [scale, setScale] = useState<number>(edit.options?.scale ?? 100);
   const [more, setMore] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -203,6 +208,7 @@ export default function Prepare() {
     if (brim !== d.brim) o.brim = brim;
     if (infill != null && infill !== d.infill) o.infill = infill;
     if (walls != null && walls !== d.walls) o.walls = walls;
+    Object.assign(o, plateOptions(copies, tilt, scale));
     setSubmitting(true);
     setError("");
     try {
@@ -232,14 +238,16 @@ export default function Prepare() {
     plate: (opts?.plates ?? []).map(p => ({ value: p, label: plateName(t, p) })),
     file: (files ?? []).map(f => ({ value: String(f.index), label: f.name,
       sub: f.size ? `${(f.size / 1048576).toFixed(1)} MB` : undefined })),
+    tilt: (Object.keys(TILTS) as Tilt[]).map(k => ({ value: k, label: t(TILT_LABELS[k]) })),
   };
-  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament: presetFor(1), process, plate, file };
+  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament: presetFor(1), process, plate, file, tilt };
   const sheetSet: Record<Exclude<Sheet, null>, (v: string) => void> = {
     printer: setPrinter, filament: v => { setFilament(v); setFilamentManual(true); }, process: changeProcess,
-    plate: setPlate, file: setFile,
+    plate: setPlate, file: setFile, tilt: v => setTilt(v as Tilt),
   };
   const sheetTitle: Record<Exclude<Sheet, null>, string> = {
     printer: t("printer"), filament: t("material"), process: t("quality"), plate: t("plate"), file: t("file"),
+    tilt: t("tilt"),
   };
 
   const dot = (id: string) => {
@@ -343,6 +351,18 @@ export default function Prepare() {
             <Field label={t("supports")}>
               <Segmented values={opts.supports} value={supports} onChange={setSupports}
                 labels={{ off: t("supOff"), normal: t("supNormal"), tree: t("supTree") }} />
+            </Field>
+          </Section>
+
+          <Section title={t("arrange")} footer={copies > 1 ? t("arrangeHint") : undefined}>
+            <Field label={t("copies")}>
+              <Stepper value={copies} min={1} max={MAX_COPIES} onChange={setCopies} format={v => t("copiesV", { n: v })} />
+            </Field>
+            <Divider />
+            <Row icon="cube-outline" label={t("tilt")} value={t(TILT_LABELS[tilt])} onPress={() => setSheet("tilt")} />
+            <Divider />
+            <Field label={t("size")} hint={scale === 100 ? t("standard") : undefined}>
+              <Stepper value={scale} min={25} max={400} step={25} onChange={setScale} format={v => `${v} %`} />
             </Field>
           </Section>
 
