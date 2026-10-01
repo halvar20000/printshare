@@ -176,7 +176,8 @@ Live state; call every 3–10 s while visible. `502` = printer not reachable (of
 - Other fields may exist (e.g. `raw` for the Centauri); ignore them.
 
 ### `GET /api/printers/{id}/options[?process=<quality>]`
-Everything for the preparation screen. `?process=` returns the defaults of that quality (supports, brim, infill, walls).
+Everything for the preparation screen. `?process=` returns the defaults of that quality (supports, brim, infill,
+infill pattern, walls).
 
 ```json
 {"printer": "cosmos",
@@ -185,12 +186,17 @@ Everything for the preparation screen. `?process=` returns the defaults of that 
  "own": {"materials": ["Meine PLA"], "processes": ["Mein Standard"]},
  "plates": ["Textured PEI Plate", "High Temp Plate", "Cool Plate", "Engineering Plate", "Supertack Plate"],
  "supports": ["off", "normal", "tree"], "brims": ["auto", "off", "outer"],
+ "infill_patterns": ["rectilinear", "alignedrectilinear", "zigzag", "…", "grid", "triangles", "cubic", "gyroid", "…"],
  "defaults": {"filament": "Elegoo PLA @ECC", "process": "0.20mm Standard @Elegoo CC 0.4 nozzle",
               "bed_type": "Textured PEI Plate", "supports": "off", "brim": "auto", "infill": 15, "walls": 2,
-              "layer_height": "0.2"}}
+              "infill_pattern": "rectilinear", "infill_line_width": 0.45, "layer_height": "0.2"}}
 ```
 - Names are OrcaSlicer preset names; show them shortened (text before ` @`).
 - `own`: uploaded presets of the user (shown first, group "Own profiles").
+- `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of Orca 2.4.2, in Orca's order); an app
+  may offer a subset. `defaults.infill_pattern`: the quality's pattern (Orca's legacy `zig-zag` is reported as
+  `rectilinear`, like Orca reads it), `defaults.infill_line_width`: infill line width in mm (`null` if the preset
+  gives it as a percentage) – for a true-to-scale infill preview. Missing on older servers: hide the choice.
 
 ### Printer control – `POST /api/printers/{id}/control`
 ```json
@@ -302,12 +308,13 @@ per colour.
 ```json
 {"link": "upload:ec1563762709", "printer": "cosmos", "file": null,
  "options": {"filament": "Elegoo PLA @ECC", "process": null, "bed_type": null,
-             "supports": "off", "brim": null, "infill": 20, "walls": null,
+             "supports": "off", "brim": null, "infill": 20, "infill_pattern": "gyroid", "walls": null,
              "filaments": null,
              "copies": 4, "rotate_x": 90, "rotate_y": null, "scale": 100, "orient": null}}
 → 200 {"job": "843289d5b2"}
 ```
-`null` / missing = the printer's default. `filaments`: multicolour, one preset per model filament (by index,
+`null` / missing = the printer's default. `infill_pattern` (0.15.2): one of `/options` `infill_patterns`, else
+`400` (older servers ignore it). `filaments`: multicolour, one preset per model filament (by index,
 `null` = default). `400` if a material/quality doesn't fit the printer.
 
 Plate options (since 0.14.0; older servers ignore them silently, so check `/api/info` `version` first):

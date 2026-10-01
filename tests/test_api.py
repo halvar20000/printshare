@@ -117,15 +117,15 @@ def test_slice_review_confirm_send(api, client, monkeypatch, tmp_path):
     seen = _fake_prepare(api, monkeypatch, tmp_path)
     r = client.post("/api/jobs", headers=H, json={
         "link": "https://www.printables.com/model/3161-3d-benchy", "printer": "dom",
-        "options": {"supports": "tree", "brim": "off", "infill": 20, "walls": 3, "copies": 3, "rotate_x": 90,
-                    "scale": 120}})
+        "options": {"supports": "tree", "brim": "off", "infill": 20, "infill_pattern": "gyroid", "walls": 3, "copies": 3,
+                    "rotate_x": 90, "scale": 120}})
     job_id = r.json()["job"]
     j = _wait(client, job_id, "sliced", "error")
     assert j["state"] == "sliced", j
     assert j["result"]["layers"] == 240
     assert j["result"]["overrides"] == {"enable_support": "1", "support_type": "tree(auto)",
                                         "brim_type": "no_brim", "sparse_infill_density": "20%",
-                                        "wall_loops": "3"}
+                                        "sparse_infill_pattern": "gyroid", "wall_loops": "3"}
     assert seen["options"].supports == "tree"
     assert (seen["options"].copies, seen["options"].rotate_x, seen["options"].scale) == (3, 90, 120)
     assert client.get("/api/jobs", headers=H).json()[0]["id"] == job_id
@@ -167,7 +167,7 @@ def test_upload_only_then_send_failure_keeps_job(api, client, monkeypatch, tmp_p
 
 def test_invalid_options_rejected(client):
     for opts in ({"supports": "everywhere"}, {"infill": 150}, {"bed_type": "Glass"}, {"copies": 99},
-                 {"scale": 1}, {"rotate_x": 90, "orient": True}):
+                 {"scale": 1}, {"rotate_x": 90, "orient": True}, {"infill_pattern": "swirl"}):
         r = client.post("/api/jobs", headers=H, json={"link": "https://x.y/a.stl", "options": opts})
         assert r.status_code == 400, opts
     assert client.post("/api/jobs", headers=H, json={"link": "file:///etc/passwd"}).status_code == 400
@@ -193,6 +193,7 @@ def test_job_options_apply():
                                    "enable_support": "0", "sparse_infill_density": "0%"}
     assert base.process_overrides["curr_bed_type"] == "Textured PEI Plate"  # base untouched
     assert JobOptions().apply(base).process_overrides == base.process_overrides
+    assert JobOptions(infill_pattern="honeycomb").process_overrides() == {"sparse_infill_pattern": "honeycomb"}
 
 
 @needs_profiles
@@ -202,6 +203,7 @@ def test_options_for_printer(client):
     assert "0.16mm Optimal @Elegoo CC 0.4 nozzle" in o["processes"]
     expected = {"infill": 15, "walls": 2, "supports": "off", "brim": "auto", "bed_type": "Textured PEI Plate"}
     assert {k: o["defaults"][k] for k in expected} == expected
+    assert "gyroid" in o["infill_patterns"] and o["defaults"]["infill_pattern"] in o["infill_patterns"]
     fine = client.get("/api/printers/dom/options", headers=H,
                       params={"process": "0.12mm Fine @Elegoo CC 0.4 nozzle"}).json()
     assert fine["defaults"]["layer_height"] == "0.12"

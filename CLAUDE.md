@@ -498,6 +498,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   real CC (status in 141 ms), whole UI flow in the web build against the real server in cloud mode (login → printer →
   relay → "Druck gestartet"). NOT yet on a real phone or a real print.
 
+## Infill pattern per print (2026-10-01, 0.15.2, Dominique)
+- Job option `infill_pattern` → `sparse_infill_pattern`, validated against `config.INFILL_PATTERNS` (the 26 values of
+  Orca 2.4.2 `PrintConfig.cpp`). `/options` lists them (`infill_patterns`) and gives `defaults.infill_pattern` +
+  `defaults.infill_line_width` (mm, for the iOS app's true-to-scale preview). The Elegoo CC presets still say
+  `zig-zag`, which Orca reads as `rectilinear` → reported as `rectilinear`. Web: select "Füllmuster".
+  Expo app not done yet.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

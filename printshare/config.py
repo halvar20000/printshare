@@ -89,6 +89,11 @@ def _has_print_start(machine_file: str) -> bool:
 MAX_COPIES = 50
 SUPPORT_TYPES = {"normal": "normal(auto)", "tree": "tree(auto)"}
 BRIM_TYPES = {"auto": "auto_brim", "off": "no_brim", "outer": "outer_only"}
+# OrcaSlicer 2.4.2 `sparse_infill_pattern` values (PrintConfig.cpp, order of Orca's own list)
+INFILL_PATTERNS = ("rectilinear", "alignedrectilinear", "zigzag", "crosszag", "lockedzag", "line", "grid",
+                   "triangles", "tri-hexagon", "cubic", "adaptivecubic", "quartercubic", "supportcubic",
+                   "lightning", "honeycomb", "3dhoneycomb", "lateral-honeycomb", "lateral-lattice", "crosshatch",
+                   "tpmsd", "tpmsfk", "gyroid", "concentric", "hilbertcurve", "archimedeanchords", "octagramspiral")
 
 
 @dataclass
@@ -100,6 +105,7 @@ class JobOptions:
     supports: str | None = None   # "off" | "normal" | "tree"
     brim: str | None = None       # "auto" | "off" | "outer"
     infill: int | None = None     # sparse infill density in percent
+    infill_pattern: str | None = None  # sparse infill pattern, one of INFILL_PATTERNS
     walls: int | None = None      # wall loops
     # multicolour: preset per filament of the model (1st = filament 1); None entries use `filament`
     filaments: list[str | None] | None = None
@@ -127,6 +133,10 @@ class JobOptions:
             if not 0 <= self.infill <= 100:
                 raise ValueError("infill must be 0-100 %")
             o["sparse_infill_density"] = f"{self.infill}%"
+        if self.infill_pattern is not None:
+            if self.infill_pattern not in INFILL_PATTERNS:
+                raise ValueError(f"unknown infill pattern {self.infill_pattern!r}")
+            o["sparse_infill_pattern"] = self.infill_pattern
         if self.walls is not None:
             if not 1 <= self.walls <= 20:
                 raise ValueError("walls must be 1-20")

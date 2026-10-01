@@ -76,6 +76,7 @@ const I18N = {
     pause: "Pause", resume: "Fortsetzen", cancel: "Abbrechen", camera: "Kamera öffnen",
     nozzle: "Düse", bed: "Bett", progress: "Fortschritt", layer: "Schicht", file_label: "Datei",
     changed: "Geänderte Werte", changed_none: "keine – Profilwerte", profile_values: "Profil",
+    infill_pattern: "Füllmuster", pattern_v: "Füllmuster: {v}",
     infill_v: "Füllung {v}", walls_v: "{v} Wände", supports_v: "Stützen: {v}", brim_v: "Brim: {v}",
     arrange: "Auf der Platte", copies: "Anzahl", tilt: "Lage", size: "Größe",
     tilt_: "Wie im Modell", tilt_auto: "Automatisch hinlegen", tilt_x90: "Nach vorne kippen",
@@ -161,6 +162,7 @@ const I18N = {
     pause: "Pause", resume: "Resume", cancel: "Cancel", camera: "Open camera",
     nozzle: "Nozzle", bed: "Bed", progress: "Progress", layer: "Layer", file_label: "File",
     changed: "Changed values", changed_none: "none – profile values", profile_values: "Profile",
+    infill_pattern: "Infill pattern", pattern_v: "Infill pattern: {v}",
     infill_v: "Infill {v}", walls_v: "{v} walls", supports_v: "Supports: {v}", brim_v: "Brim: {v}",
     arrange: "On the plate", copies: "Copies", tilt: "Position", size: "Size",
     tilt_: "As in the model", tilt_auto: "Lay flat automatically", tilt_x90: "Tip forward",
@@ -282,12 +284,33 @@ function buildSeg(box, values, prefix, value) {
 }
 const segValue = box => box.querySelector('[aria-checked="true"]')?.dataset.value ?? null;
 
+// OrcaSlicer infill patterns: [German, English]; unknown keys are shown as they are
+const INFILL_NAMES = {
+  rectilinear: ["Geradlinig", "Rectilinear"], alignedrectilinear: ["Geradlinig ausgerichtet", "Aligned Rectilinear"],
+  zigzag: ["Zickzack", "Zig Zag"], crosszag: ["Kreuz-Zickzack", "Cross Zag"], lockedzag: ["Locked Zag", "Locked Zag"],
+  line: ["Linie", "Line"], grid: ["Gitter", "Grid"], triangles: ["Dreiecke", "Triangles"],
+  "tri-hexagon": ["Tri-Hexagon", "Tri-hexagon"], cubic: ["Kubisch", "Cubic"],
+  adaptivecubic: ["Adaptiv kubisch", "Adaptive Cubic"], quartercubic: ["Viertel-kubisch", "Quarter Cubic"],
+  supportcubic: ["Stütz-kubisch", "Support Cubic"], lightning: ["Blitz", "Lightning"],
+  honeycomb: ["Bienenwabe", "Honeycomb"], "3dhoneycomb": ["3D-Bienenwabe", "3D Honeycomb"],
+  "lateral-honeycomb": ["Seitliche Wabe", "Lateral Honeycomb"], "lateral-lattice": ["Seitliches Gitter", "Lateral Lattice"],
+  crosshatch: ["Kreuzschraffur", "Cross Hatch"], tpmsd: ["TPMS-D", "TPMS-D"], tpmsfk: ["TPMS-FK", "TPMS-FK"],
+  gyroid: ["Gyroid", "Gyroid"], concentric: ["Konzentrisch", "Concentric"], hilbertcurve: ["Hilbert-Kurve", "Hilbert Curve"],
+  archimedeanchords: ["Archimedische Sehnen", "Archimedean Chords"], octagramspiral: ["Oktagramm-Spirale", "Octagram Spiral"],
+};
+const infillName = k => (INFILL_NAMES[k] || [k, k])[lang === "de" ? 0 : 1];
+
 function setDetailControls(d, keep = {}) {
   buildSeg($("supports"), S.options.supports, "sup_", keep.supports ?? d.supports);
   buildSeg($("brim"), S.options.brims, "brim_", keep.brim ?? d.brim);
   const inf = [0, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100].filter(v => v !== d.infill);
   fillSelect($("infill"), [["", t("standard", { v: (d.infill ?? "?") + "\u00a0%" })], ...inf.map(v => [v, v + "\u00a0%"])],
              keep.infill ?? "");
+  const pats = (S.options.infill_patterns || []).filter(v => v !== d.infill_pattern);   // older servers: none
+  $("infill_pattern").hidden = !pats.length;
+  document.querySelector('label[for="infill_pattern"]').hidden = !pats.length;
+  fillSelect($("infill_pattern"), [["", t("standard", { v: d.infill_pattern ? infillName(d.infill_pattern) : "?" })],
+                                   ...pats.map(v => [v, infillName(v)])], keep.infill_pattern ?? "");
   const walls = [1, 2, 3, 4, 5, 6].filter(v => v !== d.walls);
   fillSelect($("walls"), [["", t("standard", { v: d.walls ?? "?" })], ...walls.map(v => [v, String(v)])],
              keep.walls ?? "");
@@ -353,6 +376,7 @@ function formOptions() {
   if (sup !== d.supports) o.supports = sup;
   if (brim !== d.brim) o.brim = brim;
   if ($("infill").value !== "") o.infill = Number($("infill").value);
+  if ($("infill_pattern").value !== "") o.infill_pattern = $("infill_pattern").value;
   if ($("walls").value !== "") o.walls = Number($("walls").value);
   const copies = Math.min(50, Math.max(1, Math.round(Number($("copies").value) || 1)));
   if (copies > 1) o.copies = copies;
@@ -438,6 +462,7 @@ function overrideLabels(o) {
   const brim = { auto_brim: "auto", no_brim: "off", outer_only: "outer" }[o.brim_type];
   if (brim) out.push(t("brim_v", { v: t("brim_" + brim) }));
   if (o.sparse_infill_density) out.push(t("infill_v", { v: o.sparse_infill_density.replace("%", "\u00a0%") }));
+  if (o.sparse_infill_pattern) out.push(t("pattern_v", { v: infillName(o.sparse_infill_pattern) }));
   if (o.wall_loops) out.push(t("walls_v", { v: o.wall_loops }));
   return out;
 }
@@ -586,7 +611,8 @@ async function editJob() {
   const o = req.options || {};
   try {
     await loadOptions({ filament: o.filament, process: o.process, bed_type: o.bed_type,
-                        supports: o.supports, brim: o.brim, infill: o.infill, walls: o.walls });
+                        supports: o.supports, brim: o.brim, infill: o.infill, infill_pattern: o.infill_pattern,
+                        walls: o.walls });
     setPlateControls(o);
   } catch (e) { formError(e.message); }
   await loadFiles();
