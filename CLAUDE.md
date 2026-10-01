@@ -496,7 +496,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - `EXPO_PUBLIC_CLOUD_URL` overrides the cloud address at build time (tests only).
 - Tests: node against the simulated printers (3-chunk upload, dropped start retried, AFC lanes), read-only against the
   real CC (status in 141 ms), whole UI flow in the web build against the real server in cloud mode (login → printer →
-  relay → "Druck gestartet"). NOT yet on a real phone or a real print.
+  relay → "Druck gestartet").
+- **First real cloud upload 2026-10-01** (Android build 14, Thomas away from home): sliced on api.pocketprint3d.com,
+  "Nur hochladen" → the phone sent `cableclip.gcode` (0.90 MB, 75 layers) over Tailscale (Tower is the subnet router for
+  192.168.86.0/24) to the CC at 192.168.86.144 - listed by the printer (Cmd 258), printer stayed idle. A real started
+  print through the cloud is still open (do it at home, no camera in cloud mode yet).
 
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
