@@ -103,11 +103,16 @@ class Slicer:
             if colors and i < len(colors):
                 f["filament_colour"] = [colors[i]]
             filaments.append(f)
-        # Make sure the process/filament accept this machine even if it was renamed.
+        # Make sure the process/filament accept this machine even if it was renamed. Presets that select their
+        # printers by condition (Prusa, CORE One) get an explicit list: the CLI rejects them ("process not
+        # compatible with printer", exit 239) although the condition matches.
         mname = machine["name"]
         for preset in (process, *filaments):
             cp = preset.get("compatible_printers")
-            if isinstance(cp, list) and cp and mname not in cp:
+            if preset.get("compatible_printers_condition") and not cp:
+                preset["compatible_printers"] = [mname]
+                preset["compatible_printers_condition"] = ""
+            elif isinstance(cp, list) and cp and mname not in cp:
                 preset["compatible_printers"] = cp + [mname]
         return (
             write_preset(machine, workdir / "machine.json"),

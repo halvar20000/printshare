@@ -5,9 +5,11 @@ export type GcodeFile = {
   name: string;
   size: number;
   bytes(): Promise<Uint8Array>;
-  /** multipart POST of the whole file (Moonraker); the phone streams it from disk */
+  /** multipart POST of the whole file (Moonraker, OctoPrint); the phone streams it from disk */
   upload(url: string, fieldName: string, fields: Record<string, string>,
-         onProgress?: (sent: number) => void): Promise<HttpResult>;
+         onProgress?: (sent: number) => void, headers?: Record<string, string>): Promise<HttpResult>;
+  /** the file as the raw body of a PUT (PrusaLink) */
+  put(url: string, headers: Record<string, string>, onProgress?: (sent: number) => void): Promise<HttpResult>;
   release(): void;
 };
 export type HttpResult = { status: number; body: string };
@@ -21,11 +23,11 @@ export interface LanIo {
 }
 
 async function postForm(url: string, fields: Record<string, string>, fieldName: string, fileName: string,
-                        data: Uint8Array): Promise<HttpResult> {
+                        data: Uint8Array, headers: Record<string, string> = {}): Promise<HttpResult> {
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.append(k, v);
   form.append(fieldName, new Blob([data as BlobPart], { type: "application/octet-stream" }), fileName);
-  const r = await fetch(url, { method: "POST", body: form });
+  const r = await fetch(url, { method: "POST", body: form, headers });
   return { status: r.status, body: await r.text() };
 }
 
@@ -37,9 +39,13 @@ export const lanIo: LanIo = {
     return {
       name, size: data.length,
       bytes: async () => data,
-      upload: (u, fieldName, fields) => postForm(u, fields, fieldName, name, data),
+      upload: (u, fieldName, fields, _progress, headers) => postForm(u, fields, fieldName, name, data, headers),
+      put: async (u, headers) => {
+        const r = await fetch(u, { method: "PUT", headers, body: data as BodyInit });
+        return { status: r.status, body: await r.text() };
+      },
       release: () => {},
     };
   },
-  postChunk: postForm,
+  postChunk: (url, fields, fieldName, fileName, data) => postForm(url, fields, fieldName, fileName, data),
 };

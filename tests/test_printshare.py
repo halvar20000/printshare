@@ -337,3 +337,55 @@ def test_slice_with_own_process_and_filament_presets(tmp_path):
     gcode = res.gcode_path.read_text()
     assert "M104 S205" in gcode or "M109 S205" in gcode, "own filament temperature not used"
     assert "; wall_loops = 4" in gcode and "; filament_settings_id = \"Meine PLA\"" in gcode
+
+
+def test_compatible_printers_condition():
+    """Prusa / CORE One presets pick their printers by condition, as OrcaSlicer evaluates it."""
+    from printshare.profiles import condition_matches
+    mk4s = {"printer_notes": "Don't remove\nPRINTER_VENDOR_PRUSA3D\nPRINTER_MODEL_MK4S\n", "nozzle_diameter": ["0.4"]}
+    hf = {**mk4s, "printer_notes": mk4s["printer_notes"] + "HF_NOZZLE\n"}
+    plain = "printer_notes=~/.*MK4S.*/ and nozzle_diameter[0]==0.4"
+    assert condition_matches(plain, mk4s) and condition_matches(plain, hf)
+    assert not condition_matches(plain, {**mk4s, "nozzle_diameter": ["0.6"]})
+    no_hf = plain + " and printer_notes!~/.*HF_NOZZLE.*/"
+    assert condition_matches(no_hf, mk4s) and not condition_matches(no_hf, hf)
+    core = "printer_notes=~/.*PRINTER_MODEL_COREONE[^_a-zA-Z0-9].*/ and nozzle_diameter[0]==0.4"
+    assert condition_matches(core, {"printer_notes": "PRINTER_MODEL_COREONE\n", "nozzle_diameter": ["0.4"]})
+    assert not condition_matches(core, {"printer_notes": "PRINTER_MODEL_COREONE_L\n", "nozzle_diameter": ["0.4"]})
+    assert condition_matches("printer_notes=~/.*MK4S.*/ and single_extruder_multi_material",
+                             {**mk4s, "single_extruder_multi_material": "1"})
+    assert not condition_matches("printer_notes=~/.*MK4S.*/ and single_extruder_multi_material",
+                                 {**mk4s, "single_extruder_multi_material": "0"})
+    assert condition_matches("nozzle_diameter[0]==0.6 or printer_notes=~/.*MK4S.*/", mk4s)
+    assert not condition_matches("num_extruders() > 1 &&", mk4s)       # unknown syntax: never offered
+
+
+@needs_orca
+def test_prusa_qualities_and_library_materials_slice(tmp_path):
+    """A cloud Prusa printer (PrusaLink via the app): Prusa's own qualities (selected by condition) and the
+    printer-independent material library are offered and slice with the real Orca."""
+    from printshare.config import JobOptions
+    from printshare.profiles import ProfileLibrary
+    from printshare.slicer import Slicer
+    lib = ProfileLibrary.cached(f"{ORCA_ROOT}/resources/profiles")
+    mk4s = "Prusa MK4S 0.4 nozzle"
+    qualities, materials = lib.compatible("process", mk4s), lib.compatible("filament", mk4s)
+    assert "0.20mm SPEED @MK4S 0.4" in qualities and "0.15mm STRUCTURAL @MK4S 0.4" in qualities
+    assert not [q for q in qualities if "HF" in q or "Elegoo" in q]
+    assert "Prusa Generic PLA @MK4S" in materials and "Generic PETG @System" in materials
+    assert "Generic PETG @System" in lib.compatible("filament", "Elegoo Centauri Carbon 0.4 nozzle")
+    s = _settings(tmp_path)
+    s.printers = [PrinterConfig(id="mk4s", type="prusalink", url="http://127.0.0.1",
+                                slicing=SlicingConfig(machine=mk4s, process="0.20mm SPEED @MK4S 0.4",
+                                                      filament="Prusa Generic PLA @MK4S")),
+                  PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1")]
+    for pid, process, filament, model in (("mk4s", "0.15mm STRUCTURAL @MK4S 0.4", "Generic PETG @System", "MK4S"),
+                                          ("cc", None, "Generic PETG @System", "Elegoo Centauri Carbon")):
+        printer = s.printer(pid)
+        slicing = JobOptions(process=process, filament=filament).apply(printer.slicing)
+        res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / f"out-{pid}", slicing)
+        gcode = res.gcode_path.read_text()
+        assert model in gcode
+        assert '; filament_settings_id = "Generic PETG @System"' in gcode and res.print_time
+        if pid == "mk4s":
+            assert "; print_settings_id = 0.15mm STRUCTURAL @MK4S 0.4" in gcode

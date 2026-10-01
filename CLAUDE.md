@@ -518,6 +518,24 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `zig-zag`, which Orca reads as `rectilinear` → reported as `rectilinear`. Web: select "Füllmuster".
   Expo app not done yet.
 
+## PrusaLink + OctoPrint through the cloud (2026-10-01, server 0.15.3)
+- App: `lan/prusalink.ts` (HTTP digest user `maker`, MD5, qop=auth or RFC 2069, learns the nonce on the first 401;
+  X-Api-Key on old firmware; upload `PUT /api/v1/files/<storage>/<name>` with `Print-After-Upload`, storage from
+  `/api/v1/storage`, FAT-safe names), `lan/octoprint.ts` (X-Api-Key, multipart `/api/files/local` select/print,
+  `effectivePrint` checked, 409 = not connected). `io` got `put()` + extra headers. Access per printer
+  `{address, password?, apiKey?}` (`loadAccess`/`saveAccess`, old string entries converted) - only on the phone.
+- `cloud-printer/[id]`: 4 types, printer model picker from `GET /api/machines` (`ProfileLibrary.machines()`, ~1000,
+  grouped by vendor; required for Prusa/OctoPrint), password / API key fields. Tested with node against the fakes
+  (digest with/without qop, wrong password, OctoPrint not connected) and the web UI flow; **no real Prusa/OctoPrint yet**.
+- Server fixes found with the real Orca: Prusa/CORE One presets choose printers by `compatible_printers_condition`
+  (`printer_notes=~/.*MK4S.*/ and nozzle_diameter[0]==0.4 [and printer_notes!~/.*HF_NOZZLE.*/]`) → evaluated by
+  `profiles.condition_matches` (fullmatch, DOTALL; unknown syntax = not offered). Before that the MK4S quality list
+  was EMPTY and **every Prusa slice failed** (CLI: "process not compatible with printer", exit 239, even though the
+  condition matches) → `slicer.build_presets` turns a condition into `compatible_printers=[machine]`.
+  `compatible()` also appends OrcaFilamentLibrary (`Generic PETG @System`, …: no printer list, no condition).
+  Default slicing checked with the real Orca: Prusa MK4/MK4S/MINI/MK3S/XL/CORE One, Ender-3 V2, Kobra 2
+  (no "MK3.9" machine in Orca 2.4.2).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

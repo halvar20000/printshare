@@ -1,30 +1,38 @@
 // Reaching a printer: through the own server (home server), or - with the PocketPrint3D cloud - by the app itself on
 // the home Wi-Fi. The printer's address stays on this phone; the cloud never sees it (docs/CLOUD.md).
 import type { Api, Printer, PrinterStatus, Server } from "./api";
-import { canRelay, lanIo, lanPrinter, LanError, type SendOptions } from "./lan";
+import { canRelay, lanIo, lanPrinter, LanError, type LanAccess, type SendOptions } from "./lan";
 import { getJSON, setJSON } from "./storage";
 
 export class NoAddressError extends Error {}
 
-type Addresses = Record<string, string>;
+// per printer: address (+ PrusaLink password / API key); kept in the phone's secure storage, never sent to the cloud
+type Stored = Record<string, LanAccess | string>;          // plain string = address only (app builds 14-16)
 const key = (server: Server) => `ps_lan_${(server.email ?? server.url).replace(/[^\w.-]/g, "_")}`;
 
-export async function loadAddresses(server: Server): Promise<Addresses> {
-  return (await getJSON<Addresses>(key(server))) ?? {};
+export async function loadAccess(server: Server): Promise<Record<string, LanAccess>> {
+  const raw = (await getJSON<Stored>(key(server))) ?? {};
+  return Object.fromEntries(Object.entries(raw).map(([id, v]) => [id, typeof v === "string" ? { address: v } : v]));
 }
 
-export async function saveAddress(server: Server, printerId: string, address: string | null): Promise<void> {
-  const all = await loadAddresses(server);
-  if (address?.trim()) all[printerId] = address.trim();
-  else delete all[printerId];
+export async function saveAccess(server: Server, printerId: string, access: LanAccess | null): Promise<void> {
+  const all = await loadAccess(server);
+  if (access?.address.trim()) {
+    const a: LanAccess = { address: access.address.trim() };
+    if (access.password) a.password = access.password;
+    if (access.apiKey?.trim()) a.apiKey = access.apiKey.trim();
+    all[printerId] = a;
+  } else {
+    delete all[printerId];
+  }
   await setJSON(key(server), all);
 }
 
 async function lanFor(server: Server, printer: Printer) {
   if (!canRelay(printer.type)) throw new LanError("this printer type can only be used with an own server for now");
-  const address = (await loadAddresses(server))[printer.id];
-  if (!address) throw new NoAddressError(printer.id);
-  return lanPrinter(printer.type, address);
+  const access = (await loadAccess(server))[printer.id];
+  if (!access?.address) throw new NoAddressError(printer.id);
+  return lanPrinter(printer.type, access);
 }
 
 export async function printerStatus(api: Api, server: Server, printer: Printer): Promise<PrinterStatus> {

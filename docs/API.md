@@ -91,7 +91,12 @@ PATCH  /api/printers/{id}   any of {"name", "type", "machine", "cosmos", "auto_l
 DELETE /api/printers/{id}   → {"deleted": "werkstatt-cc"}
 ```
 `machine` (OrcaSlicer printer profile) is required for `prusalink` / `octoprint`; the Centauri profile is the default
-otherwise. At most 10 printers per account. The address of the printer stays in the app (it finds the printer on
+otherwise. The choices for it (0.15.3):
+```http
+GET /api/machines   → [{"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}, …]   (all of Orca 2.4.2, ~1000)
+```
+The app reaches `prusalink` printers with the user `maker` + the password from the printer screen (or an API key),
+`octoprint` with an API key; both are kept on the phone only. At most 10 printers per account. The address of the printer stays in the app (it finds the printer on
 the Wi-Fi) – the server never stores or needs it.
 
 ## Connecting the app (pairing)
@@ -193,6 +198,8 @@ infill pattern, walls).
 ```
 - Names are OrcaSlicer preset names; show them shortened (text before ` @`).
 - `own`: uploaded presets of the user (shown first, group "Own profiles").
+- Since 0.15.3 `materials` also lists OrcaSlicer's printer-independent library (`Generic PETG @System`, …) after the
+  printer's own materials, and presets that pick their printers by condition (Prusa, CORE One) are included.
 - `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of Orca 2.4.2, in Orca's order); an app
   may offer a subset. `defaults.infill_pattern`: the quality's pattern (Orca's legacy `zig-zag` is reported as
   `rectilinear`, like Orca reads it), `defaults.infill_line_width`: infill line width in mm (`null` if the preset

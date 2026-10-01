@@ -7,6 +7,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   POST /api/auth/code {"email", "lang"} -> login code by e-mail;  POST /api/auth/login {"email", "code", "device"}
   GET /api/auth/me · POST /api/auth/logout · DELETE /api/auth/account?confirm=true · GET /api/admin/stats (operator)
   POST /api/printers · PATCH|DELETE /api/printers/{id}   the account's printers (no addresses)
+  GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -81,7 +82,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.15.2")
+app = FastAPI(title="PocketPrint3D", version="0.15.3")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -297,6 +298,12 @@ def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
         raise HTTPException(403, "operator only")
     return {**ACCOUNTS.stats(), "jobs_in_memory": len(JOBS),
             "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
+
+
+@app.get("/api/machines")
+async def machines(acct: Account = Depends(auth)) -> list[dict[str, str]]:
+    """OrcaSlicer printer models to choose from (cloud printers of type prusalink/octoprint need one)."""
+    return await asyncio.to_thread(lambda: _library().machines())
 
 
 # ---------- cloud mode: the account's printers (no addresses - the app reaches them at home) ----------

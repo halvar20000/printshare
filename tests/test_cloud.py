@@ -258,3 +258,18 @@ def test_gcode_with_slots_for_the_app(cloud, monkeypatch, tmp_path):
         assert "; T1 in a comment" in r.text
         assert c.get(f"/api/jobs/{job}/gcode", headers=a, params={"lanes": '{"1": 99}'}).status_code == 400
         assert c.get(f"/api/jobs/{job}/gcode", headers=a, params={"lanes": "nope"}).status_code == 400
+
+
+def test_machine_models_and_prusa_printer(cloud):
+    """Model list for the app's picker; a cloud Prusa printer slices with that model's own defaults."""
+    api = cloud
+    with TestClient(api.app) as c:
+        a = login(api, c, "prusa@example.com")
+        models = c.get("/api/machines", headers=a).json()
+        assert {"name": "Prusa MK4S 0.4 nozzle", "vendor": "Elegoo"} in models and {"name": CC, "vendor": "Elegoo"} in models
+        r = c.post("/api/printers", headers=a, json={"name": "MK4S", "type": "prusalink", "machine": "Prusa MK4S 0.4 nozzle"})
+        assert r.status_code == 200 and r.json()["machine"] == "Prusa MK4S 0.4 nozzle" and r.json()["leveling"] is None
+        r = c.post("/api/printers", headers=a, json={"name": "Ender", "type": "octoprint", "machine": CC})
+        assert r.status_code == 200 and r.json()["type"] == "octoprint"
+        d = c.get("/api/printers/mk4s/options", headers=a).json()["defaults"]
+        assert d["filament"] == "Elegoo PLA @ECC" and d["process"] == "0.20mm Standard @Elegoo CC 0.4 nozzle"

@@ -69,7 +69,8 @@ What the user does: install the app → create an account → "add printer" (the
 
 **Effort / risk:** the printer protocols have to be written twice (Swift and TypeScript). Suggested order to keep
 it manageable: Centauri (SDCP) and Moonraker first (Thomas' and Dominique's printers, the largest group), PrusaLink
-and OctoPrint later. iOS needs the "local network" permission (`NSLocalNetworkUsageDescription`, Bonjour services).
+and OctoPrint later (Android app: all four since 0.15.3 – PrusaLink with digest auth, OctoPrint with an API
+key; access data stays on the phone). iOS needs the "local network" permission (`NSLocalNetworkUsageDescription`, Bonjour services).
 
 ## Step 2 – bridge for access from everywhere
 A bridge keeps one **outgoing** WebSocket to the cloud (no port forwarding, no VPN) and runs the printer adapters.

@@ -7,6 +7,7 @@ far more reliable with fully flattened presets, so we merge the chain ourselves.
 from __future__ import annotations
 
 import json
+import re
 import threading
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +18,52 @@ KINDS = ("machine", "process", "filament")
 
 class ProfileError(RuntimeError):
     pass
+
+
+_TERM = re.compile(r"\s*(?:(?P<re>\w+)\s*(?P<rop>=~|!~)\s*/(?P<rx>[^/]*)/"
+                   r"|(?P<var>\w+)(?:\[(?P<idx>\d+)\])?\s*(?:(?P<op>==|!=|<=|>=|<|>)\s*(?P<val>\"[^\"]*\"|[-\w.]+))?)\s*")
+
+
+def condition_matches(condition: str, machine: dict[str, Any]) -> bool:
+    """Evaluate the `compatible_printers_condition` forms OrcaSlicer's bundled presets use (Prusa, CORE One):
+    terms `var=~/re/`, `var!~/re/`, `var[i]==value` (also != < > <= >=) and bare booleans, joined by and/or.
+    Anything else counts as not compatible (never offer a preset we can't check)."""
+    def value(var: str, idx: str | None) -> Any:
+        v = machine.get(var)
+        if isinstance(v, list):
+            v = v[int(idx or 0)] if len(v) > int(idx or 0) else None
+        return v
+
+    def term(t: str) -> bool:
+        m = _TERM.fullmatch(t)
+        if not m:
+            raise ValueError(t)
+        if m["re"]:
+            hit = re.fullmatch(m["rx"], str(machine.get(m["re"]) or ""), re.S) is not None
+            return hit if m["rop"] == "=~" else not hit
+        v = value(m["var"], m["idx"])
+        if not m["op"]:
+            return str(v).lower() in ("1", "true")
+        want = m["val"].strip('"')
+        try:
+            a, b = float(v), float(want)
+        except (TypeError, ValueError):
+            a, b = str(v), want
+        return {"==": a == b, "!=": a != b, "<": a < b, ">": a > b, "<=": a <= b, ">=": a >= b}[m["op"]]
+
+    try:
+        # regexes may contain spaces/"and" - split only outside /.../
+        parts = re.split(r"(\s+(?:and|or)\s+)(?=(?:[^/]*/[^/]*/)*[^/]*$)", condition.strip())
+        result, joiner = term(parts[0]), None
+        for piece in parts[1:]:
+            if piece.strip() in ("and", "or"):
+                joiner = piece.strip()
+                continue
+            # Orca: "and" binds tighter than "or"; conditions in the bundle use one kind only
+            result = (result and term(piece)) if joiner == "and" else (result or term(piece))
+        return bool(result)
+    except (ValueError, IndexError, re.error):
+        return False
 
 
 class ProfileLibrary:
@@ -87,22 +134,51 @@ class ProfileLibrary:
         return merged
 
 
+    def machines(self) -> list[dict[str, str]]:
+        """Selectable printer presets with their vendor folder, e.g. {"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}."""
+        with self._lock:
+            if not hasattr(self, "_machines"):
+                out = []
+                for name, path in self._index["machine"].items():
+                    data = self._load(path)
+                    # abstract base presets and the vendor's model descriptions ("machine_model") can't slice
+                    if data.get("instantiation") == "false" or data.get("type") == "machine_model":
+                        continue
+                    out.append({"name": name, "vendor": path.relative_to(self.profiles_dir).parts[0]})
+                self._machines = sorted(out, key=lambda m: (m["vendor"].lower(), m["name"].lower()))
+            return list(self._machines)
+
+    LIBRARY_VENDOR = "OrcaFilamentLibrary"      # brand/generic materials for every printer ("Generic PLA @System")
+
     def compatible(self, kind: str, machine: str) -> list[str]:
-        """User-selectable presets of `kind` whose compatible_printers include `machine`."""
+        """User-selectable presets of `kind` for `machine`: the ones listing it in compatible_printers (or whose
+        compatible_printers_condition matches it) first, then
+        OrcaSlicer's printer-independent material library (no printer list, no condition), as the Orca GUI does."""
         key = (kind, machine)
         with self._lock:
             if key not in self._compatible:
-                found = []
+                found, library = [], []
+                try:
+                    machine_preset = self.resolve("machine", machine)
+                except ProfileError:
+                    machine_preset = {}
                 for name, path in self._index[kind].items():
                     if self._load(path).get("instantiation") == "false":
                         continue  # abstract base preset
                     try:
-                        cp = self.resolve(kind, name).get("compatible_printers")
+                        preset = self.resolve(kind, name)
                     except ProfileError:
                         continue
+                    cp = preset.get("compatible_printers")
+                    cond = preset.get("compatible_printers_condition")
                     if isinstance(cp, list) and machine in cp:
                         found.append(name)
-                self._compatible[key] = sorted(found)
+                    elif not cp and cond and machine_preset and condition_matches(cond, machine_preset):
+                        found.append(name)  # Prusa / CORE One presets select their printers by condition
+                    elif (not cp and not preset.get("compatible_printers_condition")
+                          and path.relative_to(self.profiles_dir).parts[0] == self.LIBRARY_VENDOR):
+                        library.append(name)
+                self._compatible[key] = sorted(found) + sorted(library, key=str.lower)
             return list(self._compatible[key])
 
     def value(self, kind: str, name: str, key: str) -> Any:

@@ -72,7 +72,7 @@ export default function Settings() {
           {printers.map((p, i) => (
             <View key={p.id}>
               {i ? <Divider /> : null}
-              <Row icon="print-outline" label={p.name} sub={p.type === "moonraker" ? t("typeKlipper") : t("typeCentauri")}
+              <Row icon="print-outline" label={p.name} sub={t.table.printerTypes[p.type] ?? p.type}
                 onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: p.id } })} />
             </View>
           ))}

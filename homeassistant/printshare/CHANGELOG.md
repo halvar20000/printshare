@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.15.3
+- Prusa printers: the quality list was empty and slicing failed ("process not compatible with printer"); both fixed
+  (Prusa's presets choose their printers by condition).
+- Materials also offer OrcaSlicer's printer-independent library (Generic PETG, Polymaker, eSUN, …).
+- `GET /api/machines`: all OrcaSlicer printer models, for the app's model choice (Prusa, OctoPrint printers in the cloud).
+
 ## 0.15.2
 - Infill pattern per print (grid, gyroid, honeycomb, …): new choice "Füllmuster" on the web page.
 

@@ -18,9 +18,14 @@ export const lanIo: LanIo = {
     return {
       name, size: file.size ?? 0,
       bytes: () => file.bytes(),
-      upload: async (u, fieldName, fields, onProgress) => {
+      upload: async (u, fieldName, fields, onProgress, headers) => {
         const r = await file.upload(u, { httpMethod: "POST", uploadType: UploadType.MULTIPART, fieldName,
-          mimeType: "application/octet-stream", parameters: fields,
+          mimeType: "application/octet-stream", parameters: fields, headers,
+          onProgress: onProgress ? p => onProgress(p.bytesSent) : undefined });
+        return { status: r.status, body: r.body };
+      },
+      put: async (u, headers, onProgress) => {
+        const r = await file.upload(u, { httpMethod: "PUT", uploadType: UploadType.BINARY_CONTENT, headers,
           onProgress: onProgress ? p => onProgress(p.bytesSent) : undefined });
         return { status: r.status, body: r.body };
       },

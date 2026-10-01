@@ -292,6 +292,8 @@ export class Api {
 
   // ---------- cloud account (docs/API.md "Cloud accounts") ----------
   me = () => this.request<Me>("/api/auth/me");
+  /** OrcaSlicer printer models for the model choice (server 0.15.3) */
+  machines = () => this.request<{ name: string; vendor: string }[]>("/api/machines", { timeout: 30000 });
   logout = () => this.request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
   deleteAccount = () => this.request<{ deleted: boolean }>("/api/auth/account?confirm=true", { method: "DELETE" });
   addPrinter = (p: PrinterSettings) => this.request<Printer>("/api/printers", { method: "POST", body: p });
