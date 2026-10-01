@@ -233,3 +233,28 @@ def api_local(tmp_path, monkeypatch):
     cfg.write_text(f"api_token: test-token\nwork_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\n")
     monkeypatch.setenv("PRINTSHARE_CONFIG", str(cfg))
     return importlib.reload(importlib.import_module("printshare.api"))
+
+
+def test_gcode_with_slots_for_the_app(cloud, monkeypatch, tmp_path):
+    """In the cloud the app sends the G-code itself: the server rewrites the tools for the chosen AFC slots."""
+    api = cloud
+
+    async def fake_prepare(settings, link, printer_id, file_choice, options, out_name=None, progress=None):
+        g = tmp_path / "two.gcode"
+        g.write_text("PRINT_START EXTRUDER=210 TOOL=0\nT0\nG1 X1\nT1 PURGE_LENGTH=60\nG1 X2\n; T1 in a comment\n")
+        return JobResult(printer_id, "two.3mf", str(g), "5m", 2.0, 0.7, 50, {}, {})
+    monkeypatch.setattr(api, "prepare_job", fake_prepare)
+    with TestClient(api.app) as c:
+        a = login(api, c, "a@example.com")
+        c.post("/api/printers", headers=a, json={"name": "COSMOS", "type": "moonraker", "cosmos": True})
+        up = c.post("/api/uploads", headers=a, params={"name": "two.3mf"}, content=b"x").json()
+        job = c.post("/api/jobs", headers=a, json={"link": up["link"], "printer": "cosmos"}).json()["job"]
+        wait(c, a, job, "sliced")
+        plain = c.get(f"/api/jobs/{job}/gcode", headers=a)
+        assert "T1 PURGE_LENGTH" in plain.text and 'filename="two.gcode"' in plain.headers["content-disposition"]
+        r = c.get(f"/api/jobs/{job}/gcode", headers=a, params={"lanes": json.dumps({"1": 3, "2": 1})})
+        assert r.status_code == 200
+        assert r.text.splitlines()[:4] == ["PRINT_START EXTRUDER=210 TOOL=3", "T3", "G1 X1", "T1 PURGE_LENGTH=60"]
+        assert "; T1 in a comment" in r.text
+        assert c.get(f"/api/jobs/{job}/gcode", headers=a, params={"lanes": '{"1": 99}'}).status_code == 400
+        assert c.get(f"/api/jobs/{job}/gcode", headers=a, params={"lanes": "nope"}).status_code == 400

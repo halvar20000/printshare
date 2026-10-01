@@ -1183,11 +1183,26 @@ async def preview(job_id: str, format: int = 1, acct: Account = Depends(auth)) -
 
 
 @app.get("/api/jobs/{job_id}/gcode")
-def download_gcode(job_id: str, acct: Account = Depends(auth)) -> FileResponse:
-    """The sliced G-code itself (SL-10)."""
+async def download_gcode(job_id: str, lanes: str | None = None, acct: Account = Depends(auth)) -> FileResponse:
+    """The sliced G-code itself (SL-10). `lanes` = the slot mapping as JSON ({"1": 3, …}, like /send): the
+    tool numbers are rewritten on a copy - in the cloud the app sends this file to the printer itself."""
     job, gcode = _job_gcode(acct, job_id)
     name = Path((job.get("result") or {}).get("source_file") or gcode.stem).stem + ".gcode"
+    if lanes:
+        try:
+            tools = lane_map.parse_mapping(json.loads(lanes))
+        except (ValueError, TypeError, AttributeError) as e:
+            raise HTTPException(400, f"lanes: {e}")
+        if tools:
+            out = Path(acct.settings.work_dir) / "lanes" / job_id / uuid.uuid4().hex[:8]
+            gcode = await asyncio.to_thread(lane_map.remap_tools, gcode, tools, out)
+            _spawn(_remove_later(out.parent, 600))
     return FileResponse(gcode, media_type="text/x.gcode", filename=name)
+
+
+async def _remove_later(path: Path, delay_s: float) -> None:
+    await asyncio.sleep(delay_s)
+    shutil.rmtree(path, ignore_errors=True)
 
 
 @app.delete("/api/jobs/{job_id}")
