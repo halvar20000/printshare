@@ -518,6 +518,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `zig-zag`, which Orca reads as `rectilinear` → reported as `rectilinear`. Web: select "Füllmuster".
   Expo app not done yet.
 
+## Local Android builds on Tower (2026-10-01)
+- The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
+  (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
+  CMake 3.22.1) in `/mnt/user/AI/tools/` (persistent); Gradle cache + EAS work dir in /tmp (rebuilt if lost).
+- Same EAS upload key (SHA256 EF:EB:B4:82:…:07:37, checked against cloud build 14) and the remote versionCode
+  counter (first local build = 17; queued cloud build 16 cancelled). Name the file after the versionCode in the log
+  ("Incremented versionCode from … to …").
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.
