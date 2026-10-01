@@ -5,7 +5,7 @@ SSH key in `.secrets/hetzner_ed25519` – both git-ignored, on Tower only).
 
 | Part | Value |
 |---|---|
-| Server | `pocketprint3d-1` (id 168141261): CX33 (4 vCPU, 8 GB, 80 GB), Nuremberg, Ubuntu 24.04, backups on |
+| Server | `pocketprint3d-1` (id 168141261): CX33 (4 vCPU, 8 GB, 80 GB), Nuremberg, Ubuntu 24.04, backups on, delete + rebuild protection on |
 | Addresses | 49.13.172.173, 2a01:4f8:1c1f:8852::1 → `api.pocketprint3d.com` (A/AAAA, TTL 300) |
 | DNS | zone `pocketprint3d.com` (id 1588152) in the same project, served by ns1.your-server.de & co. |
 | Cost | ≈ 12.83 €/month gross (server 10.19 + backups 2.04 + IPv4 0.60), created 2026-09-30 |
