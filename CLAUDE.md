@@ -502,6 +502,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   192.168.86.0/24) to the CC at 192.168.86.144 - listed by the printer (Cmd 258), printer stayed idle. A real started
   print through the cloud is still open (do it at home, no camera in cloud mode yet).
 
+## Infill pattern per print (2026-10-01, 0.15.2, Dominique)
+- Job option `infill_pattern` → `sparse_infill_pattern`, validated against `config.INFILL_PATTERNS` (the 26 values of
+  Orca 2.4.2 `PrintConfig.cpp`). `/options` lists them (`infill_patterns`) and gives `defaults.infill_pattern` +
+  `defaults.infill_line_width` (mm, for the iOS app's true-to-scale preview). The Elegoo CC presets still say
+  `zig-zag`, which Orca reads as `rectilinear` → reported as `rectilinear`. Web: select "Füllmuster".
+  Expo app not done yet.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

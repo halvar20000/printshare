@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.15.2
+- Infill pattern per print (grid, gyroid, honeycomb, …): new choice "Füllmuster" on the web page.
+
 ## 0.15.1
 - The G-code download can rewrite the tool numbers for chosen AFC slots (used by the app with PocketPrint3D Cloud,
   where the phone sends the print to the printer itself).

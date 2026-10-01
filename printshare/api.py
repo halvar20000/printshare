@@ -62,7 +62,7 @@ from pydantic import BaseModel, Field
 
 from .cloud import accounts
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
-from .config import BRIM_TYPES, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
+from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
@@ -81,7 +81,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.15.1")
+app = FastAPI(title="PocketPrint3D", version="0.15.2")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -474,8 +474,15 @@ def _defaults(acct: "Account", printer: PrinterConfig, process: str) -> dict[str
         walls = int(proc.get("wall_loops"))
     except (TypeError, ValueError):
         walls = None
+    try:  # mm; a percentage of the nozzle (e.g. "100%") gives null, the apps assume ~0.45 mm then
+        line_width = float(proc.get("sparse_infill_line_width"))
+    except (TypeError, ValueError):
+        line_width = None
     return {"filament": s.filament, "process": process, "bed_type": s.bed_type,
             "supports": support, "brim": brim, "infill": infill, "walls": walls,
+            # Orca reads the legacy "zig-zag" as rectilinear (PrintConfig handle_legacy); Elegoo CC presets still use it
+            "infill_pattern": {"zig-zag": "rectilinear"}.get(pat := proc.get("sparse_infill_pattern") or None, pat),
+            "infill_line_width": line_width or None,
             "layer_height": proc.get("layer_height")}
 
 
@@ -515,7 +522,7 @@ async def options(printer_id: str, process: str | None = None, acct: Account = D
     return {"printer": printer.id, "materials": materials, "processes": processes,
             "own": {"materials": own_m, "processes": own_p},
             "plates": PLATES, "supports": ["off", *SUPPORT_TYPES], "brims": list(BRIM_TYPES),
-            "defaults": defaults}
+            "infill_patterns": list(INFILL_PATTERNS), "defaults": defaults}
 
 
 @app.get("/api/printers/{printer_id}/status")
@@ -1004,6 +1011,7 @@ class OptionsModel(BaseModel):
     supports: str | None = None
     brim: str | None = None
     infill: int | None = None
+    infill_pattern: str | None = None            # OrcaSlicer sparse_infill_pattern (see /options infill_patterns)
     walls: int | None = None
     filaments: list[str | None] | None = None   # multicolour: preset per filament of the model
     copies: int | None = None                    # plate: copies, OrcaSlicer arranges them (fewer if they don't fit)
