@@ -217,6 +217,23 @@ const de = {
             "Cool Plate": "Cool Plate", "Engineering Plate": "Engineering Plate",
             "Supertack Plate": "Supertack Plate" } as Record<string, string>,
   ago: "vor {v}",
+  // Spoolman (MA-07)
+  spoolman: "Spoolman", spoolmanSub: "Spulen wählen, Verbrauch abbuchen", spoolmanOff: "nicht verbunden",
+  spoolmanAddress: "Spoolman-Adresse",
+  spoolmanHint: "Adresse deines Spoolman-Servers im Heimnetz, z. B. 192.168.1.20:7912. Sie bleibt auf diesem Handy.",
+  spoolmanOk: "Spoolman {version} · {n} Spulen", spoolmanRemove: "Spoolman entfernen",
+  spoolmanUnreachable: "Spoolman nicht erreichbar ({error})",
+  spools: "Spulen", spool: "Spule", noSpool: "Keine Spule", noSpoolSub: "Nicht abbuchen", spoolLeft: "{g} g übrig",
+  spoolsHint: "Nach dem Druck bucht die App den Verbrauch in Spoolman ab (nur bei „Drucken“, App einmal öffnen).",
+  spoolsHintPrinter: "Der Drucker (Moonraker) bucht den Verbrauch selbst in Spoolman ab.",
+  spoolsHintAfc: "Die Spulen sind den Slots in AFC zugeordnet – der Drucker bucht selbst ab.",
+  spoolsMultiPrinter: "Moonraker verfolgt nur eine Spule. Bei mehreren Farben ohne AFC bucht der Drucker alles auf die aktive Spule.",
+  spoolTooLittle: "{what}: auf {spool} sind nur noch {have} g – der Druck braucht {need} g.",
+  spoolMaterialWarn: "{what}: Profil ist {want}, die Spule ist {have}.",
+  bookingsOpen: "Spoolman: offene Abbuchungen", bookingsNone: "Keine offenen Abbuchungen.",
+  bookingAsk: "„{file}“ auf {printer}: Druck abgebrochen oder Ende verpasst. Wie viel abbuchen?",
+  bookingWaits: "wartet auf das Druckende", bookAll: "Alles ({g} g)", bookPart: "{g} g ({pct} %)", bookNone: "Nichts",
+  booked: "Spoolman: {g} g von {spool} abgebucht",
 };
 
 type Strings = typeof de;
@@ -416,6 +433,22 @@ const en: Strings = {
             "Cool Plate": "Cool Plate", "Engineering Plate": "Engineering Plate",
             "Supertack Plate": "Supertack Plate" },
   ago: "{v} ago",
+  spoolman: "Spoolman", spoolmanSub: "Choose spools, book the used filament", spoolmanOff: "not connected",
+  spoolmanAddress: "Spoolman address",
+  spoolmanHint: "Address of your Spoolman server on the home network, e.g. 192.168.1.20:7912. It stays on this phone.",
+  spoolmanOk: "Spoolman {version} · {n} spools", spoolmanRemove: "Remove Spoolman",
+  spoolmanUnreachable: "Spoolman not reachable ({error})",
+  spools: "Spools", spool: "Spool", noSpool: "No spool", noSpoolSub: "Don't book", spoolLeft: "{g} g left",
+  spoolsHint: "After the print the app books the used filament in Spoolman (only with “Print”; open the app once).",
+  spoolsHintPrinter: "The printer (Moonraker) books the used filament in Spoolman itself.",
+  spoolsHintAfc: "The spools are assigned to the slots in AFC – the printer books the filament itself.",
+  spoolsMultiPrinter: "Moonraker tracks one spool only. With several colours and no AFC the printer books everything on the active spool.",
+  spoolTooLittle: "{what}: {spool} has only {have} g left – the print needs {need} g.",
+  spoolMaterialWarn: "{what}: the profile is {want}, the spool is {have}.",
+  bookingsOpen: "Spoolman: bookings to decide", bookingsNone: "No open bookings.",
+  bookingAsk: "“{file}” on {printer}: print cancelled or its end was missed. How much should be booked?",
+  bookingWaits: "waiting for the print to end", bookAll: "All ({g} g)", bookPart: "{g} g ({pct} %)", bookNone: "Nothing",
+  booked: "Spoolman: {g} g booked on {spool}",
 };
 
 export type Lang = "de" | "en";

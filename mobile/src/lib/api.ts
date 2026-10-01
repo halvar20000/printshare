@@ -43,6 +43,8 @@ export type PrinterKind = "idle" | "active" | "paused" | "done" | "stopped" | "e
 export type Lane = {
   id: string; tool: number | null; unit: string | null; material: string | null; color: string | null;
   filament: string | null; weight_g: number | null; loaded: boolean; in_toolhead: boolean; status: string | null;
+  /** server 0.16.0: Spoolman spool assigned to the lane in AFC */
+  spool_id?: number | null;
 };
 export type PrinterStatus = {
   state: string | null; kind: PrinterKind; file?: string | null; progress?: number;
@@ -54,6 +56,8 @@ export type PrinterStatus = {
   fans?: Record<string, number | null>;
   lights?: Record<string, boolean>;
   speed?: number | null;
+  /** server 0.16.0, Klipper: Moonraker's own Spoolman link (it books the filament itself); null = none */
+  spoolman?: { connected: boolean; spool_id: number | null } | null;
 };
 export type Defaults = {
   filament: string; process: string; bed_type: string; supports: string; brim: string;
@@ -80,6 +84,8 @@ export type JobState = "slicing" | "sliced" | "sending" | "uploaded" | "started"
 export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
+  /** path of the G-code on the server (its file name is the name on the printer) */
+  gcode?: string;
   overrides: Record<string, string>;
   filaments?: { index: number; color: string | null; preset: string; grams: number | null }[];
   /** server 0.14.0: copies asked for / on the plate (null for one copy) */
@@ -272,10 +278,11 @@ export class Api {
     this.request<{ job: string }>("/api/jobs", { method: "POST", body: { link, printer, file, options }, timeout: 30000 });
   jobs = () => this.request<JobSummary[]>("/api/jobs");
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
-  /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>} */
-  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>) =>
+  /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>};
+   *  spoolId (server 0.16.0): Spoolman spool Moonraker books the print on (status.spoolman not null) */
+  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`,
-      { method: "POST", body: { start, confirm: start, leveling, lanes } });
+      { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}) } });
   preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview?format=2`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
   /** Where the app downloads the G-code itself (cloud: it sends it to the printer); `lanes` = AFC slot mapping. */

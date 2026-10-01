@@ -6,6 +6,7 @@ export type SendStep = "download" | "upload" | "start";
 export type SendOptions = {
   start: boolean;
   leveling?: boolean | null;
+  spoolId?: number;                         // Klipper: Spoolman spool Moonraker books the print on
   onStep?: (step: SendStep) => void;
   onProgress?: (part: number) => void;      // 0..1 of the upload
 };

@@ -536,6 +536,23 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   Default slicing checked with the real Orca: Prusa MK4/MK4S/MINI/MK3S/XL/CORE One, Ender-3 V2, Kobra 2
   (no "MK3.9" machine in Orca 2.4.2).
 
+## Spoolman (spec MA-07, 2026-10-01, server 0.16.0)
+- The app talks to Spoolman directly (address per server/account on the phone, `ps_spoolman_<key>`); API checked in
+  Spoolman's published OpenAPI (donkie.github.io/Spoolman): `GET /api/v1/info`, `GET /api/v1/spool?allow_archived=false`,
+  `PUT /api/v1/spool/{id}/use {"use_weight": g}`; default port 7912 (tried when no port is given).
+- Moonraker's own link (moonraker.readthedocs.io "Spoolman"): `GET /server/spoolman/status` (404 = not configured) →
+  status `spoolman {connected, spool_id}`; `POST /server/spoolman/spool_id {"spool_id"}` = active spool, Moonraker then
+  books itself. Server: `/send` `spool_id` (moonraker only), `send_job(spool_id=)` → `adapter.set_spool`; lanes carry
+  AFC's `spool_id` (Dominique's recorded data: all `null`, no Spoolman there).
+- App `lib/spoolman.ts`: client, last spool per printer, bookings (`ps_bookings_<key>`, max 20) settled by
+  `settleBookings` on every printers-tab refresh with the pure `judge()` (done → book; stopped/error → ask with the
+  printed share; vanished after seen ≥ 99 % → book; not seen within 20 min / 3 days offline → ask); booked spools are
+  removed one by one (no double booking on retry). Review screen: section "Spulen" + warnings; `components/bookings.tsx`
+  (decision card on the printers tab and `app/spoolman.tsx`); Settings → Spoolman.
+- Tested: node against `tests/fakes.py` `FakeSpoolman` + FakeMoonraker (incl. active spool on send), web build flow
+  (choose spool → material warning → print → simulated CC finishes → 3.7 g booked once; decision card books 30 %).
+  **No real Spoolman tried yet**; the CC1's file name after COMPLETED is assumed to stay (else the app asks).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

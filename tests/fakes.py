@@ -144,6 +144,8 @@ class FakeMoonraker:
         self.state = "printing"
         self.afc = afc
         self.scripts: list[str] = []
+        # Moonraker's [spoolman] module: None = not configured (404), else the active spool id
+        self.spoolman: dict | None = None
         self.webcams = [{"name": "cam", "enabled": True, "service": "mjpegstreamer-adaptive",
                          "stream_url": "/webcam/?action=stream", "snapshot_url": "/webcam/?action=snapshot"}]
         self.runner: web.AppRunner | None = None
@@ -203,6 +205,18 @@ class FakeMoonraker:
             return web.Response(body=test_jpeg(), content_type="image/jpeg")
         return await mjpeg(request)
 
+    async def spoolman_status(self, request: web.Request) -> web.Response:
+        if self.spoolman is None:
+            return web.json_response({"error": {"code": 404, "message": "Not Found"}}, status=404)
+        return web.json_response({"result": {"spoolman_connected": True, "pending_reports": [],
+                                             "spool_id": self.spoolman.get("spool_id")}})
+
+    async def spoolman_spool(self, request: web.Request) -> web.Response:
+        if self.spoolman is None:
+            return web.json_response({"error": {"code": 404, "message": "Not Found"}}, status=404)
+        self.spoolman["spool_id"] = (await request.json()).get("spool_id")
+        return web.json_response({"result": {"spool_id": self.spoolman["spool_id"]}})
+
     async def objects_list(self, request: web.Request) -> web.Response:
         return web.json_response({"result": {"objects": list(self._objects())}})
 
@@ -226,6 +240,8 @@ class FakeMoonraker:
         app.router.add_post("/printer/gcode/script", self.gcode_script)
         app.router.add_get("/server/temperature_store", self.temperature_store)
         app.router.add_get("/webcam/", self.webcam)
+        app.router.add_get("/server/spoolman/status", self.spoolman_status)
+        app.router.add_post("/server/spoolman/spool_id", self.spoolman_spool)
         self.runner = web.AppRunner(app)
         await self.runner.setup()
         await web.TCPSite(self.runner, "127.0.0.1", self.port).start()
@@ -483,3 +499,48 @@ class FakeHomeAssistant(_FakeHTTP):
         if e in self.states and self.states[e] != "unavailable":
             self.states[e] = {"turn_on": "on", "turn_off": "off"}.get(service, self.states[e])
         return web.json_response([self._entity(e)] if e in self.states else [])
+
+
+class FakeSpoolman(_FakeHTTP):
+    """Spoolman REST API v1 (https://donkie.github.io/Spoolman/): spools with filament + vendor, bookings via /use.
+    Only used by the app's tests (the app talks to Spoolman itself)."""
+
+    def __init__(self, port: int = 7912) -> None:
+        self.port = port
+        self.runner = None
+        self.uses: list[tuple[int, float]] = []
+        vendor = {"id": 1, "registered": "2026-01-01T00:00:00", "name": "Elegoo", "extra": {}}
+
+        def spool(i, name, material, color, remaining, archived=False):
+            return {"id": i, "registered": "2026-01-01T00:00:00", "archived": archived, "extra": {},
+                    "used_weight": 1000 - remaining, "used_length": 0, "remaining_weight": remaining,
+                    "initial_weight": 1000, "location": "Shelf", "last_used": None,
+                    "filament": {"id": i, "registered": "2026-01-01T00:00:00", "name": name, "material": material,
+                                 "vendor": vendor, "density": 1.24, "diameter": 1.75, "color_hex": color, "extra": {}}}
+        self.spools = {3: spool(3, "PLA Black", "PLA", "000000", 812.4), 4: spool(4, "PETG White", "PETG", "FFFFFFFF", 6.0),
+                       5: spool(5, "Old", "PLA", "FF0000", 100, archived=True)}
+
+    def routes(self, app: web.Application) -> None:
+        async def info(request):
+            return web.json_response({"version": "0.22.1", "debug_mode": False, "automatic_backups": True,
+                                      "data_dir": "/data", "logs_dir": "/logs", "backups_dir": "/b",
+                                      "db_type": "sqlite", "external_db_name": ""})
+
+        async def spool_list(request):
+            archived = request.query.get("allow_archived") == "true"
+            return web.json_response([s for s in self.spools.values() if archived or not s["archived"]])
+
+        async def use(request):
+            sid = int(request.match_info["id"])
+            if sid not in self.spools:
+                return web.json_response({"message": "not found"}, status=404)
+            body = await request.json()
+            grams = body.get("use_weight")
+            self.uses.append((sid, grams))
+            s = self.spools[sid]
+            s["used_weight"] += grams
+            s["remaining_weight"] = max(0, s["remaining_weight"] - grams)
+            return web.json_response(s)
+        app.router.add_get("/api/v1/info", info)
+        app.router.add_get("/api/v1/spool", spool_list)
+        app.router.add_put("/api/v1/spool/{id}/use", use)

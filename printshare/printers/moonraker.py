@@ -66,6 +66,26 @@ class Moonraker:
             return {"uploaded": item.get("path", gcode.name),
                     "started": bool((body.get("result") or body).get("print_started", start))}
 
+    async def _spoolman(self, client: httpx.AsyncClient, base: str) -> dict[str, Any] | None:
+        """Moonraker's own Spoolman link ([spoolman] in moonraker.conf): it books the used filament on the active spool
+        itself, so the apps must not book it again. None = not configured."""
+        try:
+            r = await client.get(f"{base}/server/spoolman/status", headers=self.headers)
+            if r.status_code != 200:
+                return None
+            res = r.json()["result"]
+            return {"connected": bool(res.get("spoolman_connected")), "spool_id": res.get("spool_id")}
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            return None
+
+    async def set_spool(self, spool_id: int | None) -> None:
+        """Active Spoolman spool: Moonraker books the filament of the next print on it."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            base = await self._resolve_base(client)
+            r = await client.post(f"{base}/server/spoolman/spool_id", headers=self.headers, json={"spool_id": spool_id})
+            if r.status_code != 200:
+                raise MoonrakerError(f"setting the Spoolman spool failed: HTTP {r.status_code} {r.text[:200]}")
+
     async def control(self, action: str) -> None:
         if action not in ("pause", "resume", "cancel"):
             raise ValueError(f"unknown action {action!r}")
@@ -98,6 +118,7 @@ class Moonraker:
                 raise MoonrakerError(f"Status failed: HTTP {r.status_code}")
             st = r.json()["result"]["status"]
             lanes = await self._lanes(client, base, objects)
+            spoolman = await self._spoolman(client, base)
         ps = st.get("print_stats", {})
         info = ps.get("info") or {}
         return {
@@ -113,6 +134,7 @@ class Moonraker:
             "bed_target": st.get("heater_bed", {}).get("target"),
             "camera": f"{base}/webcam/?action=stream",
             "lanes": lanes,
+            "spoolman": spoolman,
             **control_status(st, ctl),
         }
 
@@ -248,6 +270,7 @@ class Moonraker:
                 "loaded": bool(ln.get("prep") or ln.get("load")),
                 "in_toolhead": bool(ln.get("tool_loaded")) or name == current,
                 "status": ln.get("status"),
+                "spool_id": ln.get("spool_id") if isinstance(ln.get("spool_id"), int) else None,
             })
         return sorted(out, key=lambda x: (x["tool"] is None, x["tool"] if x["tool"] is not None else 0, x["id"]))
 

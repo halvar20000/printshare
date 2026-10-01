@@ -131,3 +131,36 @@ def test_lanes_from_dominiques_cosmos():
     ]
     assert not any(ln["in_toolhead"] for ln in lanes)
     assert all(ln["unit"] == "CANVAS_1" for ln in lanes)
+
+
+def test_spoolman_through_moonraker(api, client, monkeypatch, tmp_path):
+    """Spoolman (0.16.0): the status tells whether Moonraker books the filament itself; /send sets its active spool."""
+    job_id = _sliced_job(api, client, monkeypatch, tmp_path)
+    with BackgroundFake(FakeMoonraker()) as fake:
+        fake.state = "standby"
+        assert client.get("/api/printers/dom/status", headers=H).json()["spoolman"] is None   # not configured
+        fake.spoolman = {"spool_id": None}
+        assert client.get("/api/printers/dom/status", headers=H).json()["spoolman"] == {"connected": True, "spool_id": None}
+        r = client.post(f"/api/jobs/{job_id}/send", headers=H, json={"start": True, "confirm": True, "spool_id": 0})
+        assert r.status_code == 422
+        r = client.post(f"/api/jobs/{job_id}/send", headers=H, json={"start": True, "confirm": True, "spool_id": 7})
+        assert r.status_code == 200, r.text
+        j = _wait(client, job_id, "started", "sliced")
+        assert j["state"] == "started" and j["result"]["sent"]["spool_id"] == 7
+        assert fake.spoolman == {"spool_id": 7} and fake.uploads
+        assert client.get("/api/printers/dom/status", headers=H).json()["spoolman"]["spool_id"] == 7
+
+
+def test_spool_of_an_afc_lane():
+    rec = {"objects": ["AFC", "AFC_lane CANVAS_1"],
+           "status": {"AFC": {"lanes": ["CANVAS_1"], "current_load": None},
+                      "AFC_lane CANVAS_1": {"map": "T0", "material": "PLA", "prep": True, "spool_id": 12}}}
+
+    async def go():
+        fake = FakeMoonraker(recorded=rec)
+        await fake.start()
+        try:
+            return await get_adapter(PrinterConfig(id="d", type="moonraker", url="http://127.0.0.1:7125")).status()
+        finally:
+            await fake.stop()
+    assert [ln["spool_id"] for ln in asyncio.run(go())["lanes"]] == [12]

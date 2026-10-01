@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 
+import { BookingCard, bookedText } from "@/components/bookings";
 import { CameraImage } from "@/components/camera";
 
 import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/components/ui";
@@ -12,6 +13,7 @@ import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
 import { NoAddressError, printerControl, printerStatus } from "@/lib/printerAccess";
 import { slots } from "@/lib/lanes";
+import { settleBookings, type Booking } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
 
 type Entry = { printer: Printer; status: PrinterStatus | null; error?: string; noAddress?: boolean };
@@ -27,6 +29,9 @@ export default function Printers() {
   const [cams, setCams] = useState<Record<string, boolean>>({});
   const [starting, setStarting] = useState<Record<string, number>>({});   // issue #9: switched on at (ms)
   const [now, setNow] = useState(() => Date.now());
+  // Spoolman (MA-07): prints that ended are booked; unclear ones wait for the user's decision
+  const [openBookings, setOpenBookings] = useState<Booking[]>([]);
+  const [booked, setBooked] = useState<{ text: string; at: number }[]>([]);
   const router = useRouter();
 
   // which printers have a camera (asked once per visit, not with every status refresh)
@@ -51,10 +56,13 @@ export default function Printers() {
       setEntries(list);
       setNow(Date.now());
       setError("");
+      const res = await settleBookings(server!, Object.fromEntries(list.map(e => [e.printer.id, e.status])));
+      setOpenBookings(res.open);
+      if (res.booked.length) setBooked(b => [...b, ...res.booked.map(x => ({ text: bookedText(t, x), at: Date.now() }))]);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [api, server]);
+  }, [api, server, t]);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -93,6 +101,8 @@ export default function Printers() {
     <Screen refreshControl={<RefreshControl refreshing={refreshing} tintColor={c.accent}
       onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
       {error ? <Banner kind="error" text={error} /> : null}
+      {booked.filter(b => now - b.at < 60000).map(b => <Banner key={b.at + b.text} kind="ok" icon="disc-outline" text={b.text} />)}
+      {server ? openBookings.map(b => <BookingCard key={b.id} server={server} booking={b} onDone={load} />) : null}
       {entries && !entries.length ? (
         <Empty icon="print-outline" title={t("noPrinters")} sub={cloud ? t("noPrintersCloud") : undefined}>
           {cloud ? <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} /> : null}

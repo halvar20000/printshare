@@ -82,7 +82,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.15.3")
+app = FastAPI(title="PocketPrint3D", version="0.16.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -1109,6 +1109,8 @@ class SendRequest(BaseModel):
     leveling: bool | None = None  # bed leveling before the print; None = printer default
     # lane selection (issue #6): {"<model filament, 1-based>": <printer tool of the lane>}
     lanes: dict[str, int] | None = None
+    # Spoolman (0.16.0): spool that the printer's Moonraker books this print on (status "spoolman" not null)
+    spool_id: int | None = Field(None, ge=1)
 
 
 @app.post("/api/jobs/{job_id}/send")
@@ -1120,6 +1122,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
     if job["state"] not in ("sliced", "uploaded"):
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
     result = JobResult(**job["result"])
+    if req.spool_id is not None and _printer(acct, result.printer).type != "moonraker":
+        raise HTTPException(400, "spool_id only for Klipper printers with Moonraker's Spoolman link")
     try:
         tools = lane_map.parse_mapping(req.lanes)
     except ValueError as e:
@@ -1150,7 +1154,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
     async def worker() -> None:
         try:
             await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
-                           leveling=req.leveling, tools=tools)
+                           leveling=req.leveling, tools=tools, spool_id=req.spool_id)
             job["leveling"] = req.leveling
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
         except Exception as e:  # noqa: BLE001

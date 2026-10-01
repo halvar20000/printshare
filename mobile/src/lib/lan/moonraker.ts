@@ -54,6 +54,7 @@ export class MoonrakerPrinter implements Lan {
       bed: st.heater_bed?.temperature ?? null, bed_target: st.heater_bed?.target ?? null,
       camera: `${base}/webcam/?action=stream`,
       lanes: await this.lanes(objects),
+      spoolman: await this.spoolman(),
       heaters: { nozzle: { actual: st.extruder?.temperature ?? null, target: st.extruder?.target ?? null },
                  bed: { actual: st.heater_bed?.temperature ?? null, target: st.heater_bed?.target ?? null } },
       speed: typeof st.gcode_move?.speed_factor === "number" ? Math.round(st.gcode_move.speed_factor * 100) : null,
@@ -79,6 +80,7 @@ export class MoonrakerPrinter implements Lan {
           color: /^#?[0-9A-Fa-f]{6,8}$/.test(color) ? `#${color.replace("#", "").slice(0, 6).toUpperCase()}` : null,
           filament: ln.filament_name || null, weight_g: ln.weight ?? null, loaded: !!(ln.prep || ln.load),
           in_toolhead: !!ln.tool_loaded || name === afc.current_load, status: ln.status ?? null,
+          spool_id: Number.isInteger(ln.spool_id) ? ln.spool_id : null,
         };
       }).sort((a, b) => (a.tool ?? 99) - (b.tool ?? 99) || a.id.localeCompare(b.id));
     } catch {
@@ -86,10 +88,26 @@ export class MoonrakerPrinter implements Lan {
     }
   }
 
+  /** Moonraker's own Spoolman link ([spoolman] in moonraker.conf); null = not configured. */
+  private async spoolman(): Promise<PrinterStatus["spoolman"]> {
+    try {
+      const r: Raw = await this.get("/server/spoolman/status", 5000);
+      return { connected: !!r.spoolman_connected, spool_id: Number.isInteger(r.spool_id) ? r.spool_id : null };
+    } catch {
+      return null;
+    }
+  }
+
   async send(file: GcodeFile, opts: SendOptions): Promise<void> {
     // bed leveling is part of the printer's start G-code; it can't be switched per print here
     opts.onStep?.("upload");
     const base = await this.resolve();
+    if (opts.spoolId != null) {
+      // Moonraker books the filament of the next print on its active spool
+      const r = await fetchWithTimeout(`${base}/server/spoolman/spool_id`, { method: "POST",
+        headers: { ...this.headers(), "Content-Type": "application/json" }, body: JSON.stringify({ spool_id: opts.spoolId }) }, 10000);
+      if (!r.ok) throw new LanError(`setting the Spoolman spool failed (HTTP ${r.status})`);
+    }
     const r = await file.upload(`${base}/server/files/upload`, "file",
       { root: "gcodes", print: opts.start ? "true" : "false" },
       opts.onProgress ? sent => opts.onProgress!(Math.min(1, sent / Math.max(1, file.size))) : undefined);

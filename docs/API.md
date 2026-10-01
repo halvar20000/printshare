@@ -178,6 +178,9 @@ Live state; call every 3–10 s while visible. `502` = printer not reachable (of
 - `heaters` with `target: null` = sensor only (e.g. a chamber thermometer). `fans` in %, `lights` on/off,
   `speed` in % (Centauri: one of its modes 50/100/130/160).
 - `camera`: the printer's own URL – **apps use `/camera/...` below instead** (works away from home).
+- `spoolman` (0.16.0, Klipper only): Moonraker's own Spoolman link – `{"connected": true, "spool_id": 3}` or `null`
+  (not configured). When it is not null, Moonraker books the used filament itself: the app must not book it again
+  (see "Spoolman" below). Lanes then carry the `spool_id` AFC assigned to them (`null` = none).
 - Other fields may exist (e.g. `raw` for the Centauri); ignore them.
 
 ### `GET /api/printers/{id}/options[?process=<quality>]`
@@ -368,6 +371,9 @@ Plate options (since 0.14.0; older servers ignore them silently, so check `/api/
 - `leveling`: only for printers with `leveling != null`; omitted = printer default.
 - `lanes` (AFC): `{"<model colour index>": <tool of the chosen slot>}`. The server rewrites the tool numbers in a
   copy of the G-code – changing slots needs no re-slicing. `409` if a chosen slot is empty and the print should start.
+- `spool_id` (0.16.0, Klipper with `status.spoolman` not null): Moonraker's active spool is set to it before the
+  upload, so Moonraker books this print on that spool. `400` for other printer types. Leave it out with AFC (the lanes
+  carry their own spools).
 - `409 "printer is busy - wait until the current print has finished"`.
 
 ### Preview and G-code
@@ -388,6 +394,30 @@ the printer itself** on the home Wi-Fi (see `mobile/src/lib/lan/` for the Centau
 ### One-shot (CLI, iOS Shortcuts)
 `POST /api/print {"link": "…", "printer": "centauri", "file": null, "start": true}` → `{"job": "…"}` – downloads,
 slices, uploads and starts without review. Not for the apps (no confirmation step).
+
+## Spoolman (0.16.0, spec MA-07)
+[Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
+directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server
+needs no setting. API: https://donkie.github.io/Spoolman/ – the apps use
+
+| | |
+|---|---|
+| `GET /api/v1/info` | connection test (`version`); Spoolman listens on port 7912 unless a proxy is used |
+| `GET /api/v1/spool?allow_archived=false&sort=last_used:desc,id:asc` | spools: `id`, `remaining_weight` (g, `null` if unknown), `location`, `filament.{name, material, color_hex, vendor.name}` |
+| `PUT /api/v1/spool/{id}/use` `{"use_weight": 11.4}` | book used filament in grams |
+
+What the Android app does (`mobile/src/lib/spoolman.ts`):
+1. Review screen: one spool per colour (default: the AFC lane's `spool_id`, else Moonraker's active spool, else the
+   last choice for that printer). Warning when `remaining_weight` < the colour's grams, or the spool's material
+   differs from the preset's.
+2. **Who books:** printer `status.spoolman` not null → Moonraker books itself; the app only sends `spool_id` with
+   `/send` (single colour, no AFC) or, in the cloud, sets it itself (`POST /server/spoolman/spool_id`). Otherwise
+   (Centauri, PrusaLink, OctoPrint, Klipper without Moonraker's Spoolman link) **the app books**: after "Print" it
+   stores a booking (printer, file name on the printer, spool + grams per colour).
+3. With every printer status it reads, the app settles the booking: same file and `kind` `done` → book it all;
+   `stopped`/`error` → ask the user (all / the printed share from `progress` / nothing); the file vanished after it was
+   seen printing → book if it had reached 99 %, else ask; never seen within 20 min → ask. A booked spool is removed
+   from the booking right away, so a retry never books twice. "Upload only" books nothing.
 
 ## Profiles (own OrcaSlicer presets)
 | | |

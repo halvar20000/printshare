@@ -153,8 +153,9 @@ async def prepare_job(settings: Settings, link: str, printer_id: str | None = No
 
 async def send_job(settings: Settings, result: JobResult, start: bool,
                    progress: Callable[[str], None] | None = None, leveling: bool | None = None,
-                   tools: dict[int, int] | None = None) -> dict[str, Any]:
-    """tools: OrcaSlicer tool -> printer tool (lane selection, issue #6); the G-code is rewritten on a copy."""
+                   tools: dict[int, int] | None = None, spool_id: int | None = None) -> dict[str, Any]:
+    """tools: OrcaSlicer tool -> printer tool (lane selection, issue #6); the G-code is rewritten on a copy.
+    spool_id: Spoolman spool that Moonraker books this print on (printers with Moonraker's [spoolman])."""
     say = progress or (lambda msg: log.info(msg))
     say("Sending to printer" + (" and starting" if start else ""))
     gcode = Path(result.gcode)
@@ -162,13 +163,20 @@ async def send_job(settings: Settings, result: JobResult, start: bool,
     if tools and any(k != v for k, v in tools.items()):
         tmp = Path(tempfile.mkdtemp(prefix="lanes-", dir=settings.work_dir))
         gcode = await asyncio.to_thread(lane_map.remap_tools, gcode, tools, tmp)
+    adapter = get_adapter(settings.printer(result.printer))
+    if spool_id is not None:
+        if not hasattr(adapter, "set_spool"):
+            raise ValueError("this printer can't track a Spoolman spool itself")
+        await adapter.set_spool(spool_id)
     try:
-        sent = await get_adapter(settings.printer(result.printer)).send(gcode, start=start, leveling=leveling)
+        sent = await adapter.send(gcode, start=start, leveling=leveling)
     finally:
         if tmp:
             shutil.rmtree(tmp, ignore_errors=True)
     if tools:
         sent = {**sent, "tools": {str(k): v for k, v in tools.items()}}
+    if spool_id is not None:
+        sent = {**sent, "spool_id": spool_id}
     result.sent = sent
     say("Done")
     return sent

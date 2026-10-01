@@ -7,6 +7,7 @@ import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@
 import type { Me, Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
+import { loadSpoolmanUrl } from "@/lib/spoolman";
 import { useColors } from "@/lib/theme";
 
 export default function Settings() {
@@ -18,15 +19,17 @@ export default function Settings() {
   const [route, setRoute] = useState<"home" | "remote" | null>(null);
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [me, setMe] = useState<Me | null>(null);
+  const [spoolman, setSpoolman] = useState<string | null>(null);
   const cloud = !!server?.cloud;
 
   useFocusEffect(useCallback(() => {
     if (!api) { setOnline(null); return; }
     api.printers().then(setPrinters).catch(() => setPrinters([]));
     if (server?.cloud) api.me().then(setMe).catch(() => setMe(null));
+    if (server) loadSpoolmanUrl(server).then(setSpoolman);
     api.info().then(i => { setOnline(true); setServerVersion(i.version); setRoute(api.route()); })
       .catch(() => { setOnline(false); setRoute(null); });
-  }, [api, server?.cloud]));
+  }, [api, server]));
 
   const disconnect = () => {
     const run = () => setServer(null);
@@ -81,6 +84,11 @@ export default function Settings() {
             onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
         </Section>
 
+        <Section title={t("spoolman")}>
+          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman ?? t("spoolmanSub")}
+            value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
+        </Section>
+
         <Section title={t("language")}>
           <View style={{ padding: 12 }}>
             <Segmented<LangPref> values={["auto", "de", "en"]} value={langPref} onChange={setLangPref}
@@ -127,6 +135,13 @@ export default function Settings() {
                 onPress={() => router.push({ pathname: "/printer/[id]", params: { id: p.id } })} />
             </View>
           ))}
+        </Section>
+      ) : null}
+
+      {server ? (
+        <Section title={t("spoolman")}>
+          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman ?? t("spoolmanSub")}
+            value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
         </Section>
       ) : null}
 

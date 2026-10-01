@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.16.0
+- Spoolman (for the apps): the printer status tells whether Klipper's Moonraker books the used filament in Spoolman
+  itself, and AFC lanes report their spool; "send" can set Moonraker's active spool. The Android app chooses the
+  spool per colour, warns when too little is left and books the filament after the print.
+
 ## 0.15.3
 - Prusa printers: the quality list was empty and slicing failed ("process not compatible with printer"); both fixed
   (Prusa's presets choose their printers by condition).

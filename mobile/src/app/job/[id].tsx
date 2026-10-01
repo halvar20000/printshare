@@ -14,6 +14,7 @@ import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/
 import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
+import { addBooking, loadLastSpools, loadSpoolmanUrl, saveLastSpools, spoolLabel, Spoolman, type Spool } from "@/lib/spoolman";
 import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -167,6 +168,73 @@ export default function JobScreen() {
     return out;
   }, [colours, printerLanes, laneFor, t]);
 
+  // Spoolman (MA-07): spool per colour, enough filament left? The app books the use after the print unless the
+  // printer's Moonraker does it itself (status.spoolman); with AFC the spools belong to the slots.
+  const [smUrl, setSmUrl] = useState<string | null>(null);
+  const [spools, setSpools] = useState<Spool[] | null>(null);
+  const [smError, setSmError] = useState("");
+  const [spoolChoice, setSpoolChoice] = useState<Record<number, number | null>>({});
+  const [lastSpools, setLastSpools] = useState<Record<string, number>>({});
+  const [spoolSheet, setSpoolSheet] = useState<number | null>(null);
+  const reviewing = job?.state === "sliced" || job?.state === "uploaded";
+  useEffect(() => {
+    if (server) loadSpoolmanUrl(server).then(setSmUrl);
+  }, [server]);
+  useEffect(() => {
+    if (server && printerId) loadLastSpools(server, printerId).then(setLastSpools);
+  }, [server, printerId]);
+  useEffect(() => {
+    if (!smUrl || !reviewing) return;
+    new Spoolman(smUrl).spools().then(list => { setSpools(list); setSmError(""); })
+      .catch(e => setSmError((e as Error).message));
+  }, [smUrl, reviewing]);
+  const tracker = pstatus && pstatus !== "offline" ? pstatus.spoolman ?? null : null;
+  const printerBooks = !!tracker?.connected;               // Moonraker books the filament itself
+  const afcSpools = printerBooks && printerLanes.length > 0; // ... on the spools AFC assigned to the slots
+  const spoolFor = useMemo(() => {
+    const out: Record<number, number | null> = {};
+    for (const col of colours) {
+      const lane = printerLanes.find(l => l.tool === laneFor[col.index]);
+      let id: number | null;
+      if (afcSpools) id = lane?.spool_id ?? null;
+      else if (col.index in spoolChoice) id = spoolChoice[col.index];
+      else id = lane?.spool_id ?? (printerBooks ? tracker?.spool_id : null) ?? lastSpools[String(col.index)] ?? null;
+      out[col.index] = id != null && spools && !spools.some(s => s.id === id) ? null : id;
+    }
+    return out;
+  }, [colours, printerLanes, laneFor, afcSpools, spoolChoice, printerBooks, tracker, lastSpools, spools]);
+  const spoolById = (id: number | null | undefined) => (id != null ? spools?.find(s => s.id === id) : undefined);
+  const spoolWarnings = useMemo(() => {
+    const out: string[] = [];
+    for (const col of colours) {
+      const sp = spools?.find(s => s.id === spoolFor[col.index]);
+      if (!sp) continue;
+      const what = colours.length > 1 ? t("colorN", { n: col.index }) : t("spool");
+      if (sp.remaining_g != null && col.grams != null && sp.remaining_g < col.grams) {
+        out.push(t("spoolTooLittle", { what, spool: spoolLabel(sp), have: Math.floor(sp.remaining_g), need: col.grams.toFixed(1) }));
+      }
+      if (!fits(col.preset, { material: sp.material } as Parameters<typeof fits>[1])) {
+        out.push(t("spoolMaterialWarn", { what, want: shortName(col.preset), have: sp.material ?? "" }));
+      }
+    }
+    return out;
+  }, [colours, spools, spoolFor, t]);
+  // Moonraker without AFC tracks one active spool: set it for a single-colour print
+  const activeSpool = printerBooks && !afcSpools && colours.length === 1 ? spoolFor[colours[0].index] ?? undefined : undefined;
+
+  /** After a started print: remember the choice; the app books the filament once the print is over. */
+  const afterStart = async (fileName: string) => {
+    if (!server || !printerId || !smUrl || !spools) return;
+    const chosen = Object.fromEntries(Object.entries(spoolFor).filter(([, v]) => v != null)) as Record<string, number>;
+    if (!afcSpools) await saveLastSpools(server, printerId, chosen);
+    if (printerBooks) return;
+    const uses = colours.flatMap(col => {
+      const sp = spoolById(spoolFor[col.index]);
+      return sp && col.grams ? [{ spool: sp.id, grams: col.grams, label: spoolLabel(sp) }] : [];
+    });
+    await addBooking(server, { printer: printerId, printerName: printerNames[printerId] ?? printerId, file: fileName, uses });
+  };
+
   const send = async (start: boolean) => {
     if (!api || !job) return;
     const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
@@ -176,11 +244,14 @@ export default function JobScreen() {
     if (cloud && server && printerObj) {
       // the phone is on the home Wi-Fi: G-code from the cloud (slots already mapped) -> straight to the printer
       try {
-        await relayJob(api, server, printerObj, job.id, printerFileName(job.result?.source_file, job.id),
+        const fileName = printerFileName(job.result?.source_file, job.id);
+        await relayJob(api, server, printerObj, job.id, fileName,
           printerLanes.length ? laneFor : undefined, {
             start, leveling: start && levelingOn != null ? levelingOn : undefined,
+            spoolId: start ? activeSpool : undefined,
             onStep: step => setRelay({ step, part: 0 }), onProgress: part => setRelay(r => ({ step: r?.step ?? "upload", part })) });
         setRelayed(start ? "started" : "uploaded");
+        if (start) await afterStart(fileName).catch(() => {});
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
         setActionError(e instanceof NoAddressError ? t("needLanAddress") : `${t("errRelay")} ${(e as Error).message}`);
@@ -193,7 +264,7 @@ export default function JobScreen() {
     }
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
-        printerLanes.length ? laneFor : undefined);
+        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined);
       let j: Job | null = null;
       for (let i = 0; i < 600; i++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -202,7 +273,10 @@ export default function JobScreen() {
       }
       if (j) setJob(j);
       if (j?.error) setActionError(friendlyError(t, 0, j.error));
-      else if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      else if (start && j?.state === "started") {
+        await afterStart((j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id)).catch(() => {});
+      }
+      if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {
       setActionError((e as Error).message);
       refreshPrinter();
@@ -385,6 +459,41 @@ export default function JobScreen() {
           value={laneFor[laneSheet] != null ? String(laneFor[laneSheet]) : null}
           onPick={v => setLaneChoice(p => ({ ...p, [laneSheet]: Number(v) }))}
           onClose={() => setLaneSheet(null)} searchLabel={t("search")} closeLabel="OK" />
+      ) : null}
+
+      {!done && smUrl && (spools || smError) ? (
+        smError ? <Banner kind="warn" icon="disc-outline" text={t("spoolmanUnreachable", { error: smError })} />
+        : printerBooks && !afcSpools && colours.length > 1 ? <Banner kind="info" icon="disc-outline" text={t("spoolsMultiPrinter")} />
+        : (
+          <Section title={t("spools")} footer={t(afcSpools ? "spoolsHintAfc" : printerBooks ? "spoolsHintPrinter" : "spoolsHint")}>
+            {colours.map((col, i) => {
+              const sp = spoolById(spoolFor[col.index]);
+              return (
+                <View key={col.index}>
+                  {i ? <Divider /> : null}
+                  <Row label={colours.length > 1 ? t("colorN", { n: col.index }) : t("spool")}
+                    sub={sp ? [sp.material, sp.remaining_g != null ? t("spoolLeft", { g: Math.round(sp.remaining_g) }) : null]
+                      .filter(Boolean).join(" · ") : undefined}
+                    value={sp ? spoolLabel(sp) : t("noSpool")}
+                    onPress={afcSpools ? undefined : () => setSpoolSheet(col.index)}
+                    right={<View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: sp?.color || c.track,
+                      marginLeft: 8, borderWidth: 1, borderColor: c.line }} />} />
+                </View>
+              );
+            })}
+          </Section>
+        )
+      ) : null}
+      {!done ? spoolWarnings.map(w => <Banner key={w} kind="warn" icon="disc-outline" text={w} />) : null}
+      {spoolSheet != null && spools ? (
+        <PickerSheet visible title={colours.length > 1 ? t("colorN", { n: spoolSheet }) : t("spool")}
+          choices={[{ value: "none", label: t("noSpool"), sub: t("noSpoolSub") }, ...spools.map(s => ({
+            value: String(s.id), label: spoolLabel(s),
+            sub: [s.material, s.remaining_g != null ? t("spoolLeft", { g: Math.round(s.remaining_g) }) : null, s.location]
+              .filter(Boolean).join(" · ") }))]}
+          value={spoolFor[spoolSheet] != null ? String(spoolFor[spoolSheet]) : "none"}
+          onPick={v => setSpoolChoice(p => ({ ...p, [spoolSheet]: v === "none" ? null : Number(v) }))}
+          onClose={() => setSpoolSheet(null)} searchLabel={t("search")} closeLabel="OK" />
       ) : null}
 
       {r?.filaments && r.filaments.length > 1 ? (
