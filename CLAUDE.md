@@ -471,8 +471,15 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   status/control/camera/power/adjust/send/print in the cloud (the app relays at home). Operator token in the cloud =
   `Account("admin")`: only `/api/admin/stats`.
 - Limits: `limit_slices_per_day` (30), one slicing job per account, `limit_upload_mb` (100). Tests `tests/test_cloud.py`.
+- **Live on api.pocketprint3d.com since 2026-10-01** (`secrets.env` on the server: PRINTSHARE_CLOUD=1,
+  PRINTSHARE_MAIL=brevo, BREVO_API_KEY; key also in /root/brevo/key and `.secrets/brevo-api-key` on Tower).
+  Brevo account "pocketprint3d" (free, 300 mails/day), domain authenticated (brevo-code TXT, DKIM CNAMEs
+  brevo1/brevo2._domainkey, our DMARC p=reject kept), sender no-reply@pocketprint3d.com, API key IP-locked to the
+  server (49.13.172.173, 2a01:4f8:1c1f:8852::1) - call Brevo's API from the server, not from Tower.
+  End-to-end test 2026-10-01: code mail arrived in the inbox, login, printer added, cube sliced on the server (2 s).
+  Thomas' account exists (thomasherbrig@ipomme.fr, printer "centauri-carbon").
 - Not yet: web page login, app login + LAN relay (Android: me, iOS: Dominique per docs/API.md), job persistence
-  (jobs are still in memory), Brevo key on the server (cloud mode stays off there until then).
+  (jobs are still in memory), monitoring.
 
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
