@@ -481,6 +481,23 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Not yet: web page login, app login + LAN relay (Android: me, iOS: Dominique per docs/API.md), job persistence
   (jobs are still in memory), monitoring.
 
+## Cloud stage 2 in the Android app (2026-10-01)
+- `mobile/src/lib/lan/`: the app talks to printers on the home Wi-Fi itself. `sdcp.ts` (Centauri: WebSocket :3030,
+  status via Cmd 0 - the CC answers without MainboardID and sends it along, checked live; upload POST :80
+  /uploadFile/upload in 1 MB multipart chunks with `md5.ts`; start Cmd 128 after waiting for Cmd 258 listing + the
+  dropped-start retry; pause/stop/resume 129/130/131), `moonraker.ts` (status incl. AFC lanes, upload with print=true,
+  pause/resume/cancel; tries the address, then :7125), `io.ts` (web/node: fetch/FormData) + `io.native.ts`
+  (expo-file-system `File.downloadFileAsync` with the session header, `file.upload` multipart from disk).
+- `lib/printerAccess.ts`: home server → server API; cloud → LAN (`printerStatus`, `printerControl`, `relayJob` =
+  `GET /api/jobs/{id}/gcode?lanes=…` then upload+start). Printer addresses only on the phone (`ps_lan_<email>`).
+- Screens: connect (Cloud e-mail code | own server), settings (account, slices today, logout, delete account,
+  printers), `cloud-printer/[id]` (name, type Centauri/Klipper, COSMOS, Wi-Fi address + connection test), printers
+  tab + prepare + job screen use LAN in the cloud (camera/control screen hidden there for now).
+- `EXPO_PUBLIC_CLOUD_URL` overrides the cloud address at build time (tests only).
+- Tests: node against the simulated printers (3-chunk upload, dropped start retried, AFC lanes), read-only against the
+  real CC (status in 141 ms), whole UI flow in the web build against the real server in cloud mode (login → printer →
+  relay → "Druck gestartet"). NOT yet on a real phone or a real print.
+
 ## Next steps (in order)
 1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
    Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.

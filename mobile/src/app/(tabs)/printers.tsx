@@ -10,13 +10,15 @@ import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/compo
 import type { Printer, PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
+import { NoAddressError, printerControl, printerStatus } from "@/lib/printerAccess";
 import { slots } from "@/lib/lanes";
 import { space, useColors } from "@/lib/theme";
 
-type Entry = { printer: Printer; status: PrinterStatus | null; error?: string };
+type Entry = { printer: Printer; status: PrinterStatus | null; error?: string; noAddress?: boolean };
 
 export default function Printers() {
-  const { api, t } = useApp();
+  const { api, server, t } = useApp();
+  const cloud = !!server?.cloud;
   const c = useColors();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState("");
@@ -42,8 +44,9 @@ export default function Printers() {
     try {
       const ps = await api.printers();
       const list = await Promise.all(ps.map(async p => {
-        try { return { printer: p, status: await api.status(p.id) }; }
-        catch (e) { return { printer: p, status: null, error: (e as Error).message }; }
+        // cloud: the app asks the printer itself on the home Wi-Fi
+        try { return { printer: p, status: await printerStatus(api, server!, p) }; }
+        catch (e) { return { printer: p, status: null, error: (e as Error).message, noAddress: e instanceof NoAddressError }; }
       }));
       setEntries(list);
       setNow(Date.now());
@@ -51,7 +54,7 @@ export default function Printers() {
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [api]);
+  }, [api, server]);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -73,7 +76,7 @@ export default function Printers() {
     if (!api) return;
     const run = async () => {
       setActing(`${p.id}:${action}`);
-      try { await api.control(p.id, action); }
+      try { await printerControl(api, server!, p, action); }
       catch (e) { setError((e as Error).message); }
       finally { setActing(""); setTimeout(load, 800); }
     };
@@ -90,8 +93,12 @@ export default function Printers() {
     <Screen refreshControl={<RefreshControl refreshing={refreshing} tintColor={c.accent}
       onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
       {error ? <Banner kind="error" text={error} /> : null}
-      {entries && !entries.length ? <Empty icon="print-outline" title={t("noPrinters")} /> : null}
-      {(entries ?? []).map(({ printer: p, status: s }) => {
+      {entries && !entries.length ? (
+        <Empty icon="print-outline" title={t("noPrinters")} sub={cloud ? t("noPrintersCloud") : undefined}>
+          {cloud ? <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} /> : null}
+        </Empty>
+      ) : null}
+      {(entries ?? []).map(({ printer: p, status: s, noAddress }) => {
         const kind = s ? s.kind : "offline";
         const busy = kind === "active" || kind === "paused";
         let label = t.table.printerKinds[kind];
@@ -129,8 +136,14 @@ export default function Printers() {
                 <View><Text style={{ color: c.sub, fontSize: 13 }}>{t("bed")}</Text>
                   <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }}>{temp(s.bed, s.bed_target)}</Text></View>
               </View>
+            ) : noAddress ? (
+              <>
+                <Text style={{ color: c.sub, fontSize: 15 }}>{t("needLanAddress")}</Text>
+                <Button kind="secondary" title={t("lanAddress")} icon="wifi-outline" style={{ marginTop: 12 }}
+                  onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: p.id } })} />
+              </>
             ) : (
-              <Text style={{ color: c.sub, fontSize: 15 }}>{t("errPrinterOffline")}</Text>
+              <Text style={{ color: c.sub, fontSize: 15 }}>{t(cloud ? "errPrinterOfflineLan" : "errPrinterOffline")}</Text>
             )}
             {s?.lanes?.length ? (
               // filament lanes of an AFC unit (CANVAS on COSMOS), spec MA-02
@@ -174,7 +187,7 @@ export default function Printers() {
                 </>
               )
             ) : null}
-            {s ? (
+            {s && !cloud ? (
               <Button kind="secondary" title={t("control")} icon="options-outline" style={{ marginTop: 14 }}
                 onPress={() => router.push({ pathname: "/control/[id]", params: { id: p.id, name: p.name } })} />
             ) : null}

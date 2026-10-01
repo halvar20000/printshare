@@ -367,7 +367,9 @@ Plate options (since 0.14.0; older servers ignore them silently, so check `/api/
 Each path: `[type index, tool, x0, y0, x1, y1, …]`, coordinates in 1/`unit` mm (here 1/20 mm). Without
 `format=2` the server sends version 1 (no tool entry) for old apps.
 
-`GET /api/jobs/{job}/gcode` – the G-code file (for "share/export").
+`GET /api/jobs/{job}/gcode[?lanes={"1":3,"2":1}]` – the G-code file (for "share/export"). With `lanes` (AFC slot
+mapping, as in `/send`) the tool numbers are rewritten on a copy: **in the cloud the app downloads this and sends it to
+the printer itself** on the home Wi-Fi (see `mobile/src/lib/lan/` for the Centauri SDCP and Moonraker side).
 
 ### One-shot (CLI, iOS Shortcuts)
 `POST /api/print {"link": "…", "printer": "centauri", "file": null, "start": true}` → `{"job": "…"}` – downloads,

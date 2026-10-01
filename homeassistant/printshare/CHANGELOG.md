@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.15.1
+- The G-code download can rewrite the tool numbers for chosen AFC slots (used by the app with PocketPrint3D Cloud,
+  where the phone sends the print to the printer itself).
+
 ## 0.15.0
 - Groundwork for the hosted PocketPrint3D service (cloud mode, off by default): login with an e-mail code,
   separate printers, profiles, uploads and jobs per account, limits for the free service. Nothing changes for

@@ -11,6 +11,7 @@ import type { JobOptions, Lane, ModelColors, ModelFile, Options, Printer, Printe
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
 import { brandOf, comboWarnings, jobName, plateName, shortName } from "@/lib/format";
 import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
+import { printerStatus } from "@/lib/printerAccess";
 import { MAX_COPIES, plateOptions, TILT_LABELS, TILTS, tiltOf, type Tilt } from "@/lib/plate";
 import { useColors } from "@/lib/theme";
 
@@ -19,7 +20,7 @@ type Edit = { printer?: string; file?: string | null; options?: JobOptions; name
 type Sheet = "printer" | "filament" | "process" | "plate" | "file" | "tilt" | null;
 
 export default function Prepare() {
-  const { api, t } = useApp();
+  const { api, server, t } = useApp();
   const c = useColors();
   const router = useRouter();
   const params = useLocalSearchParams<Params>();
@@ -107,7 +108,7 @@ export default function Prepare() {
         setPrinters(list);
         const last = edit.printer ?? (await loadLastPrinter());
         setPrinter(list.find(p => p.id === last)?.id ?? list[0]?.id ?? "");
-        list.forEach(p => api.status(p.id)
+        list.forEach(p => printerStatus(api, server!, p)
           .then(s => {
             setKinds(k => ({ ...k, [p.id]: s.kind }));
             setLanesBy(l => ({ ...l, [p.id]: s.lanes ?? [] }));
@@ -117,7 +118,7 @@ export default function Prepare() {
         setError((e as Error).message);
       }
     })();
-  }, [api, edit.printer]);
+  }, [api, server, edit.printer]);
 
   // 4. presets for the chosen printer, preselected with the last choices (spec 4)
   const applyDefaults = useCallback((o: Options, keepDetails: JobOptions | null) => {

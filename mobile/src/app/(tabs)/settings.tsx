@@ -3,8 +3,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, Linking, Platform, Text, View } from "react-native";
 
-import { Badge, Divider, Row, Screen, Section, Segmented } from "@/components/ui";
-import type { Printer } from "@/lib/api";
+import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@/components/ui";
+import type { Me, Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -17,13 +17,16 @@ export default function Settings() {
   const [serverVersion, setServerVersion] = useState("");
   const [route, setRoute] = useState<"home" | "remote" | null>(null);
   const [printers, setPrinters] = useState<Printer[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
+  const cloud = !!server?.cloud;
 
   useFocusEffect(useCallback(() => {
     if (!api) { setOnline(null); return; }
     api.printers().then(setPrinters).catch(() => setPrinters([]));
+    if (server?.cloud) api.me().then(setMe).catch(() => setMe(null));
     api.info().then(i => { setOnline(true); setServerVersion(i.version); setRoute(api.route()); })
       .catch(() => { setOnline(false); setRoute(null); });
-  }, [api]));
+  }, [api, server?.cloud]));
 
   const disconnect = () => {
     const run = () => setServer(null);
@@ -33,6 +36,72 @@ export default function Settings() {
       { text: t("disconnect"), style: "destructive", onPress: run },
     ]);
   };
+
+  const logout = async () => {
+    if (!api || !(await confirmAsync(t("logoutQ"), t("logout"), t("cancelBtn")))) return;
+    await api.logout().catch(() => {});        // offline: the session just stays unused
+    await setServer(null);
+  };
+  const deleteAccount = async () => {
+    if (!api || !(await confirmAsync(t("deleteAccountQ"), t("deleteAccount"), t("cancelBtn")))) return;
+    if (!(await confirmAsync(t("deleteAccountQ2"), t("deleteAccount"), t("cancelBtn")))) return;
+    try {
+      await api.deleteAccount();
+      await setServer(null);
+    } catch (e) {
+      Alert.alert(t("deleteAccount"), (e as Error).message);
+    }
+  };
+
+  if (cloud && server) {
+    return (
+      <Screen>
+        <Section title={t("account")}>
+          <Row icon="cloud-outline" label={t("modeCloud")} sub={server.email}
+            right={<Badge text={online === false ? t("offline") : online ? t("connected") : "…"}
+              kind={online === false ? "error" : online ? "ok" : "neutral"} />} />
+          {me ? <><Divider /><Row icon="layers-outline" label={t("slicesToday", { used: me.limits.slices_today,
+            limit: me.limits.slices_per_day })} /></> : null}
+          <Divider />
+          <Row icon="swap-horizontal-outline" label={t("changeServer")} onPress={() => router.push("/connect")} />
+          <Divider />
+          <Row icon="log-out-outline" label={t("logout")} onPress={logout} />
+        </Section>
+
+        <Section title={t("tabPrinters")}>
+          {printers.map((p, i) => (
+            <View key={p.id}>
+              {i ? <Divider /> : null}
+              <Row icon="print-outline" label={p.name} sub={p.type === "moonraker" ? t("typeKlipper") : t("typeCentauri")}
+                onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: p.id } })} />
+            </View>
+          ))}
+          {printers.length ? <Divider /> : null}
+          <Row icon="add-circle-outline" label={t("addPrinter")}
+            onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
+        </Section>
+
+        <Section title={t("language")}>
+          <View style={{ padding: 12 }}>
+            <Segmented<LangPref> values={["auto", "de", "en"]} value={langPref} onChange={setLangPref}
+              labels={{ auto: t("langAuto"), de: "Deutsch", en: "English" }} />
+          </View>
+        </Section>
+
+        <Section title={t("about")} footer={t("aboutText")}>
+          <Row icon="information-circle-outline" label={t("version")} value={Constants.expoConfig?.version ?? "–"} />
+          <Divider />
+          <Row icon="shield-checkmark-outline" label="pocketprint3d.com/privacy" onPress={() => Linking.openURL("https://pocketprint3d.com/privacy/")} />
+          <Divider />
+          <Row icon="logo-github" label={t("sourceCode")} onPress={() => Linking.openURL("https://github.com/halvar20000/printshare")} />
+        </Section>
+        <Section>
+          <Row icon="trash-outline" label={t("deleteAccount")} danger onPress={deleteAccount} />
+        </Section>
+        <Text style={{ color: c.sub, textAlign: "center", fontSize: 12 }}>PocketPrint3D · MIT</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>

@@ -5,8 +5,14 @@ import { Platform } from "react-native";
 
 import type { T } from "./i18n";
 
-/** `remoteUrl`: optional second address for use away from home (e.g. Tailscale). */
-export type Server = { url: string; token: string; remoteUrl?: string };
+/** `remoteUrl`: optional second address for use away from home (e.g. Tailscale).
+ * `cloud`: the hosted PocketPrint3D service - `token` is the session of `email`, printers are reached by the app. */
+export type Server = { url: string; token: string; remoteUrl?: string; cloud?: boolean; email?: string };
+// EXPO_PUBLIC_CLOUD_URL only for development/tests (inlined at build time); the app uses the real service
+export const CLOUD_URL = process.env.EXPO_PUBLIC_CLOUD_URL || "https://api.pocketprint3d.com";
+export type Me = { id: string; email: string; printers: number;
+  limits: { slices_per_day: number; slices_today: number; upload_mb: number } };
+export type PrinterSettings = Partial<{ name: string; type: string; machine: string; cosmos: boolean; auto_leveling: boolean }>;
 export type Route = "home" | "remote";
 
 /** What a printer can be controlled with (issue #5). */
@@ -19,7 +25,8 @@ export type TempHistory = { series: Record<string, [number, number, number | nul
 export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolean; name: string | null };
 /** leveling: null = this printer can't switch bed leveling per print; else its default. */
 /** power: a smart plug is set up on the web page (issue #9) -> "switch on" while the printer is off. */
-export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null; power?: boolean };
+export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null; power?: boolean;
+  cosmos?: boolean };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
 export type Preview = {
@@ -236,7 +243,8 @@ export class Api {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const detail = typeof body?.detail === "string" ? body.detail : `HTTP ${res.status}`;
-      throw new ApiError(friendlyError(this.t, res.status, detail), res.status, detail);
+      const msg = res.status === 401 && this.server.cloud ? this.t("errSession") : friendlyError(this.t, res.status, detail);
+      throw new ApiError(msg, res.status, detail);
     }
     return body as R;
   }
@@ -266,6 +274,21 @@ export class Api {
       { method: "POST", body: { start, confirm: start, leveling, lanes } });
   preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview?format=2`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
+  /** Where the app downloads the G-code itself (cloud: it sends it to the printer); `lanes` = AFC slot mapping. */
+  async gcodeDownload(id: string, lanes?: Record<number, number>) {
+    const q = lanes && Object.keys(lanes).length ? `?lanes=${encodeURIComponent(JSON.stringify(lanes))}` : "";
+    return { url: `${await this.base()}/api/jobs/${id}/gcode${q}`, headers: { Authorization: `Bearer ${this.server.token}` } };
+  }
+
+  // ---------- cloud account (docs/API.md "Cloud accounts") ----------
+  me = () => this.request<Me>("/api/auth/me");
+  logout = () => this.request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+  deleteAccount = () => this.request<{ deleted: boolean }>("/api/auth/account?confirm=true", { method: "DELETE" });
+  addPrinter = (p: PrinterSettings) => this.request<Printer>("/api/printers", { method: "POST", body: p });
+  updatePrinter = (id: string, p: PrinterSettings) =>
+    this.request<Printer>(`/api/printers/${encodeURIComponent(id)}`, { method: "PATCH", body: p });
+  deletePrinter = (id: string) =>
+    this.request<{ deleted: string }>(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" });
   sources = () => this.request<Source[]>("/api/sources");
   search = (q: string, source: string, page: number, sort: SortKey) =>
     this.request<SearchPage>(`/api/search?q=${encodeURIComponent(q)}&source=${source}&page=${page}&sort=${sort}`,
@@ -341,3 +364,37 @@ export class Api {
     return body as R;
   }
 }
+
+
+// ---------- cloud login (before there is a session) ----------
+async function cloudPost<R>(t: T, path: string, body: unknown): Promise<R> {
+  let res: Response;
+  try {
+    res = await fetch(CLOUD_URL + path, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body) });
+  } catch (e) {
+    throw new ApiError(t("errOffline"), 0, String(e));
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof data?.detail === "string" ? data.detail : `HTTP ${res.status}`;
+    throw new ApiError(cloudError(t, res.status, detail), res.status, detail);
+  }
+  return data as R;
+}
+
+function cloudError(t: T, status: number, detail: string): string {
+  const d = detail.toLowerCase();
+  if (d.includes("valid e-mail")) return t("errEmail");
+  if (status === 429) return t("errTooManyCodes");
+  if (d.includes("wrong code")) return t("errWrongCode");
+  if (d.includes("expired")) return t("errCodeExpired");
+  if (status === 502) return t("errMail");
+  return detail;
+}
+
+export const cloudRequestCode = (t: T, email: string) =>
+  cloudPost<{ sent: boolean; email: string }>(t, "/api/auth/code", { email, lang: t.lang });
+export const cloudLogin = (t: T, email: string, code: string) =>
+  cloudPost<{ token: string; user: { id: string; email: string } }>(t, "/api/auth/login",
+    { email, code, device: `${Platform.OS} app` });

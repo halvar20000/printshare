@@ -1,0 +1,73 @@
+// Reaching a printer: through the own server (home server), or - with the PocketPrint3D cloud - by the app itself on
+// the home Wi-Fi. The printer's address stays on this phone; the cloud never sees it (docs/CLOUD.md).
+import type { Api, Printer, PrinterStatus, Server } from "./api";
+import { canRelay, lanIo, lanPrinter, LanError, type SendOptions } from "./lan";
+import { getJSON, setJSON } from "./storage";
+
+export class NoAddressError extends Error {}
+
+type Addresses = Record<string, string>;
+const key = (server: Server) => `ps_lan_${(server.email ?? server.url).replace(/[^\w.-]/g, "_")}`;
+
+export async function loadAddresses(server: Server): Promise<Addresses> {
+  return (await getJSON<Addresses>(key(server))) ?? {};
+}
+
+export async function saveAddress(server: Server, printerId: string, address: string | null): Promise<void> {
+  const all = await loadAddresses(server);
+  if (address?.trim()) all[printerId] = address.trim();
+  else delete all[printerId];
+  await setJSON(key(server), all);
+}
+
+async function lanFor(server: Server, printer: Printer) {
+  if (!canRelay(printer.type)) throw new LanError("this printer type can only be used with an own server for now");
+  const address = (await loadAddresses(server))[printer.id];
+  if (!address) throw new NoAddressError(printer.id);
+  return lanPrinter(printer.type, address);
+}
+
+export async function printerStatus(api: Api, server: Server, printer: Printer): Promise<PrinterStatus> {
+  if (!server.cloud) return api.status(printer.id);
+  const lan = await lanFor(server, printer);
+  try {
+    return await lan.status();
+  } finally {
+    lan.close();
+  }
+}
+
+export async function printerControl(api: Api, server: Server, printer: Printer,
+                                     action: "pause" | "resume" | "cancel"): Promise<void> {
+  if (!server.cloud) {
+    await api.control(printer.id, action);
+    return;
+  }
+  const lan = await lanFor(server, printer);
+  try {
+    await lan.control(action);
+  } finally {
+    lan.close();
+  }
+}
+
+/** Cloud: download the sliced G-code (slots already mapped by the server) and send it to the printer. */
+export async function relayJob(api: Api, server: Server, printer: Printer, jobId: string, fileName: string,
+                               lanes: Record<number, number> | undefined, opts: SendOptions): Promise<void> {
+  const lan = await lanFor(server, printer);
+  opts.onStep?.("download");
+  const { url, headers } = await api.gcodeDownload(jobId, lanes);
+  const file = await lanIo.download(url, headers, fileName);
+  try {
+    await lan.send(file, opts);
+  } finally {
+    file.release();
+    lan.close();
+  }
+}
+
+/** File name on the printer: model name + .gcode, plain characters (the Centauri's file list is picky). */
+export function printerFileName(source: string | null | undefined, jobId: string): string {
+  const stem = (source ?? "").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
+  return `${stem || `print_${jobId}`}.gcode`;
+}

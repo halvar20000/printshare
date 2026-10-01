@@ -7,8 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { friendlyError, type Job, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { friendlyError, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
+import type { SendStep } from "@/lib/lan";
+import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/printerAccess";
 import { getItem, setItem } from "@/lib/storage";
 import { jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
@@ -39,7 +41,12 @@ function confirmAsync(title: string, ok: string, cancel: string): Promise<boolea
 
 export default function JobScreen() {
   const { id, slots: slotsParam } = useLocalSearchParams<{ id: string; slots?: string }>();
-  const { api, t } = useApp();
+  const { api, server, t } = useApp();
+  const cloud = !!server?.cloud;
+  const [printerList, setPrinterList] = useState<Printer[]>([]);
+  // cloud: the app sends the G-code itself - the server's job stays "sliced", this remembers what happened
+  const [relayed, setRelayed] = useState<"started" | "uploaded" | null>(null);
+  const [relay, setRelay] = useState<{ step: SendStep; part: number } | null>(null);
   const c = useColors();
   const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
@@ -91,6 +98,7 @@ export default function JobScreen() {
 
   useEffect(() => {
     api?.printers().then(ps => {
+      setPrinterList(ps);
       setPrinterNames(Object.fromEntries(ps.map(p => [p.id, p.name])));
       setLevelingDefault(Object.fromEntries(ps.map(p => [p.id, p.leveling ?? null])));
     }).catch(() => {});
@@ -111,10 +119,13 @@ export default function JobScreen() {
     setLeveling(v);
     if (printerId) setItem(`ps_level_${printerId}`, v ? "1" : "0");
   };
+  const printerObj = printerList.find(p => p.id === printerId);
   const refreshPrinter = useCallback(() => {
-    if (!api || !printerId) return;
-    api.status(printerId).then(setPstatus).catch(() => setPstatus("offline"));
-  }, [api, printerId]);
+    if (!api || !server || !printerId) return;
+    if (cloud && !printerObj) return;               // printer list not loaded yet
+    (cloud ? printerStatus(api, server, printerObj!) : api.status(printerId))
+      .then(setPstatus).catch(() => setPstatus("offline"));
+  }, [api, server, cloud, printerId, printerObj]);
   useEffect(() => {
     if (job?.state !== "sliced" && job?.state !== "uploaded") return;
     refreshPrinter();
@@ -161,6 +172,24 @@ export default function JobScreen() {
     if (start && !(await confirmAsync(t("confirmStartQ", { printer: pname }), t("start"), t("cancelBtn")))) return;
     setActionError("");
     setSending(start ? "print" : "upload");
+    if (cloud && server && printerObj) {
+      // the phone is on the home Wi-Fi: G-code from the cloud (slots already mapped) -> straight to the printer
+      try {
+        await relayJob(api, server, printerObj, job.id, printerFileName(job.result?.source_file, job.id),
+          printerLanes.length ? laneFor : undefined, {
+            start, leveling: start && levelingOn != null ? levelingOn : undefined,
+            onStep: step => setRelay({ step, part: 0 }), onProgress: part => setRelay(r => ({ step: r?.step ?? "upload", part })) });
+        setRelayed(start ? "started" : "uploaded");
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } catch (e) {
+        setActionError(e instanceof NoAddressError ? t("needLanAddress") : `${t("errRelay")} ${(e as Error).message}`);
+      } finally {
+        setRelay(null);
+        setSending(null);
+        refreshPrinter();
+      }
+      return;
+    }
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
         printerLanes.length ? laneFor : undefined);
@@ -269,7 +298,8 @@ export default function JobScreen() {
   const fewer = r?.copies_requested && r.copies != null && r.copies < r.copies_requested
     ? t("copiesFit", { n: r.copies, m: r.copies_requested }) : null;
   const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
-  const done = job.state === "started";
+  const done = job.state === "started" || relayed === "started";
+  const uploaded = job.state === "uploaded" || relayed === "uploaded";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
   const canPrint = plateOk && !busy && kind !== "offline" && !sending && !laneWarnings.some(w => w.blocking);
@@ -282,15 +312,15 @@ export default function JobScreen() {
   const footer = done ? (
     <>
       <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
-      <Button kind="secondary" title={t("camera")} icon="videocam-outline"
-        onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} />
+      {!cloud ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
+        onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
     </>
   ) : (
     <>
       <Button title={t("print")} icon="play" onPress={() => send(true)} disabled={!canPrint}
         loading={sending === "print" || job.state === "sending"} />
-      {job.state !== "uploaded" ? (
+      {!uploaded ? (
         <Button kind="secondary" title={t("uploadOnly")} icon="cloud-upload-outline" onPress={() => send(false)}
           disabled={!!sending || job.state === "sending"} loading={sending === "upload"} />
       ) : null}
@@ -299,7 +329,7 @@ export default function JobScreen() {
 
   return (
     <Screen footer={footer}>
-      {done || job.state === "uploaded" ? (
+      {done || uploaded ? (
         <View style={{ alignItems: "center", paddingVertical: 20 }}>
           <Ionicons name={done ? "checkmark-circle" : "cloud-done"} size={64} color={c.ok} />
           <Text style={{ color: c.text, fontSize: 22, fontWeight: "700", marginTop: 10 }}>{t(done ? "startedTitle" : "uploadedTitle")}</Text>
@@ -311,6 +341,8 @@ export default function JobScreen() {
       <Text style={{ color: c.sub, fontSize: 15, marginBottom: 16 }} numberOfLines={2}>{name}</Text>
 
       {actionError ? <Banner kind="error" text={actionError} /> : null}
+      {relay ? <Banner kind="info" icon="wifi-outline" text={relay.step === "upload"
+        ? t("relayUpload", { pct: Math.round(relay.part * 100) }) : t(relay.step === "download" ? "relayDownload" : "relayStart")} /> : null}
 
       <View style={{ flexDirection: "row", gap: 10, marginBottom: 22 }}>
         <Stat label={t("printTime")} value={printTime(r?.print_time)} />

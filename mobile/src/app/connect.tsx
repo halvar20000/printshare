@@ -1,9 +1,11 @@
-// Onboarding: pair with the PocketPrint3D server by QR code, deep link or manual entry.
+// Onboarding: log in to the PocketPrint3D cloud by e-mail code, or pair an own server by QR code, deep link or
+// manual entry.
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
 
-import { Banner, Button, Card, Divider, Screen, Section } from "@/components/ui";
+import { Banner, Button, Card, Divider, Screen, Section, Segmented } from "@/components/ui";
+import { CLOUD_URL, cloudLogin, cloudRequestCode } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { checkServer } from "@/lib/pairing";
 import { space, useColors } from "@/lib/theme";
@@ -19,14 +21,49 @@ export default function Connect() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const auto = useRef(false);
+  const [mode, setMode] = useState<"cloud" | "own">(params.url || (server && !server.cloud) ? "own" : "cloud");
+  const [email, setEmail] = useState(server?.email ?? "");
+  const [code, setCode] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  const done = () => {
+    if (router.canDismiss()) router.dismissAll();
+    else router.replace("/");
+  };
+  const requestCode = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await cloudRequestCode(t, email);
+      setSentTo(r.email);
+      setCode("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const login = async () => {
+    if (!sentTo) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await cloudLogin(t, sentTo, code);
+      await setServer({ url: CLOUD_URL, token: r.token, cloud: true, email: r.user.email });
+      done();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const connect = async (u = url, tk = token, r = remote) => {
     setBusy(true);
     setError("");
     try {
       await setServer(await checkServer({ url: u, token: tk, remoteUrl: r }, t));
-      if (router.canDismiss()) router.dismissAll();
-      else router.replace("/");
+      done();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -50,10 +87,49 @@ export default function Connect() {
   const mono = Platform.select({ ios: "Menlo", default: "monospace" });
   return (
     <Screen>
-      <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t("connectSub")}</Text>
+      <View style={{ marginBottom: 20 }}>
+        <Segmented<"cloud" | "own"> values={["cloud", "own"]} value={mode} onChange={m => { setMode(m); setError(""); }}
+          labels={{ cloud: t("modeCloud"), own: t("modeOwn") }} />
+      </View>
       {error ? <Banner kind="error" text={error} /> : null}
 
-      {Platform.OS !== "web" ? (
+      {mode === "cloud" ? (
+        <>
+          <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t("cloudIntro")}</Text>
+          {!sentTo ? (
+            <>
+              <Section title={t("email")}>
+                <TextInput value={email} onChangeText={setEmail} placeholder="name@example.com" placeholderTextColor={c.sub}
+                  autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="email"
+                  textContentType="emailAddress" accessibilityLabel={t("email")} style={input}
+                  onSubmitEditing={requestCode} returnKeyType="send" />
+              </Section>
+              <Button title={t("sendCode")} icon="mail-outline" onPress={requestCode} loading={busy}
+                disabled={!email.includes("@")} />
+            </>
+          ) : (
+            <>
+              <Text style={{ color: c.text, fontSize: 16, lineHeight: 22, marginBottom: 16 }}>{t("codeSent", { email: sentTo })}</Text>
+              <Section title={t("code")}>
+                <TextInput value={code} onChangeText={v => setCode(v.replace(/\D/g, "").slice(0, 6))} placeholder="123456"
+                  placeholderTextColor={c.sub} keyboardType="number-pad" autoComplete="one-time-code"
+                  textContentType="oneTimeCode" maxLength={6} accessibilityLabel={t("code")}
+                  style={[input, { fontSize: 24, letterSpacing: 8, textAlign: "center" }]}
+                  onSubmitEditing={login} returnKeyType="go" autoFocus />
+              </Section>
+              <Button title={t("login")} icon="log-in-outline" onPress={login} loading={busy} disabled={code.length !== 6} />
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <Button kind="plain" title={t("otherEmail")} onPress={() => { setSentTo(null); setError(""); }} style={{ flex: 1 }} />
+                <Button kind="plain" title={t("resendCode")} onPress={requestCode} disabled={busy} style={{ flex: 1 }} />
+              </View>
+            </>
+          )}
+          <Text style={{ color: c.sub, fontSize: 13, lineHeight: 18, marginTop: 20, marginHorizontal: 4 }}>{t("cloudPrivacy")}</Text>
+        </>
+      ) : null}
+
+      {mode === "own" ? <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t("connectSub")}</Text> : null}
+      {mode === "own" && Platform.OS !== "web" ? (
         <>
           <Button title={t("scanQr")} icon="qr-code-outline" onPress={() => router.push("/scan")} />
           <Text style={{ color: c.sub, fontSize: 13, marginTop: 12, marginHorizontal: 4 }}>{t("scanHelp")}</Text>
@@ -66,6 +142,7 @@ export default function Connect() {
         </>
       ) : null}
 
+      {mode === "own" ? (<>
       <Section title={t("manual")}>
         <TextInput value={url} onChangeText={setUrl} placeholder={`${t("serverUrl")} – http://192.168.1.10:8484`}
           placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} keyboardType="url"
@@ -86,6 +163,7 @@ export default function Connect() {
         <Button title={busy ? t("connecting") : t("connect")} icon="link" onPress={() => connect()}
           loading={busy} disabled={!url.trim()} />
       </View>
+      </>) : null}
     </Screen>
   );
 }
