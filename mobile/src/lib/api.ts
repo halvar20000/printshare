@@ -284,6 +284,12 @@ export class Api {
     return { url: `${await this.base()}/api/jobs/${id}/gcode${q}`, headers: { Authorization: `Bearer ${this.server.token}` } };
   }
 
+  /** The model file itself for the 3D view (server 0.10.1, served from the download cache). */
+  async modelFileDownload(link: string, file: string | null) {
+    const q = new URLSearchParams({ link, ...(file ? { file } : {}) });
+    return { url: `${await this.base()}/api/model-file?${q}`, headers: { Authorization: `Bearer ${this.server.token}` } };
+  }
+
   // ---------- cloud account (docs/API.md "Cloud accounts") ----------
   me = () => this.request<Me>("/api/auth/me");
   logout = () => this.request<{ ok: boolean }>("/api/auth/logout", { method: "POST" });

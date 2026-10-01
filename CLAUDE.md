@@ -497,6 +497,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Infill pattern (PR #15, server 0.15.2) in the Android app too: prepare → "Weitere Einstellungen" → Füllmuster
   (PickerSheet with `t.table.infillNames`, schematic tile `components/infill.tsx`, not to scale); sent as
   `infill_pattern` only when it differs from the quality profile's; review lists it under changed values.
+- True-scale infill preview (`InfillPreview`, 30 mm at 160 dp/inch): spacing = directions × line width / density
+  (rectilinear 1, grid 2, triangles/cubic 3, honeycomb edge 1.1547·w/ρ), line width `defaults.infill_line_width`
+  (fallback 0.45 mm). 3D view before slicing: prepare → "3D-Ansicht" → `model3d.tsx`; file from
+  `/api/model-file` (max 40 MB), three.js 0.170 from jsdelivr in a WebView (`components/Model3D.tsx`, iframe on web,
+  page in `lib/viewer3d.ts`) - STL, OBJ, 3MF; needs internet for the three.js files. Checked in the web build with
+  STL + OBJ (30 × 30 × 20 mm ring); 3MF not yet tried.
 - Tests: node against the simulated printers (3-chunk upload, dropped start retried, AFC lanes), read-only against the
   real CC (status in 141 ms), whole UI flow in the web build against the real server in cloud mode (login → printer →
   relay → "Druck gestartet").

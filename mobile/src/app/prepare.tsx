@@ -12,7 +12,8 @@ import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "
 import { brandOf, comboWarnings, infillName, jobName, plateName, shortName } from "@/lib/format";
 import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
 import { printerStatus } from "@/lib/printerAccess";
-import { InfillTile } from "@/components/infill";
+import { InfillPreview, InfillTile } from "@/components/infill";
+import { viewable } from "@/lib/viewer3d";
 import { MAX_COPIES, plateOptions, TILT_LABELS, TILTS, tiltOf, type Tilt } from "@/lib/plate";
 import { useColors } from "@/lib/theme";
 
@@ -293,6 +294,13 @@ export default function Prepare() {
         ) : files?.length === 1 && !name ? (
           <><Divider /><Row icon="document-outline" label={files[0].name} /></>
         ) : null}
+        {link && fileName && viewable(fileName) ? (
+          <><Divider />
+            <Row icon="cube" label={t("view3d")} sub={fileName}
+              onPress={() => router.push({ pathname: "/model3d", params: { link, name: fileName,
+                ...(files && files.length > 1 && file ? { file } : {}) } })} />
+          </>
+        ) : null}
       </Section>
 
       {printers.length === 0 && !error ? null : (
@@ -396,6 +404,9 @@ export default function Prepare() {
                     sub={!pattern || pattern === d.infill_pattern ? t("standard") : undefined}
                     onPress={() => setSheet("pattern")}
                     right={<View style={{ marginLeft: 10 }}><InfillTile pattern={pattern ?? d.infill_pattern} /></View>} />
+                  <InfillPreview pattern={pattern ?? d.infill_pattern ?? "rectilinear"} density={(infill ?? d.infill ?? 15) / 100}
+                    lineWidth={d.infill_line_width}
+                    caption={t("infillRealSize", { pct: infill ?? d.infill ?? 15, w: (d.infill_line_width || 0.45).toFixed(2) })} />
                 </>
               ) : null}
               <Divider />
