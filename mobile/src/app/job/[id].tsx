@@ -12,7 +12,7 @@ import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
 import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/printerAccess";
 import { getItem, setItem } from "@/lib/storage";
-import { jobName, plateName, printTime, shortName } from "@/lib/format";
+import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
 import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
@@ -27,6 +27,7 @@ function changedValues(t: T, o: Record<string, string>): string[] {
   const brim = ({ auto_brim: "brimAuto", no_brim: "brimOff", outer_only: "brimOuter" } as const)[o.brim_type as "auto_brim"];
   if (brim) out.push(`${t("brim")}: ${t(brim)}`);
   if (o.sparse_infill_density) out.push(`${t("infill")}: ${o.sparse_infill_density.replace("%", " %")}`);
+  if (o.sparse_infill_pattern) out.push(`${t("infillPattern")}: ${infillName(t, o.sparse_infill_pattern)}`);
   if (o.wall_loops) out.push(`${t("walls")}: ${o.wall_loops}`);
   return out;
 }

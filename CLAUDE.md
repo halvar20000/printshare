@@ -494,6 +494,9 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   printers), `cloud-printer/[id]` (name, type Centauri/Klipper, COSMOS, Wi-Fi address + connection test), printers
   tab + prepare + job screen use LAN in the cloud (camera/control screen hidden there for now).
 - `EXPO_PUBLIC_CLOUD_URL` overrides the cloud address at build time (tests only).
+- Infill pattern (PR #15, server 0.15.2) in the Android app too: prepare → "Weitere Einstellungen" → Füllmuster
+  (PickerSheet with `t.table.infillNames`, schematic tile `components/infill.tsx`, not to scale); sent as
+  `infill_pattern` only when it differs from the quality profile's; review lists it under changed values.
 - Tests: node against the simulated printers (3-chunk upload, dropped start retried, AFC lanes), read-only against the
   real CC (status in 141 ms), whole UI flow in the web build against the real server in cloud mode (login → printer →
   relay → "Druck gestartet").

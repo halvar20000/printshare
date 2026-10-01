@@ -9,15 +9,16 @@ import {
 } from "@/components/ui";
 import type { JobOptions, Lane, ModelColors, ModelFile, Options, Printer, PrinterKind } from "@/lib/api";
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
-import { brandOf, comboWarnings, jobName, plateName, shortName } from "@/lib/format";
+import { brandOf, comboWarnings, infillName, jobName, plateName, shortName } from "@/lib/format";
 import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
 import { printerStatus } from "@/lib/printerAccess";
+import { InfillTile } from "@/components/infill";
 import { MAX_COPIES, plateOptions, TILT_LABELS, TILTS, tiltOf, type Tilt } from "@/lib/plate";
 import { useColors } from "@/lib/theme";
 
 type Params = { link?: string; fileUri?: string; fileName?: string; edit?: string };
 type Edit = { printer?: string; file?: string | null; options?: JobOptions; name?: string; slots?: Record<number, number> };
-type Sheet = "printer" | "filament" | "process" | "plate" | "file" | "tilt" | null;
+type Sheet = "printer" | "filament" | "process" | "plate" | "file" | "tilt" | "pattern" | null;
 
 export default function Prepare() {
   const { api, server, t } = useApp();
@@ -44,6 +45,7 @@ export default function Prepare() {
   const [supports, setSupports] = useState("off");
   const [brim, setBrim] = useState("auto");
   const [infill, setInfill] = useState<number | null>(null);  // null = profile default
+  const [pattern, setPattern] = useState<string | null>(null);  // null = the quality profile's pattern
   const [walls, setWalls] = useState<number | null>(null);
   // plate: kept when the printer changes, taken over when editing a job
   const [copies, setCopies] = useState<number>(edit.options?.copies ?? 1);
@@ -126,6 +128,7 @@ export default function Prepare() {
     setSupports(keepDetails?.supports ?? d.supports);
     setBrim(keepDetails?.brim ?? d.brim);
     setInfill(keepDetails?.infill ?? null);
+    setPattern(keepDetails?.infill_pattern ?? null);
     setWalls(keepDetails?.walls ?? null);
   }, []);
 
@@ -208,6 +211,7 @@ export default function Prepare() {
     if (supports !== d.supports) o.supports = supports;
     if (brim !== d.brim) o.brim = brim;
     if (infill != null && infill !== d.infill) o.infill = infill;
+    if (pattern && pattern !== d.infill_pattern) o.infill_pattern = pattern;
     if (walls != null && walls !== d.walls) o.walls = walls;
     Object.assign(o, plateOptions(copies, tilt, scale));
     setSubmitting(true);
@@ -240,15 +244,18 @@ export default function Prepare() {
     file: (files ?? []).map(f => ({ value: String(f.index), label: f.name,
       sub: f.size ? `${(f.size / 1048576).toFixed(1)} MB` : undefined })),
     tilt: (Object.keys(TILTS) as Tilt[]).map(k => ({ value: k, label: t(TILT_LABELS[k]) })),
+    pattern: (opts?.infill_patterns ?? []).map(k => ({ value: k, label: infillName(t, k),
+      sub: k === d?.infill_pattern ? t("standard") : undefined })),
   };
-  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament: presetFor(1), process, plate, file, tilt };
+  const sheetValue: Record<Exclude<Sheet, null>, string | null> = { printer, filament: presetFor(1), process, plate, file, tilt,
+    pattern: pattern ?? d?.infill_pattern ?? null };
   const sheetSet: Record<Exclude<Sheet, null>, (v: string) => void> = {
     printer: setPrinter, filament: v => { setFilament(v); setFilamentManual(true); }, process: changeProcess,
-    plate: setPlate, file: setFile, tilt: v => setTilt(v as Tilt),
+    plate: setPlate, file: setFile, tilt: v => setTilt(v as Tilt), pattern: setPattern,
   };
   const sheetTitle: Record<Exclude<Sheet, null>, string> = {
     printer: t("printer"), filament: t("material"), process: t("quality"), plate: t("plate"), file: t("file"),
-    tilt: t("tilt"),
+    tilt: t("tilt"), pattern: t("infillPattern"),
   };
 
   const dot = (id: string) => {
@@ -382,6 +389,15 @@ export default function Prepare() {
               <Field label={t("infill")} hint={infill == null || infill === d.infill ? t("standard") : undefined}>
                 <Stepper value={infill ?? d.infill ?? 15} min={0} max={100} step={5} onChange={setInfill} format={v => `${v} %`} />
               </Field>
+              {opts.infill_patterns?.length ? (
+                <>
+                  <Divider />
+                  <Row label={t("infillPattern")} value={infillName(t, pattern ?? d.infill_pattern ?? "")}
+                    sub={!pattern || pattern === d.infill_pattern ? t("standard") : undefined}
+                    onPress={() => setSheet("pattern")}
+                    right={<View style={{ marginLeft: 10 }}><InfillTile pattern={pattern ?? d.infill_pattern} /></View>} />
+                </>
+              ) : null}
               <Divider />
               <Field label={t("walls")} hint={walls == null || walls === d.walls ? t("standard") : undefined}>
                 <Stepper value={walls ?? d.walls ?? 2} min={1} max={10} onChange={setWalls} />

@@ -58,16 +58,20 @@ export type PrinterStatus = {
 export type Defaults = {
   filament: string; process: string; bed_type: string; supports: string; brim: string;
   infill: number | null; walls: number | null; layer_height?: string | null;
+  /** server 0.15.2: the quality profile's infill pattern and line width (mm) */
+  infill_pattern?: string | null; infill_line_width?: number | null;
 };
 export type Options = {
   printer: string; materials: string[]; processes: string[]; plates: string[];
   supports: string[]; brims: string[]; defaults: Defaults;
   /** uploaded quality/material presets among materials/processes (#2, later Orca Cloud #7) */
   own?: { materials: string[]; processes: string[] };
+  /** server 0.15.2: OrcaSlicer infill patterns that can be chosen per print */
+  infill_patterns?: string[];
 };
 export type JobOptions = Partial<{
   filament: string; process: string; bed_type: string; supports: string; brim: string;
-  infill: number; walls: number; filaments: (string | null)[];
+  infill: number; infill_pattern: string; walls: number; filaments: (string | null)[];
   /** plate (server 0.14.0): copies 1-50, tilt in degrees, size in %, lay flat automatically */
   copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;

@@ -135,6 +135,8 @@ const de = {
   // connect
   connectTitle: "Verbinden",
   modeCloud: "PocketPrint3D Cloud", modeOwn: "Eigener Server",
+  infillPattern: "Füllmuster",
+  infillNames: { "rectilinear": "Geradlinig", "alignedrectilinear": "Geradlinig ausgerichtet", "zigzag": "Zickzack", "crosszag": "Kreuz-Zickzack", "lockedzag": "Locked Zag", "line": "Linie", "grid": "Gitter", "triangles": "Dreiecke", "tri-hexagon": "Tri-Hexagon", "cubic": "Kubisch", "adaptivecubic": "Adaptiv kubisch", "quartercubic": "Viertel-kubisch", "supportcubic": "Stütz-kubisch", "lightning": "Blitz", "honeycomb": "Bienenwabe", "3dhoneycomb": "3D-Bienenwabe", "lateral-honeycomb": "Seitliche Wabe", "lateral-lattice": "Seitliches Gitter", "crosshatch": "Kreuzschraffur", "tpmsd": "TPMS-D", "tpmsfk": "TPMS-FK", "gyroid": "Gyroid", "concentric": "Konzentrisch", "hilbertcurve": "Hilbert-Kurve", "archimedeanchords": "Archimedische Sehnen", "octagramspiral": "Oktagramm-Spirale" } as Record<string, string>,
   needLanAddress: "Die App braucht die Adresse des Druckers in deinem WLAN.",
   errSession: "Deine Anmeldung ist abgelaufen – bitte unter Einstellungen neu anmelden.",
   relayDownload: "G-Code wird aus der Cloud geladen …", relayUpload: "Übertragung zum Drucker über WLAN … {pct} %",
@@ -322,6 +324,8 @@ const en: Strings = {
   sourceCode: "Source code on GitHub", version: "Version",
   connectTitle: "Connect",
   modeCloud: "PocketPrint3D Cloud", modeOwn: "Own server",
+  infillPattern: "Infill pattern",
+  infillNames: { "rectilinear": "Rectilinear", "alignedrectilinear": "Aligned Rectilinear", "zigzag": "Zig Zag", "crosszag": "Cross Zag", "lockedzag": "Locked Zag", "line": "Line", "grid": "Grid", "triangles": "Triangles", "tri-hexagon": "Tri-hexagon", "cubic": "Cubic", "adaptivecubic": "Adaptive Cubic", "quartercubic": "Quarter Cubic", "supportcubic": "Support Cubic", "lightning": "Lightning", "honeycomb": "Honeycomb", "3dhoneycomb": "3D Honeycomb", "lateral-honeycomb": "Lateral Honeycomb", "lateral-lattice": "Lateral Lattice", "crosshatch": "Cross Hatch", "tpmsd": "TPMS-D", "tpmsfk": "TPMS-FK", "gyroid": "Gyroid", "concentric": "Concentric", "hilbertcurve": "Hilbert Curve", "archimedeanchords": "Archimedean Chords", "octagramspiral": "Octagram Spiral" },
   needLanAddress: "The app needs the printer's address on your Wi-Fi.",
   errSession: "Your login has expired - please log in again under Settings.",
   relayDownload: "Loading the G-code from the cloud …", relayUpload: "Sending to the printer over Wi-Fi … {pct} %",

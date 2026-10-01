@@ -1,5 +1,8 @@
 import type { T } from "./i18n";
 
+/** OrcaSlicer infill pattern -> name in the app's language (unknown keys as they are). */
+export const infillName = (t: T, key: string) => t.table.infillNames[key] ?? key;
+
 /** "Elegoo PLA @ECC" -> "Elegoo PLA", "0.20mm Standard @Elegoo CC 0.4 nozzle" -> "0.20mm Standard" */
 export const shortName = (name?: string | null) => (name || "").replace(/\s*@.*$/, "");
 
