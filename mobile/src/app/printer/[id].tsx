@@ -1,14 +1,14 @@
-// Printer settings: own OrcaSlicer printer profile (issue #2, spec PR-01/02).
+// Printer settings: own OrcaSlicer printer profile (issue #2, spec PR-01/02), uploaded or from an Orca Cloud share link (#7).
 import * as DocumentPicker from "expo-document-picker";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { Banner, Button, Divider, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
 import type { Printer, PrinterProfile, UserProfile } from "@/lib/api";
 import { useApp } from "@/lib/app";
-import { useColors } from "@/lib/theme";
+import { space, useColors } from "@/lib/theme";
 
 export default function PrinterSettings() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +22,8 @@ export default function PrinterSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  const [orcaLink, setOrcaLink] = useState("");
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (!api) return;
@@ -74,6 +76,33 @@ export default function PrinterSettings() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const importOrca = async () => {
+    if (!api || !current) return;
+    setImporting(true);
+    setError("");
+    setDone("");
+    try {
+      const r = await api.importOrcaCloud(orcaLink.trim());
+      const lines = [t("orcaCloudDone", { bundle: r.bundle.name ?? "Orca Cloud", n: r.imported.length })];
+      if (r.skipped.length) lines.push(t("orcaCloudSkipped", { n: r.skipped.length }));
+      // one printer preset made for this printer's model: use it right away; several (nozzles, AFC …): the user picks
+      const fitting = r.imported.filter(p => p.kind === "machine" && p.inherits === current.machine);
+      if (fitting.length === 1) {
+        setCurrent(await api.setPrinterProfile(id, fitting[0].file));
+        lines.push(t("profileUploaded", { name: fitting[0].name ?? fitting[0].file, printer: printer?.name ?? id }));
+      } else if (r.imported.some(p => p.kind === "machine")) {
+        lines.push(t("orcaCloudChoose"));
+      }
+      setDone(lines.join(" "));
+      setOrcaLink("");
+      setProfiles(await api.profiles());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -132,6 +161,19 @@ export default function PrinterSettings() {
           ))}
         </Section>
       ) : null}
+
+      <Section title={t("orcaCloudTitle")} footer={t("orcaCloudHint")}>
+        <TextInput value={orcaLink} onChangeText={setOrcaLink} placeholder="https://cloud.orcaslicer.com/b/…"
+          placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} keyboardType="url"
+          accessibilityLabel={t("orcaCloudTitle")}
+          style={{ color: c.text, fontSize: 16, paddingHorizontal: space, paddingVertical: 14 }} />
+        <Divider />
+        <View style={{ padding: space }}>
+          <Button kind="secondary" title={t("orcaCloudImport")} icon="cloud-download-outline"
+            onPress={() => { tap(); importOrca(); }} loading={importing}
+            disabled={!current || !/cloud\.orcaslicer\.com\/b\//.test(orcaLink)} />
+        </View>
+      </Section>
 
       <Button title={t("uploadProfile")} icon="cloud-upload-outline" onPress={() => { tap(); upload(); }}
         loading={busy} disabled={!current} />

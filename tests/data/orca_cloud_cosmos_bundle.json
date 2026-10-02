@@ -1,0 +1,177 @@
+{
+ "id": "3fa56ae8-2e73-410d-b595-b6c5c90cce57",
+ "name": "COSMOS for Centauri Carbon 1",
+ "description": "Printer profiles required to use [OpenCentauri COSMOS](https://github.com/OpenCentauri/cosmos) for the CC1.",
+ "public": true,
+ "creator_display_name": "Sims",
+ "compatible_orcaslicer_version": "2.3.2",
+ "compatible_printers": [
+  "Elegoo Centauri Carbon 0.2 nozzle",
+  "Elegoo Centauri Carbon 0.4 nozzle",
+  "Elegoo Centauri Carbon 0.6 nozzle",
+  "Elegoo Centauri Carbon 0.8 nozzle"
+ ],
+ "sharing_token": "3fad3c38f25f",
+ "version": "0.07",
+ "updated_at": "2026-09-14T20:42:05.000Z",
+ "shared_profiles": [
+  {
+   "name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos",
+    "type": "printer",
+    "base_id": "ECC02",
+    "version": "2.4.0.2",
+    "inherits": "Elegoo Centauri Carbon 0.2 nozzle",
+    "machine_end_gcode": "PRINT_END",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature]",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos",
+    "change_filament_gcode": "M600",
+    "manual_filament_change": "1",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos",
+    "type": "printer",
+    "base_id": "ECC08",
+    "version": "2.4.0.2",
+    "inherits": "Elegoo Centauri Carbon 0.8 nozzle",
+    "machine_end_gcode": "PRINT_END",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature]",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos",
+    "change_filament_gcode": "M600",
+    "manual_filament_change": "1",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos",
+    "type": "printer",
+    "base_id": "ECC06",
+    "version": "2.4.0.2",
+    "inherits": "Elegoo Centauri Carbon 0.6 nozzle",
+    "machine_end_gcode": "PRINT_END",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature]",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos",
+    "change_filament_gcode": "M600",
+    "manual_filament_change": "1",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos",
+    "type": "printer",
+    "base_id": "LyL8izVzYFaXHlPb",
+    "version": "2.4.0.2",
+    "inherits": "Elegoo Centauri Carbon 0.4 nozzle",
+    "host_type": "moonraker",
+    "printer_agent": "moonraker",
+    "machine_end_gcode": "PRINT_END",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature]",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos",
+    "change_filament_gcode": "M600",
+    "manual_filament_change": "1",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+    "type": "printer",
+    "base_id": "LyL8izVzYFaXHlPb",
+    "version": "2.4.0.2",
+    "inherits": "Elegoo Centauri Carbon 0.4 nozzle",
+    "host_type": "moonraker",
+    "printer_agent": "moonraker",
+    "machine_end_gcode": "PRINT_END",
+    "extra_loading_move": "0",
+    "cooling_tube_length": "0",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature] TOOL={initial_tool}",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC",
+    "change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\\n; FLUSH_START\\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\\n; FLUSH_END",
+    "parking_pos_retraction": "0",
+    "cooling_tube_retraction": "0",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos AFC",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos AFC",
+    "type": "printer",
+    "base_id": "lCZzm0T7xxIG25jo",
+    "version": "2.4.0.6",
+    "inherits": "Elegoo Centauri Carbon 0.8 nozzle",
+    "host_type": "moonraker",
+    "printer_agent": "moonraker",
+    "machine_end_gcode": "PRINT_END",
+    "extra_loading_move": "0",
+    "cooling_tube_length": "0",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature] TOOL={initial_tool}",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.8 nozzle - Cosmos AFC",
+    "change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\\n; FLUSH_START\\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\\n; FLUSH_END",
+    "parking_pos_retraction": "0",
+    "cooling_tube_retraction": "0",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC",
+    "type": "printer",
+    "base_id": "snOU0RMJW8uNmbap",
+    "version": "2.4.0.6",
+    "inherits": "Elegoo Centauri Carbon 0.2 nozzle",
+    "host_type": "moonraker",
+    "printer_agent": "moonraker",
+    "machine_end_gcode": "PRINT_END",
+    "extra_loading_move": "0",
+    "cooling_tube_length": "0",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature] TOOL={initial_tool}",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.2 nozzle - Cosmos AFC",
+    "change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\\n; FLUSH_START\\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\\n; FLUSH_END",
+    "parking_pos_retraction": "0",
+    "cooling_tube_retraction": "0",
+    "support_multi_bed_types": "1"
+   }
+  },
+  {
+   "name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos AFC",
+   "content": {
+    "name": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos AFC",
+    "type": "printer",
+    "base_id": "PuL9y6ue61mrGpzi",
+    "version": "2.4.0.6",
+    "inherits": "Elegoo Centauri Carbon 0.6 nozzle",
+    "host_type": "moonraker",
+    "printer_agent": "moonraker",
+    "machine_end_gcode": "PRINT_END",
+    "extra_loading_move": "0",
+    "cooling_tube_length": "0",
+    "machine_pause_gcode": "PAUSE",
+    "machine_start_gcode": "M104 S0 ; Stops OrcaSlicer from sending temp waits separately\\n\\nM140 S0\\n\\nSET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]\\n\\nPRINT_START EXTRUDER=[first_layer_temperature] BED=[first_layer_bed_temperature] CHAMBER=[chamber_temperature] TOOL={initial_tool}",
+    "printer_settings_id": "Elegoo Centauri Carbon 0.6 nozzle - Cosmos AFC",
+    "change_filament_gcode": "T[next_extruder] PURGE_LENGTH=[flush_length]\\n; FLUSH_START\\n; EXTERNAL_PURGE {flush_length_1+flush_length_2+flush_length_3+flush_length_4}\\n; FLUSH_END",
+    "parking_pos_retraction": "0",
+    "cooling_tube_retraction": "0",
+    "support_multi_bed_types": "1"
+   }
+  }
+ ]
+}

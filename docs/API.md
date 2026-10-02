@@ -462,6 +462,12 @@ POST /spoolman/api/v1/spool
 | `GET /api/profiles` | `[{"file": "filament-Meine PLA.json", "kind": "filament", "name": "Meine PLA", "inherits": "Elegoo PLA @ECC"}, …]` (+ `print_start`, `nozzle` for printer presets, `error` if unusable) |
 | `POST /api/profiles?filename=x.json` | body: JSON preset or OrcaSlicer bundle (zip); → list of stored presets; `400` with a reason if Orca 2.4.2 doesn't know the base |
 | `DELETE /api/profiles/{file}` | `400` while a printer uses it |
+| `POST /api/profiles/orca-cloud` `{"link": "https://cloud.orcaslicer.com/b/<code>"}` (0.18.0) | imports a bundle shared on Orca Cloud (public or by link; **no Orca account**): `{"bundle": {"name", "author", "version", "updated"}, "imported": [<same as the list above>], "skipped": [{"name", "error"}]}`; presets Orca 2.4.2 can't use are skipped, `400` if none is usable / not a share link / not found |
+
+Orca Cloud: the server reads `GET https://api.orcaslicer.com/api/v1/bundles/share/<code>` (open, found in the
+cloud.orcaslicer.com web app); presets inheriting another preset of the same bundle are merged first, `"type": "printer"`
+is stored as `machine`. Apps: after the import, set the printer profile automatically only if exactly one imported printer
+preset `inherits` the printer's system model (`GET /api/printers/{id}/profile` → `machine`), else let the user choose.
 
 `kind`: `machine` (printer), `process` (quality), `filament` (material). Printer presets are assigned per printer
 (`PUT /api/printers/{id}/profile`); quality/material presets appear in `/options` under `own`.

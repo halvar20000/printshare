@@ -201,6 +201,9 @@ def load_user_preset(path: Path, overrides: dict[str, Any] | None = None,
         data = base
     data.pop("inherits", None)
     data["from"] = "system"
+    if kind:
+        # the Orca CLI only knows machine/process/filament; Orca Cloud calls printer presets "printer" (#7)
+        data["type"] = kind
     if overrides:
         data.update(overrides)
     return data

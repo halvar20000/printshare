@@ -120,7 +120,11 @@ def _parse(filename: str, content: bytes) -> list[dict[str, Any]]:
 
 def store(config_dir: str | Path, filename: str, content: bytes, lib: ProfileLibrary) -> list[dict[str, Any]]:
     """Check and store an uploaded preset or bundle. Returns a summary per stored preset."""
-    presets = _parse(filename, content)
+    return store_presets(config_dir, _parse(filename, content), lib)
+
+
+def store_presets(config_dir: str | Path, presets: list[dict[str, Any]], lib: ProfileLibrary) -> list[dict[str, Any]]:
+    """Check presets (all must be usable, else nothing is stored) and store them."""
     checked = []
     for data in presets:
         kind = detect_kind(data)
@@ -134,6 +138,7 @@ def store(config_dir: str | Path, filename: str, content: bytes, lib: ProfileLib
     out = []
     for data, kind, info in checked:
         data = {k: v for k, v in data.items() if k not in ("print_host", "printhost_apikey", "printer_agent")}
+        data["type"] = kind        # Orca Cloud says "printer"; the Orca CLI only reads "machine" (#7)
         file = _safe_file(f"{kind}-{data['name']}")
         (target / file).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         out.append({**info, "file": file})

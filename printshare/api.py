@@ -9,6 +9,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   POST /api/printers · PATCH|DELETE /api/printers/{id}   the account's printers (no addresses)
   GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
+  POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -64,6 +65,7 @@ from pydantic import BaseModel, Field
 
 from .cloud import accounts
 from .cloud.spools import Spools
+from . import orca_cloud
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -84,7 +86,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.17.1")
+app = FastAPI(title="PocketPrint3D", version="0.18.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -1001,6 +1003,20 @@ async def profiles_upload(request: Request, filename: str = "profile.json", acct
         return await asyncio.to_thread(user_profiles.store, acct.settings.config_dir, filename, content, lib)
     except user_profiles.ProfileUploadError as e:
         raise _profile_error(e)
+
+
+class OrcaCloudImport(BaseModel):
+    link: str = Field(..., max_length=300)
+
+
+@app.post("/api/profiles/orca-cloud")
+async def profiles_orca_cloud(req: OrcaCloudImport, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Import a bundle shared on cloud.orcaslicer.com (issue #7) - no Orca account needed."""
+    lib = await asyncio.to_thread(_library)
+    try:
+        return await asyncio.to_thread(orca_cloud.import_bundle, acct.settings.config_dir, req.link, lib)
+    except orca_cloud.OrcaCloudError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.delete("/api/profiles/{file}")

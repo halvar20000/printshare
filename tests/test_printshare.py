@@ -389,3 +389,36 @@ def test_prusa_qualities_and_library_materials_slice(tmp_path):
         assert '; filament_settings_id = "Generic PETG @System"' in gcode and res.print_time
         if pid == "mk4s":
             assert "; print_settings_id = 0.15mm STRUCTURAL @MK4S 0.4" in gcode
+
+
+@needs_orca
+def test_orca_cloud_bundle_preset_slices(tmp_path):
+    """A printer preset from a shared Orca Cloud bundle (#7, recorded COSMOS bundle) slices with the real Orca."""
+    import json
+
+    import httpx
+
+    from printshare import orca_cloud
+    from printshare.config import load_settings
+    from printshare.profiles import ProfileLibrary
+    from printshare.slicer import Slicer
+    conf = tmp_path / "cfg"
+    conf.mkdir()
+    (conf / "config.yaml").write_text(
+        f"work_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\norca_binary: {ORCA_ROOT}/AppRun\n"
+        f"orca_profiles_dir: {ORCA_ROOT}/resources/profiles\nprinters:\n  - id: dom\n    type: moonraker\n"
+        "    url: http://127.0.0.1:7125\n")
+    lib = ProfileLibrary.cached(f"{ORCA_ROOT}/resources/profiles")
+    bundle = json.loads((Path(__file__).parent / "data" / "orca_cloud_cosmos_bundle.json").read_text())
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json=bundle)))
+    out = orca_cloud.import_bundle(conf, "https://cloud.orcaslicer.com/b/3fad3c38f25f", lib, http)
+    assert len(out["imported"]) == 8 and not out["skipped"]
+    afc = next(p for p in out["imported"] if p["name"] == "Elegoo Centauri Carbon 0.4 nozzle - Cosmos AFC")
+    from printshare import user_profiles
+    user_profiles.assign_machine(conf, "dom", afc["file"], lib)
+    s = load_settings(conf / "config.yaml")
+    Path(s.work_dir).mkdir(parents=True, exist_ok=True)
+    printer = s.printers[0]
+    res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out", printer.slicing)
+    code = "\n".join(line for line in res.gcode_path.read_text().splitlines() if not line.startswith(";"))
+    assert "PRINT_START" in code and "SET_PRINT_STATS_INFO TOTAL_LAYER=" in code and "M729" not in code

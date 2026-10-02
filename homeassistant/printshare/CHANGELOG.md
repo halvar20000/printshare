@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.0
+- Import OrcaSlicer profiles from an Orca Cloud share link (cloud.orcaslicer.com/b/…) – web page "Druckerprofil" card and
+  app; no Orca account needed. Printer presets with `"type": "printer"` (as Orca Cloud stores them) now slice.
+
 ## 0.17.1
 - MakerWorld links: the app shows the model page (pictures, creator, licence, variants) with a button to MakerWorld.
   MakerWorld only allows downloads with your own account - download the 3MF there and share it with PocketPrint3D.

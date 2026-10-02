@@ -158,6 +158,13 @@
       </div>
       <input id="profile-file" type="file" accept=".json,.zip,.orca_printer,application/json,application/zip" hidden>
       <button type="button" id="profile-upload" class="primary" data-t="profile_upload">Druckerprofil hochladen</button>
+      <!-- bundle shared on cloud.orcaslicer.com (#7): no Orca account needed -->
+      <label for="orca-link" data-t="orca_title">Aus Orca Cloud importieren</label>
+      <div class="row">
+        <input id="orca-link" type="url" placeholder="https://cloud.orcaslicer.com/b/…" autocomplete="off">
+        <button type="button" id="orca-import" data-t="orca_import">Importieren</button>
+      </div>
+      <p class="hint" data-t="orca_hint"></p>
       <p id="profiles-msg" class="hint" hidden></p>
       <ul id="profile-list" class="list profiles"></ul>
     </div>

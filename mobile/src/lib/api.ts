@@ -361,6 +361,12 @@ export class Api {
   uploadProfile = (uri: string, name: string) =>
     this.rawUpload<UserProfile[]>(`/api/profiles?filename=${encodeURIComponent(name)}`, uri);
 
+  /** Import a bundle shared on cloud.orcaslicer.com (server 0.18.0, issue #7) - no Orca account needed. */
+  importOrcaCloud = (link: string) =>
+    this.request<{ bundle: { name: string | null; author: string | null; version: string | null };
+                   imported: UserProfile[]; skipped: { name: string | null; error: string }[] }>(
+      "/api/profiles/orca-cloud", { method: "POST", body: { link }, timeout: 60000 });
+
   /** Upload a local model file (document picker or share menu) as raw body. */
   upload = (uri: string, name: string) =>
     this.rawUpload<Upload>(`/api/uploads?name=${encodeURIComponent(name)}`, uri);

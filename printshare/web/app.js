@@ -33,6 +33,10 @@ const I18N = {
     profile_standard: "Standard: {name}", profile_cosmos: " (mit eingebautem COSMOS-Startcode)",
     profile_config: "Aus config.yaml: {name}", profile_for: "Hochladen für",
     profile_upload: "Druckerprofil hochladen", profile_uploading: "Wird hochgeladen …",
+    orca_title: "Aus Orca Cloud importieren", orca_import: "Importieren", orca_importing: "Wird importiert …",
+    orca_hint: "Link eines geteilten Bundles von cloud.orcaslicer.com (öffentlich oder per Link geteilt) – Drucker-, Qualitäts- und Materialprofile, ohne Orca-Konto.",
+    orca_done: "„{bundle}“: {n} Profile importiert.", orca_skipped: "{n} übersprungen (OrcaSlicer 2.4.2 kennt ihre Basis nicht).",
+    orca_choose: "Wähle oben das passende Druckerprofil.",
     profile_uploaded: "„{name}“ wird ab jetzt für {printer} verwendet.",
     profile_stored: "Hochgeladen: {names}", profile_saved: "{printer} verwendet jetzt: {name}",
     profile_delete: "Löschen", profile_delete_q: "Profil „{name}“ löschen?",
@@ -119,6 +123,10 @@ const I18N = {
     profile_standard: "Standard: {name}", profile_cosmos: " (with built-in COSMOS start code)",
     profile_config: "From config.yaml: {name}", profile_for: "Upload for",
     profile_upload: "Upload printer profile", profile_uploading: "Uploading …",
+    orca_title: "Import from Orca Cloud", orca_import: "Import", orca_importing: "Importing …",
+    orca_hint: "Link of a bundle shared on cloud.orcaslicer.com (public or shared by link) – printer, quality and material profiles, no Orca account needed.",
+    orca_done: "“{bundle}”: {n} profiles imported.", orca_skipped: "{n} skipped (OrcaSlicer 2.4.2 doesn't know their base).",
+    orca_choose: "Choose the matching printer profile above.",
     profile_uploaded: "“{name}” is now used for {printer}.",
     profile_stored: "Uploaded: {names}", profile_saved: "{printer} now uses: {name}",
     profile_delete: "Delete", profile_delete_q: "Delete profile “{name}”?",
@@ -821,6 +829,34 @@ async function deleteProfile(p) {
   } catch (e) { profilesMsg(e.message, true); }
   renderProfiles();
 }
+async function importOrcaCloud() {
+  const printer = S.printers.find(p => p.id === $("profile-target").value) || S.printers[0];
+  profilesMsg("");
+  $("orca-import").disabled = true;
+  $("orca-import").textContent = t("orca_importing");
+  try {
+    const r = await api("/api/profiles/orca-cloud", { method: "POST", body: JSON.stringify({ link: $("orca-link").value.trim() }) });
+    const lines = [t("orca_done", { bundle: r.bundle.name || "Orca Cloud", n: r.imported.length })];
+    if (r.skipped.length) lines.push(t("orca_skipped", { n: r.skipped.length }));
+    // one printer preset for this printer's model: use it; several (nozzles, AFC …): the user picks
+    const base = printer && PR.assigned[printer.id] ? PR.assigned[printer.id].machine : null;
+    const fitting = r.imported.filter(p => p.kind === "machine" && p.inherits === base);
+    if (printer && fitting.length === 1) {
+      PR.assigned[printer.id] = await api(`/api/printers/${encodeURIComponent(printer.id)}/profile`,
+                                          { method: "PUT", body: JSON.stringify({ machine_file: fitting[0].file }) });
+      lines.push(t("profile_uploaded", { name: profileName(fitting[0]), printer: printer.name }));
+    } else if (r.imported.some(p => p.kind === "machine")) {
+      lines.push(t("orca_choose"));
+    }
+    profilesMsg(lines.join(" "));
+    $("orca-link").value = "";
+    PR.profiles = await api("/api/profiles");
+  } catch (e) { profilesMsg(e.message, true); }
+  $("orca-import").disabled = false;
+  $("orca-import").textContent = t("orca_import");
+  renderProfiles();
+}
+$("orca-import").onclick = importOrcaCloud;
 $("profile-upload").onclick = () => $("profile-file").click();
 $("profile-file").onchange = () => {
   const f = $("profile-file").files[0];
