@@ -421,6 +421,23 @@ All `409` in the cloud. The server reads Manyfold's API v0 (`/models`, `/models/
 `Accept: application/vnd.manyfold.v0+json`, bearer API key or OAuth client credentials); the JSON API has no search, so
 the model list (ids + names) is cached 5 minutes and searched on the server.
 
+### AI failure detection (0.23.0, own servers only)
+The user runs Obico's ML API (`ml_api` service of obico-server, AGPL, separate container). While a printer prints, the
+server checks a camera frame every `interval` s (frames offered under one-time addresses `/api/detect/frame/<token>.jpg`,
+60 s, no key) and smooths the failure confidences; after a warm-up of 12 frames per print an alert is raised at the
+sensitivity's threshold (low 0.75, medium 0.55, high 0.38), optionally pausing the printer.
+
+| | |
+|---|---|
+| `GET /api/printers/{id}/status` | adds `"watch": {"state": "idle|warming|watching|alert|muted", "score", "threshold", "frames", "last_check", "alerted_at", "paused", "action", "error", "frame"}` when set up |
+| `GET /api/printers/{id}/watch/frame` | the last checked frame (JPEG) – `?token=` for image views |
+| `POST /api/printers/{id}/watch/mute` | "false alarm": no more alerts for this print |
+| `GET /api/failure-detection/config` | `{"configured", "ml_url", "token_set", "server_url", "interval", "sensitivity", "action"}` |
+| `PUT /api/failure-detection/config` `{"ml_url", "ml_token"?, "server_url"?, "interval", "sensitivity", "action"}` | saved only after the ML API fetched and checked a test frame → `{…, "test": {"detections": 0}}`; `400` with the reason (e.g. "can it reach http://…?") |
+| `DELETE /api/failure-detection/config` | turns it off (env `ML_API_URL` / `ML_API_TOKEN` may still set it) |
+
+All `409` in the cloud. `server_url` = this server as the ML API container reaches it (default `PRINTSHARE_URL`).
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

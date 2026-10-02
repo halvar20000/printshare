@@ -56,8 +56,20 @@ export type PrinterStatus = {
   fans?: Record<string, number | null>;
   lights?: Record<string, boolean>;
   speed?: number | null;
+  /** server 0.23.0, own servers with AI failure detection set up */
+  watch?: WatchState;
   /** server 0.16.0, Klipper: Moonraker's own Spoolman link (it books the filament itself); null = none */
   spoolman?: { connected: boolean; spool_id: number | null } | null;
+};
+/** AI failure detection of one printer (Obico ML API on the user's server). */
+export type WatchState = {
+  state: "idle" | "warming" | "watching" | "alert" | "muted"; score: number; threshold: number; frames: number;
+  last_check: number | null; alerted_at: number | null; paused: boolean; action: "notify" | "pause";
+  error: string | null; frame: boolean;
+};
+export type FailureConfig = {
+  configured: boolean; ml_url: string | null; token_set: boolean; server_url: string | null; interval: number;
+  sensitivity: "low" | "medium" | "high"; action: "notify" | "pause";
 };
 export type Defaults = {
   filament: string; process: string; bed_type: string; supports: string; brim: string;
@@ -210,6 +222,15 @@ export class Api {
     this.request<{ configured: boolean; url: string; models: number }>("/api/manyfold/config",
       { method: "PUT", body: { url, ...(token ? { token } : {}) }, timeout: 60000 });
   removeManyfold = () => this.request<{ configured: boolean }>("/api/manyfold/config", { method: "DELETE" });
+
+  /** AI failure detection (server 0.23.0, own servers only). */
+  failureConfig = () => this.request<FailureConfig>("/api/failure-detection/config");
+  setFailureConfig = (c: { ml_url: string; ml_token?: string; server_url?: string; sensitivity: string; action: string }) =>
+    this.request<FailureConfig & { test: { detections: number } }>("/api/failure-detection/config",
+      { method: "PUT", body: c, timeout: 90000 });
+  removeFailureConfig = () => this.request<{ configured: boolean }>("/api/failure-detection/config", { method: "DELETE" });
+  muteWatch = (printer: string) =>
+    this.request<WatchState>(`/api/printers/${encodeURIComponent(printer)}/watch/mute`, { method: "POST" });
 
   route(): Route | null {
     const a = activeAddress.get(this.key);

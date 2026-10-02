@@ -145,6 +145,12 @@ export default function Settings() {
       ) : null}
 
       {server ? (
+        <Section title={t("failureTitle")} footer={t("failureSub")}>
+          <Row icon="eye-outline" label={t("failureTitle")} onPress={() => router.push("/failure-detection")} />
+        </Section>
+      ) : null}
+
+      {server ? (
         <Section title={t("spoolman")}>
           <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
             value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />

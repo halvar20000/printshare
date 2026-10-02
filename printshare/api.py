@@ -12,6 +12,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
+  GET|PUT|DELETE /api/failure-detection/config · /api/printers/{id}/watch/frame|mute   AI failure detection (0.23.0, own servers)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -45,6 +46,7 @@ One-shot (CLI / iOS Shortcut):
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import json
 import os
@@ -70,6 +72,7 @@ from .cloud.spools import Spools
 from . import orca_cloud
 from . import filament_db
 from . import manyfold as mf
+from . import failure_watch as fw
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -90,7 +93,14 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.22.0")
+@contextlib.asynccontextmanager
+async def _lifespan(_app):
+    if not settings.cloud:
+        WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
+    yield
+
+
+app = FastAPI(title="PocketPrint3D", version="0.23.0", lifespan=_lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -628,7 +638,11 @@ async def status(printer_id: str, acct: Account = Depends(auth)) -> dict[str, An
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     _log_temperatures(printer_id, st)
-    return {**st, "kind": printer_kind(st.get("state"))}
+    out = {**st, "kind": printer_kind(st.get("state"))}
+    watch_cfg = fw.load_config(settings)
+    if watch_cfg.configured:
+        out["watch"] = WATCHER.state(printer_id, watch_cfg)     # AI failure detection (0.23.0)
+    return out
 
 
 def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
@@ -640,6 +654,97 @@ def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
     if log and now - log[-1][0] < 4:
         return
     log.append((now, {h: (v.get("actual"), v.get("target")) for h, v in heaters.items() if v.get("actual") is not None}))
+
+
+# ---------- AI failure detection with the Obico ML API (0.23.0, own servers only) ----------
+WATCHER = fw.FailureWatcher(lambda: settings, get_adapter, printer_kind)
+
+
+@app.get("/api/detect/frame/{token}.jpg")
+def detect_frame(token: str) -> Response:
+    """A camera frame for the ML API (one-time address, 60 s; the random token is the secret, no key in its logs)."""
+    data = WATCHER.frame(token) if not settings.cloud and re.fullmatch(r"[A-Za-z0-9_-]{16,64}", token) else None
+    if data is None:
+        raise HTTPException(404, "no such frame")
+    return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+class FailureDetectionSettings(BaseModel):
+    ml_url: str = Field(..., max_length=300)
+    ml_token: str | None = Field(None, max_length=300)        # None = keep
+    server_url: str | None = Field(None, max_length=300)
+    interval: int = Field(15, ge=5, le=300)
+    sensitivity: str = Field("medium", pattern="^(low|medium|high)$")
+    action: str = Field("notify", pattern="^(notify|pause)$")
+
+
+def _watch_home(acct: Account) -> None:
+    if acct.cloud or settings.cloud:
+        raise HTTPException(409, "failure detection needs your own PocketPrint3D server with camera access")
+
+
+@app.get("/api/failure-detection/config")
+def failure_config(acct: Account = Depends(auth)) -> dict[str, Any]:
+    _watch_home(acct)
+    cfg = fw.load_config(settings)
+    return {"configured": cfg.configured, "ml_url": cfg.ml_url or None, "token_set": bool(cfg.ml_token),
+            "server_url": cfg.server_url or None, "interval": cfg.interval, "sensitivity": cfg.sensitivity,
+            "action": cfg.action}
+
+
+def _http_url(u: str) -> str:
+    u = u.strip().rstrip("/")
+    parts = urlsplit(u)
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.query or parts.fragment:
+        raise HTTPException(400, f"not an address: {u!r} (e.g. http://192.168.1.10:3333)")
+    return u
+
+
+@app.put("/api/failure-detection/config")
+async def failure_config_set(req: FailureDetectionSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Saves after a real test: the ML API has to fetch and check a test image from this server."""
+    _watch_home(acct)
+    old = fw.load_config(settings)
+    cfg = fw.WatchConfig(_http_url(req.ml_url), old.ml_token if req.ml_token is None else req.ml_token.strip(),
+                         _http_url(req.server_url) if req.server_url else old.server_url,
+                         req.interval, req.sensitivity, req.action)
+    if not cfg.server_url:
+        raise HTTPException(400, "enter this server's address as the ML API container reaches it (e.g. http://192.168.1.10:8484)")
+    from PIL import Image
+    buf = __import__("io").BytesIO()
+    Image.new("RGB", (320, 240), (90, 90, 90)).save(buf, "JPEG")
+    try:
+        detections = await WATCHER.detect(cfg, buf.getvalue())
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    fw.save_config(settings, cfg)
+    return {**failure_config(acct), "test": {"detections": len(detections)}}
+
+
+@app.delete("/api/failure-detection/config")
+def failure_config_delete(acct: Account = Depends(auth)) -> dict[str, Any]:
+    _watch_home(acct)
+    fw.save_config(settings, None)
+    return {"configured": fw.load_config(settings).configured}
+
+
+@app.get("/api/printers/{printer_id}/watch/frame")
+def watch_frame(printer_id: str, acct: Account = Depends(auth)) -> Response:
+    _watch_home(acct)
+    _printer(acct, printer_id)
+    w = WATCHER.watches.get(printer_id)
+    if w is None or w.frame is None:
+        raise HTTPException(404, "no frame yet")
+    return Response(w.frame, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/printers/{printer_id}/watch/mute")
+def watch_mute(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """'False alarm': no more alerts for the rest of this print."""
+    _watch_home(acct)
+    _printer(acct, printer_id)
+    WATCHER.mute(printer_id)
+    return WATCHER.state(printer_id, fw.load_config(settings))
 
 
 # ---------- printer control (issue #5) ----------

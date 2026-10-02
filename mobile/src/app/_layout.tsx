@@ -66,6 +66,7 @@ function Root() {
         <Stack.Screen name="spools" options={{ title: t("spools") }} />
         <Stack.Screen name="printables" options={{ title: "Printables" }} />
         <Stack.Screen name="manyfold" options={{ title: "Manyfold" }} />
+        <Stack.Screen name="failure-detection" options={{ title: t("failureTitle") }} />
         <Stack.Screen name="spool/[id]" options={{ title: "" }} />
         <Stack.Screen name="connect" options={{ title: t("connectTitle"), presentation: "modal" }} />
         <Stack.Screen name="scan" options={{ title: t("scanTitle"), presentation: "fullScreenModal", headerShown: false }} />

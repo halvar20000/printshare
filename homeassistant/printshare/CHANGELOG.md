@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.23.0
+- AI failure detection with Obico's ML API (runs as its own container): while printing, camera pictures are checked;
+  a likely failure shows in the app with the picture and can pause the print automatically. Works for every printer
+  with a camera, also the Centauri Carbon with stock firmware. Set up in the app (Settings → AI failure detection).
+
 ## 0.22.0
 - Exact print times for Klipper printers (e.g. COSMOS): after slicing, klipper_estimator recalculates the time with the
   printer's own speed and acceleration limits (often 10–20 % closer than OrcaSlicer) and corrects the progress lines,

@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Text, Vi
 
 import { BookingCard, bookedText } from "@/components/bookings";
 import { CameraImage } from "@/components/camera";
+import { WatchInfo } from "@/components/watch";
 
 import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/components/ui";
 import type { Printer, PrinterStatus } from "@/lib/api";
@@ -78,6 +79,13 @@ export default function Printers() {
       setStarting(st => ({ ...st, [p.id]: Date.now() }));
     } catch (e) { setError((e as Error).message); }
     finally { setActing(""); setTimeout(load, 3000); }
+  };
+
+  const muteWatch = async (p: Printer) => {
+    if (!api) return;
+    setActing(`${p.id}:mute`);
+    try { await api.muteWatch(p.id); } catch (e) { setError((e as Error).message); }
+    finally { setActing(""); setTimeout(load, 500); }
   };
 
   const control = async (p: Printer, action: "pause" | "resume" | "cancel") => {
@@ -170,6 +178,10 @@ export default function Printers() {
                   </View>
                 ))}
               </View>
+            ) : null}
+            {s?.watch ? (
+              <WatchInfo printer={p.id} watch={s.watch} busy={acting} onMute={() => muteWatch(p)}
+                onPause={() => control(p, "pause")} />
             ) : null}
             {busy ? (
               <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>

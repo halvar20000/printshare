@@ -678,6 +678,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (cloud printers have none), the adapter's URL candidates (configured, then :7125), cache in
   `<config dir>/klipper_estimator/<printer>.json`. Example: cone 9m16s (Orca) → 8m33s with 500 mm/s / 20000 mm/s².
 
+## AI failure detection with the Obico ML API (2026-10-02, server 0.23.0)
+- Obico's own REST API needs OAuth app registration with Obico (support@obico.io) and only knows printers with its
+  plugin → not used. Instead the **ML API** alone (`ml_api` service of obico-server, `docker compose up -d ml_api`,
+  port 3333, ~4 GB RAM, optional `ML_API_TOKEN`; same approach as Bambuddy): `GET /p/?img=<url>` → `{"detections":
+  [[label, confidence, [x, y, w, h]]]}`; it fetches the image itself → our server must be reachable from it.
+- `printshare/failure_watch.py` (own scoring, no Obico code: sum of "failure"/"spaghetti" confidences per frame, EMA
+  α=2/13, 12 warm-up frames per print, thresholds low .75 / medium .55 / high .38; actions notify|pause), frames scaled
+  to 640 px and offered once under `/api/detect/frame/<token>.jpg` (60 s); `WATCHER` started via FastAPI lifespan (not in
+  the cloud); config `<config dir>/failure_detection.yaml` (0600) or env; PUT config runs a real test frame.
+- App: `components/watch.tsx` on the printer card (chip / red alert box with frame, "Fehlalarm", "Pausieren"),
+  `app/failure-detection.tsx`. Web build tested end-to-end with a fake ML API fetching frames over HTTP and FakeMoonraker
+  (alert, pause, false alarm). **Not yet with the real ml_api / a real failed print.** No push notifications yet.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
