@@ -182,15 +182,17 @@ jobs:
       - name: Smoke test - starts, answers, shows its bridge state
         run: |
           img="$BRIDGE_IMAGE@${{ steps.build.outputs.digest }}"
-          fail() { echo "::error title=bridge smoke test::$1 $(docker logs b 2>&1 | tail -15 | tr '\n' '|')"; exit 1; }
-          docker run -d --name b -p 8484:8484 -e PRINTSHARE_API_TOKEN=t -e PRINTSHARE_BRIDGE_URL=http://127.0.0.1:9 "$img" \
-            || fail "docker run failed"
+          c=pp3d-bridge-smoke
+          fail() { echo "::error title=bridge smoke test::$1 | $(docker logs $c 2>&1 | tail -15 | tr '\n' '|')"; exit 1; }
+          out=$(docker pull "$img" 2>&1) || fail "docker pull failed: $(echo "$out" | tail -3 | tr '\n' ' ')"
+          out=$(docker run -d --name $c -p 8484:8484 -e PRINTSHARE_API_TOKEN=t -e PRINTSHARE_BRIDGE_URL=http://127.0.0.1:9 "$img" 2>&1) \
+            || fail "docker run failed: $(echo "$out" | tail -3 | tr '\n' ' ')"
           for i in $(seq 40); do curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge >/dev/null && break; sleep 1; done
           out=$(curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge) || fail "no answer from /api/bridge"
           echo "$out"
           echo "$out" | grep -q '"enabled":true' || fail "bridge mode not on: $out"
-          docker logs b | tail -20
-          docker rm -f b
+          docker logs $c | tail -20
+          docker rm -f $c
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
