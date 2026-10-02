@@ -620,7 +620,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Logout needs native code: local Expo module `mobile/modules/web-data` (`WebData.clearAsync()`: Android
   `CookieManager.removeAllCookies` + `flush` + `WebStorage.deleteAllData` on the main queue; iOS `WKWebsiteDataStore`).
   Created with `create-expo-module --local` (non-interactive), autolinked from `modules/`. Native → new app build.
-- **To check on a real phone:** the login survives an app restart; downloads on the site don't start a system download.
+- **Checked 2026-10-02 (Thomas, Galaxy S24 Ultra):** login with e-mail + password works in the app's WebView.
+  Still to check: the login survives an app restart; downloads on the site don't start a system download.
 
 ## OpenPrintTag NFC spools (2026-10-02, app only, Android)
 - Spec read from specs.openprinttag.org (Docsify: `nfc_data_format.md`, `nfc_technical_details.md`,
