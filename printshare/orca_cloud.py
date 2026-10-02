@@ -3,7 +3,8 @@
 A bundle shared on cloud.orcaslicer.com (`https://cloud.orcaslicer.com/b/<sharing token>`) can be read by anyone:
 `GET https://api.orcaslicer.com/api/v1/bundles/share/<token>` returns its presets as JSON (`shared_profiles[].content`,
 the same keys as an OrcaSlicer user preset). Found in the web app's code and checked with the public COSMOS bundle
-(2026-10-02). Syncing a user's *private* presets needs a registered app (client_id) and stays blocked.
+(2026-10-02). Only *public* bundles: private ones (and syncing a user's own presets) need an Orca login, i.e. a
+registered app (client_id) - still blocked.
 """
 from __future__ import annotations
 
@@ -21,6 +22,10 @@ API = "https://api.orcaslicer.com/api/v1/bundles/share/"
 LINK = re.compile(r"cloud\.orcaslicer\.com/b/([A-Za-z0-9_-]{4,64})(?:[/?#]|$)")
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PRESETS = 200
+# Orca Cloud bundles are "Public" or "Private"; a private one only opens for whitelisted, logged-in Orca users (the web
+# app: "Only whitelisted users can access this private bundle link") - there is no link-only mode.
+PRIVATE = ("bundle not found or private - private Orca Cloud bundles only open for logged-in Orca users: make the bundle "
+           "public, or export the presets in OrcaSlicer and upload the file")
 
 
 class OrcaCloudError(Exception):
@@ -39,7 +44,7 @@ def fetch_bundle(token: str, http: httpx.Client | None = None) -> dict[str, Any]
     try:
         with client.stream("GET", API + token, headers={"Accept": "application/json"}) as r:
             if r.status_code in (401, 403, 404):
-                raise OrcaCloudError("bundle not found - is it shared (public or with a link)?")
+                raise OrcaCloudError(PRIVATE)
             if r.status_code != 200:
                 raise OrcaCloudError(f"Orca Cloud answered HTTP {r.status_code}")
             body = b""

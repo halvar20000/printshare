@@ -400,7 +400,9 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   /api/profiles/orca-cloud`; app `printer/[id].tsx` + web card. **Bug found with the real Orca:** the CLI rejects
   `"type": "printer"` ("unknown config type printer", exit 251) → stored/loaded presets get `type = kind`. Checked live with
   the public COSMOS bundle `/b/3fad3c38f25f` (8 printer presets, all import + slice; fixture
-  `tests/data/orca_cloud_cosmos_bundle.json`). Not yet checked: bundles shared by link but not public.
+  `tests/data/orca_cloud_cosmos_bundle.json`). Orca Cloud has only Public and Private bundles - private ones open only for
+  whitelisted logged-in users ("Only whitelisted users can access this private bundle link"), no link-only mode → import
+  is for public bundles; texts say so since build 24.
 - **Orca Cloud *account* sync (private presets automatically) is still blocked:** it needs a `client_id` registered with the Orca Cloud team and their
   (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow
   (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store

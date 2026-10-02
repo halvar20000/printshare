@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.1
+- Orca Cloud import: only public bundles can be read without an Orca account (private ones only open for whitelisted,
+  logged-in Orca users) - texts and the error message say so and point to exporting the presets in OrcaSlicer.
+
 ## 0.18.0
 - Import OrcaSlicer profiles from an Orca Cloud share link (cloud.orcaslicer.com/b/…) – web page "Druckerprofil" card and
   app; no Orca account needed. Printer presets with `"type": "printer"` (as Orca Cloud stores them) now slice.

@@ -42,7 +42,7 @@ def test_import_cosmos_bundle(tmp_path, lib):  # noqa: F811
     assert all(p["kind"] == "machine" and p["inherits"] == CC and p["print_start"] for p in out["imported"])
     assert len(out["skipped"]) == 6 and "0.2 nozzle" in " ".join(s["name"] for s in out["skipped"])
     assert sorted(p["name"] for p in user_profiles.list_profiles(tmp_path, lib)) == names
-    with pytest.raises(orca_cloud.OrcaCloudError, match="bundle not found"):
+    with pytest.raises(orca_cloud.OrcaCloudError, match="not found or private"):
         orca_cloud.import_bundle(tmp_path, "https://cloud.orcaslicer.com/b/missing1", lib, http)
 
 
