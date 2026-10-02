@@ -1,10 +1,12 @@
 // Reaching a printer: through the own server (home server), or - with the PocketPrint3D cloud - by the app itself on
 // the home Wi-Fi. The printer's address stays on this phone; the cloud never sees it (docs/CLOUD.md).
-import type { Api, Printer, PrinterStatus, Server } from "./api";
+import { WEB_APP, type Api, type Printer, type PrinterStatus, type Server } from "./api";
 import { canRelay, lanIo, lanPrinter, LanError, type LanAccess, type SendOptions } from "./lan";
 import { getJSON, setJSON } from "./storage";
 
 export class NoAddressError extends Error {}
+/** Web app: a browser can't talk to printers on the home network - only bridge printers work there. */
+export class WebLanError extends Error {}
 
 // per printer: address (+ PrusaLink password / API key); kept in the phone's secure storage, never sent to the cloud
 type Stored = Record<string, LanAccess | string>;          // plain string = address only (app builds 14-16)
@@ -29,6 +31,7 @@ export async function saveAccess(server: Server, printerId: string, access: LanA
 }
 
 async function lanFor(server: Server, printer: Printer) {
+  if (WEB_APP) throw new WebLanError(printer.id);
   if (!canRelay(printer.type)) throw new LanError("this printer type can only be used with an own server for now");
   const access = (await loadAccess(server))[printer.id];
   if (!access?.address) throw new NoAddressError(printer.id);

@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Switch, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync } from "@/components/ui";
-import { errorText, type Printer } from "@/lib/api";
+import { errorText, WEB_APP, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { lanPrinter } from "@/lib/lan";
 import { discoverPrinters, NoWifiError, type Found } from "@/lib/lan/discover";
@@ -25,6 +25,8 @@ const needsModel = (k: Kind) => k === "prusalink" || k === "octoprint";
 export default function CloudPrinter() {
   const { id, bridge: bridgeParam } = useLocalSearchParams<{ id: string; bridge?: string }>();
   const isNew = id === "new";
+  // web app without a bridge: no Wi-Fi search and no address - the browser can't reach the printer anyway
+  const webOnly = WEB_APP && !bridgeParam;
   const { api, server, t } = useApp();
   const c = useColors();
   const router = useRouter();
@@ -44,9 +46,9 @@ export default function CloudPrinter() {
   const [testing, setTesting] = useState(false);
   // finding printers on the Wi-Fi (new printers only): the form opens when one is picked or "enter yourself" is tapped
   const [found, setFound] = useState<Found[]>([]);
-  const [scan, setScan] = useState<{ pct: number } | "done" | "nowifi" | null>(isNew ? { pct: 0 } : null);
+  const [scan, setScan] = useState<{ pct: number } | "done" | "nowifi" | null>(isNew && !webOnly ? { pct: 0 } : null);
   const [picked, setPicked] = useState<string | null>(null);
-  const [manual, setManual] = useState(!isNew);
+  const [manual, setManual] = useState(!isNew || webOnly);
   const [known, setKnown] = useState<string[]>([]);
   const scanRun = useRef(0);
   // the bridge this printer sits behind (new: from the route; existing: from the printer)
@@ -82,7 +84,7 @@ export default function CloudPrinter() {
       .catch(e => { if (live()) setScan(e instanceof NoWifiError ? "nowifi" : "done"); });
   };
   useEffect(() => {
-    if (!isNew || !server) return;
+    if (!isNew || !server || webOnly) return;
     if (!bridgeParam) {
       loadAccess(server).then(a => setKnown(Object.values(a).map(x => x.address.replace(/^https?:\/\//, "")))).catch(() => {});
     }
@@ -213,13 +215,14 @@ export default function CloudPrinter() {
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
-      disabled={missingModel || (isNew && !address.trim()) || (isNew && !!viaBridge && missingCreds)} />}>
+      disabled={missingModel || (isNew && !webOnly && !address.trim()) || (isNew && !!viaBridge && missingCreds)} />}>
       <Stack.Screen options={{ title: isNew ? t("addPrinter") : name || t("printer") }} />
       {error ? <Banner kind="error" text={error} /> : null}
       {viaBridge ? <Banner kind="info" icon="git-network-outline"
         text={t(isNew ? "bridgeAddHint" : "bridgePrinterHint", { bridge: bridgeInfo?.name ?? "…" })} /> : null}
 
-      {isNew ? (
+      {webOnly && !viaBridge ? <Banner kind="info" icon="phone-portrait-outline" text={t("webAddPrinterHint")} /> : null}
+      {isNew && !webOnly ? (
         <Section title={t(bridgeParam ? "bridgeFindTitle" : "lanFindTitle")} footer={found.length ? t("discoverHint") : undefined}>
           {found.map((f, i) => {
             const added = known.includes(f.address);
@@ -273,6 +276,7 @@ export default function CloudPrinter() {
         ) : null}
       </Section>
 
+      {!(WEB_APP && !viaBridge) ? (
       <Section title={t("lanAddress")} footer={t(!viaBridge ? "lanAddressHint" : isNew ? "bridgeAddressHint" : "bridgeAccessHint")}>
         <TextInput value={address} onChangeText={v => { setAddress(v); setTest(null); }}
           placeholder={type === "octoprint" ? "octopi.local" : "192.168.1.50"}
@@ -306,9 +310,10 @@ export default function CloudPrinter() {
           </>
         ) : null}
       </Section>
-      {type === "prusalink" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
+      ) : null}
+      {type === "prusalink" && !(WEB_APP && !viaBridge) ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("prusaHint")}</Text> : null}
-      {type === "octoprint" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
+      {type === "octoprint" && !(WEB_APP && !viaBridge) ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("octoHint")}</Text> : null}
 
       <Section title={t("printerNameAuto")} footer={name.trim() ? undefined : t("printerNameAutoHint", { name: autoName })}>

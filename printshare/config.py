@@ -220,6 +220,8 @@ class Settings:
     bridge: bool = False
     bridge_url: str = "https://api.pocketprint3d.com"
     lan_subnet: str = ""               # printer search when broadcasts don't work (Docker bridge network), e.g. 192.168.1.0/24
+    # cloud: the web app (Expo web build, docs/WEB.md) served at / of api./app.pocketprint3d.com
+    webapp_dir: str = "/opt/webapp"
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
         if not self.printers:

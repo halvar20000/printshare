@@ -2,7 +2,8 @@
 	email thomasherbrig@ipomme.fr
 }
 
-api.pocketprint3d.com {
+# api: the apps; app: the web app (docs/WEB.md) - same container, same API, served from the same address
+api.pocketprint3d.com, app.pocketprint3d.com {
 	encode zstd gzip
 	# uploads of models / profiles (the app limits files to 300 MB)
 	request_body {

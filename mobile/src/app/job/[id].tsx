@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { errorText, friendlyError, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { errorText, friendlyError, WEB_APP, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
 import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/printerAccess";
@@ -411,12 +411,26 @@ export default function JobScreen() {
     return [l.slot, l.loaded ? l.material : t("laneEmpty")].filter(Boolean).join(" · ");
   };
 
+  // web app: the browser can't reach a printer on the home network - print it from the phone, through a bridge,
+  // or take the G-code along
+  const webLan = WEB_APP && cloud && !!printerObj && !printerObj.bridge;
+  const downloadGcode = async () => {
+    if (!api || !job) return;
+    const { url } = await api.gcodeDownload(job.id, printerLanes.length ? laneFor : undefined);
+    globalThis.open?.(url, "_blank");
+  };
+
   const footer = done ? (
     <>
       <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
       {!cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
         onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
+    </>
+  ) : webLan ? (
+    <>
+      <Button title={t("gcodeDownload")} icon="download-outline" onPress={downloadGcode} />
+      <Button kind="secondary" title={t("bridgesTitle")} icon="git-network-outline" onPress={() => router.push("/bridges")} />
     </>
   ) : (
     <>
@@ -566,7 +580,8 @@ export default function JobScreen() {
       {!done ? (
         <>
           {busy ? <Banner kind="warn" text={t("printerBusy", { printer: pname })} /> : null}
-          {kind === "offline" ? <Banner kind="error" text={t("printerOffline", { printer: pname })} /> : null}
+          {webLan ? <Banner kind="info" icon="phone-portrait-outline" text={t("webLanJob", { printer: pname })} />
+            : kind === "offline" ? <Banner kind="error" text={t("printerOffline", { printer: pname })} /> : null}
           {levelingOn != null ? (
             <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", marginTop: 10 }}>
               <View style={{ flex: 1 }}>

@@ -8,8 +8,19 @@ import type { T } from "./i18n";
 /** `remoteUrl`: optional second address for use away from home (e.g. Tailscale).
  * `cloud`: the hosted PocketPrint3D service - `token` is the session of `email`, printers are reached by the app. */
 export type Server = { url: string; token: string; remoteUrl?: string; cloud?: boolean; email?: string };
+/** The web app on app.pocketprint3d.com (docs/WEB.md): built with EXPO_PUBLIC_WEB_SAME_ORIGIN=1 and served by the cloud
+ *  server itself - API on the same address, session in an HttpOnly cookie (`token` stays empty). */
+export const WEB_APP = Platform.OS === "web" && process.env.EXPO_PUBLIC_WEB_SAME_ORIGIN === "1";
 // EXPO_PUBLIC_CLOUD_URL only for development/tests (inlined at build time); the app uses the real service
-export const CLOUD_URL = process.env.EXPO_PUBLIC_CLOUD_URL || "https://api.pocketprint3d.com";
+export const CLOUD_URL = WEB_APP && typeof location !== "undefined" ? location.origin
+  : process.env.EXPO_PUBLIC_CLOUD_URL || "https://api.pocketprint3d.com";
+
+/** How a request proves who it is: the session token, or (web app) the cookie plus the header the server expects
+ *  on changes, which a foreign page can't send. */
+export function authHeaders(server: Server): Record<string, string> {
+  return server.token ? { Authorization: `Bearer ${server.token}` } : WEB_APP ? { "X-Requested-With": "pocketprint3d" } : {};
+}
+const tokenParam = (server: Server) => server.token ? `token=${encodeURIComponent(server.token)}` : "";
 export type Me = { id: string; email: string; printers: number;
   limits: { slices_per_day: number; slices_today: number; upload_mb: number } };
 export type PrinterSettings = Partial<{ name: string; type: string; machine: string; cosmos: boolean; auto_leveling: boolean }>;
@@ -250,7 +261,8 @@ export class Api {
     if (!u) return undefined;
     if (!u.startsWith("/api/")) return u;
     const base = activeAddress.get(this.key) ?? this.server.url;
-    return `${base}${u}${u.includes("?") ? "&" : "?"}token=${encodeURIComponent(this.server.token)}`;
+    const tp = tokenParam(this.server);
+    return tp ? `${base}${u}${u.includes("?") ? "&" : "?"}${tp}` : `${base}${u}`;
   }
 
   /** Own Manyfold library (server 0.21.0, own servers only). */
@@ -275,7 +287,7 @@ export class Api {
   }
 
   private headers(json = true): Record<string, string> {
-    return { Authorization: `Bearer ${this.server.token}`, ...(json ? { "Content-Type": "application/json" } : {}) };
+    return { ...authHeaders(this.server), ...(json ? { "Content-Type": "application/json" } : {}) };
   }
 
   /** Ask all addresses at once; the first that answers at all (even 401) wins. */
@@ -374,13 +386,13 @@ export class Api {
   /** Where the app downloads the G-code itself (cloud: it sends it to the printer); `lanes` = AFC slot mapping. */
   async gcodeDownload(id: string, lanes?: Record<number, number>) {
     const q = lanes && Object.keys(lanes).length ? `?lanes=${encodeURIComponent(JSON.stringify(lanes))}` : "";
-    return { url: `${await this.base()}/api/jobs/${id}/gcode${q}`, headers: { Authorization: `Bearer ${this.server.token}` } };
+    return { url: `${await this.base()}/api/jobs/${id}/gcode${q}`, headers: authHeaders(this.server) };
   }
 
   /** The model file itself for the 3D view (server 0.10.1, served from the download cache). */
   async modelFileDownload(link: string, file: string | null) {
     const q = new URLSearchParams({ link, ...(file ? { file } : {}) });
-    return { url: `${await this.base()}/api/model-file?${q}`, headers: { Authorization: `Bearer ${this.server.token}` } };
+    return { url: `${await this.base()}/api/model-file?${q}`, headers: authHeaders(this.server) };
   }
 
   // ---------- cloud account (docs/API.md "Cloud accounts") ----------
@@ -439,11 +451,11 @@ export class Api {
     const q = new URLSearchParams();
     if (width) q.set("w", String(width));
     if (kind === "snapshot") q.set("t", String(Date.now()));          // always a fresh image
-    if (tokenInUrl || Platform.OS === "web") q.set("token", this.server.token);
+    if ((tokenInUrl || Platform.OS === "web") && this.server.token) q.set("token", this.server.token);
     const qs = q.toString();
     return {
       uri: `${await this.base()}/api/printers/${encodeURIComponent(printer)}/camera/${kind}${qs ? `?${qs}` : ""}`,
-      headers: { Authorization: `Bearer ${this.server.token}` },
+      headers: authHeaders(this.server),
     };
   }
   deleteProfile = (file: string) =>
@@ -524,6 +536,7 @@ function cloudError(t: T, status: number, detail: string): string {
 
 export const cloudRequestCode = (t: T, email: string) =>
   cloudPost<{ sent: boolean; email: string }>(t, "/api/auth/code", { email, lang: t.lang });
+/** Web app: the server keeps the session in an HttpOnly cookie and answers `token: null`. */
 export const cloudLogin = (t: T, email: string, code: string) =>
-  cloudPost<{ token: string; user: { id: string; email: string } }>(t, "/api/auth/login",
-    { email, code, device: `${Platform.OS} app` });
+  cloudPost<{ token: string | null; user: { id: string; email: string } }>(t, "/api/auth/login",
+    { email, code, device: WEB_APP ? "web browser" : `${Platform.OS} app`, ...(WEB_APP ? { cookie: true } : {}) });

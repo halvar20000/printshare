@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Screen, Section, Segmented } from "@/components/ui";
-import { CLOUD_URL, cloudLogin, cloudRequestCode } from "@/lib/api";
+import { CLOUD_URL, cloudLogin, cloudRequestCode, WEB_APP } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { checkServer } from "@/lib/pairing";
 import { space, useColors } from "@/lib/theme";
@@ -21,7 +21,7 @@ export default function Connect() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const auto = useRef(false);
-  const [mode, setMode] = useState<"cloud" | "own">(params.url || params.mode === "own" || (server && !server.cloud) ? "own" : "cloud");
+  const [mode, setMode] = useState<"cloud" | "own">(!WEB_APP && (params.url || params.mode === "own" || (server && !server.cloud)) ? "own" : "cloud");
   const [email, setEmail] = useState(server?.email ?? "");
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export default function Connect() {
     setError("");
     try {
       const r = await cloudLogin(t, sentTo, code);
-      await setServer({ url: CLOUD_URL, token: r.token, cloud: true, email: r.user.email });
+      await setServer({ url: CLOUD_URL, token: r.token ?? "", cloud: true, email: r.user.email });
       done();
     } catch (e) {
       setError((e as Error).message);
@@ -87,10 +87,13 @@ export default function Connect() {
   const mono = Platform.select({ ios: "Menlo", default: "monospace" });
   return (
     <Screen>
-      <View style={{ marginBottom: 20 }}>
-        <Segmented<"cloud" | "own"> values={["cloud", "own"]} value={mode} onChange={m => { setMode(m); setError(""); }}
-          labels={{ cloud: t("modeCloud"), own: t("modeOwn") }} />
-      </View>
+      {!WEB_APP ? (
+        // the web app on app.pocketprint3d.com is the cloud only (an own server has its own web page)
+        <View style={{ marginBottom: 20 }}>
+          <Segmented<"cloud" | "own"> values={["cloud", "own"]} value={mode} onChange={m => { setMode(m); setError(""); }}
+            labels={{ cloud: t("modeCloud"), own: t("modeOwn") }} />
+        </View>
+      ) : null}
       {error ? <Banner kind="error" text={error} /> : null}
 
       {mode === "cloud" ? (

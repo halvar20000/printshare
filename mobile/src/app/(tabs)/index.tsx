@@ -2,11 +2,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Clipboard from "expo-clipboard";
 import * as DocumentPicker from "expo-document-picker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Badge, Banner, Button, Card, Divider, Empty, Row, tap } from "@/components/ui";
+import { Badge, Banner, Button, Card, Divider, Empty, Row, tap, useContentWidth } from "@/components/ui";
 import type { JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago, extractLink, jobName, makerWorldId, printTime } from "@/lib/format";
@@ -20,6 +20,39 @@ export default function Home() {
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<JobSummary[]>([]);
   const [noPrinter, setNoPrinter] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const width = useContentWidth();
+
+  // desktop browsers: drop a model file anywhere on the page
+  useEffect(() => {
+    if (Platform.OS !== "web" || !server || typeof window === "undefined") return;
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+    const enter = (e: DragEvent) => { if (hasFiles(e)) { e.preventDefault(); depth++; setDragging(true); } };
+    const over = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault(); };
+    const leave = (e: DragEvent) => { if (hasFiles(e) && --depth <= 0) { depth = 0; setDragging(false); } };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      if (!/\.(stl|3mf|obj|step|stp)$/i.test(file.name)) { setError(t("dropWrongType")); return; }
+      setError("");
+      router.push({ pathname: "/prepare", params: { fileUri: URL.createObjectURL(file), fileName: file.name } });
+    };
+    window.addEventListener("dragenter", enter);
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragenter", enter);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+  }, [server, router, t]);
 
   useFocusEffect(useCallback(() => {
     api?.jobs().then(j => setRecent(j.slice(0, 3))).catch(() => {});
@@ -64,7 +97,7 @@ export default function Home() {
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: space, paddingBottom: 40, maxWidth: 640, width: "100%", alignSelf: "center" }}>
+        contentContainerStyle={{ padding: space, paddingBottom: 40, maxWidth: width, width: "100%", alignSelf: "center" }}>
         <Text style={{ color: c.text, fontSize: 32, fontWeight: "800", marginTop: 12 }}>{t("homeTitle")}</Text>
         <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginTop: 8, marginBottom: 22 }}>{t("homeSub")}</Text>
 
@@ -96,7 +129,7 @@ export default function Home() {
         </Card>
 
         <Card style={{ marginTop: 16 }}>
-          <Row icon="folder-open-outline" label={t("pickFile")} sub={t("pickFileSub")} onPress={pick} />
+          <Row icon="folder-open-outline" label={t("pickFile")} sub={t(Platform.OS === "web" ? "pickFileSubWeb" : "pickFileSub")} onPress={pick} />
           <Divider />
           <Row icon="search" label={t("searchModels")} sub={t("searchModelsSub")} onPress={() => router.navigate("/discover")} />
         </Card>
@@ -130,6 +163,14 @@ export default function Home() {
           </>
         ) : null}
       </ScrollView>
+      {dragging ? (
+        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, margin: 12,
+          borderRadius: radius, borderWidth: 3, borderStyle: "dashed", borderColor: c.accent, backgroundColor: c.accentSoft,
+          alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="cloud-upload-outline" size={56} color={c.accent} />
+          <Text style={{ color: c.text, fontSize: 20, fontWeight: "700", marginTop: 10 }}>{t("dropHere")}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }

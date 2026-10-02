@@ -1,3 +1,12 @@
+# Web app (docs/WEB.md): the Expo web build of mobile/, served by the cloud at app.pocketprint3d.com. Built once on
+# the build machine's own architecture - the output is plain HTML/JS for every platform.
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS webapp
+WORKDIR /mobile
+COPY mobile/package.json mobile/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY mobile/ ./
+RUN EXPO_PUBLIC_WEB_SAME_ORIGIN=1 npx expo export --platform web --output-dir /webapp && test -f /webapp/index.html
+
 FROM ubuntu:24.04
 
 ARG ORCA_VERSION=2.4.2
@@ -56,6 +65,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY printshare ./printshare
 RUN python3 -m venv /opt/venv && pip install --no-cache-dir .
+COPY --from=webapp /webapp /opt/webapp
 
 # Labels: OCI metadata + what Home Assistant expects from a pre-built add-on image
 ARG VERSION=dev

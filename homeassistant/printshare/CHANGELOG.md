@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.0
+- PocketPrint3D Cloud in the browser: app.pocketprint3d.com is the same app as on the phone, with the same account -
+  search, prepare, slice, preview, spools, and printing through a bridge. Drop a model file onto the page to start.
+  (Self-hosted servers: no change.)
+
 ## 0.27.0
 - Print from anywhere: new add-on option "Connect to PocketPrint3D Cloud" (bridge mode). The add-on's web page shows the
   pairing code and the connection under Settings → Print from anywhere.

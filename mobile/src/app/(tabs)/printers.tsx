@@ -12,12 +12,12 @@ import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/compo
 import { errorText, type Printer, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
-import { NoAddressError, printerControl, printerStatus } from "@/lib/printerAccess";
+import { NoAddressError, WebLanError, printerControl, printerStatus } from "@/lib/printerAccess";
 import { slots } from "@/lib/lanes";
 import { settleBookings, type Booking } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
 
-type Entry = { printer: Printer; status: PrinterStatus | null; error?: string; noAddress?: boolean };
+type Entry = { printer: Printer; status: PrinterStatus | null; error?: string; noAddress?: boolean; webLan?: boolean };
 
 export default function Printers() {
   const { api, server, t } = useApp();
@@ -52,7 +52,8 @@ export default function Printers() {
       const list = await Promise.all(ps.map(async p => {
         // cloud: the app asks the printer itself on the home Wi-Fi
         try { return { printer: p, status: await printerStatus(api, server!, p) }; }
-        catch (e) { return { printer: p, status: null, error: errorText(t, e), noAddress: e instanceof NoAddressError }; }
+        catch (e) { return { printer: p, status: null, error: errorText(t, e), noAddress: e instanceof NoAddressError,
+                             webLan: e instanceof WebLanError }; }
       }));
       setEntries(list);
       setNow(Date.now());
@@ -116,13 +117,14 @@ export default function Printers() {
           {cloud ? <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} /> : null}
         </Empty>
       ) : null}
-      {(entries ?? []).map(({ printer: p, status: s, noAddress, error }) => {
+      {(entries ?? []).map(({ printer: p, status: s, noAddress, error, webLan }) => {
         const kind = s ? s.kind : "offline";
         const busy = kind === "active" || kind === "paused";
         let label = t.table.printerKinds[kind];
         const raw = (s?.state ?? "").toLowerCase();
         if (kind === "active" && raw && raw !== "printing") label += ` · ${t.table.rawStates[raw] ?? raw}`;
         const badge = kind === "offline" || kind === "error" ? "error" : kind === "paused" ? "warn" : busy ? "accent" : "ok";
+        if (webLan) label = t("webLanBadge");
         const pct = s?.progress ?? 0;
         // printers that report it (PrusaLink, OctoPrint) know better than the estimate from progress
         const left = !busy ? null : s?.time_remaining_s != null ? s.time_remaining_s
@@ -135,7 +137,7 @@ export default function Printers() {
                 <Text style={{ color: c.text, fontSize: 19, fontWeight: "700" }} numberOfLines={1}>{p.name}</Text>
                 {p.bridge ? <Text style={{ color: c.sub, fontSize: 13, marginTop: 1 }}>{t("viaBridge")}</Text> : null}
               </View>
-              <Badge text={label} kind={badge} />
+              <Badge text={label} kind={webLan ? "neutral" : badge} />
             </View>
             {busy && s ? (
               <>
@@ -157,6 +159,12 @@ export default function Printers() {
                 <View><Text style={{ color: c.sub, fontSize: 13 }}>{t("bed")}</Text>
                   <Text style={{ color: c.text, fontSize: 16, fontWeight: "600" }}>{temp(s.bed, s.bed_target)}</Text></View>
               </View>
+            ) : webLan ? (
+              <>
+                <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21 }}>{t("webLanHint")}</Text>
+                <Button kind="secondary" title={t("bridgesTitle")} icon="git-network-outline" style={{ marginTop: 12 }}
+                  onPress={() => router.push("/bridges")} />
+              </>
             ) : noAddress ? (
               <>
                 <Text style={{ color: c.sub, fontSize: 15 }}>{t("needLanAddress")}</Text>

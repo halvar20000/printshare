@@ -3,7 +3,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import {
-  ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, useWindowDimensions, View,
   type StyleProp, type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -211,20 +211,27 @@ export function Empty({ icon, title, sub, children }: { icon: IconName; title: s
   );
 }
 
+/** Width of the content column: phone-like, a bit wider on desktop browsers. */
+export function useContentWidth(): number {
+  const { width } = useWindowDimensions();
+  return Platform.OS === "web" && width >= 1100 ? 820 : 640;
+}
+
 export function Screen({ children, footer, refreshControl }: {
   children: ReactNode; footer?: ReactNode; refreshControl?: ComponentProps<typeof ScrollView>["refreshControl"];
 }) {
   const c = useColors();
+  const maxWidth = useContentWidth();
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
         refreshControl={refreshControl}
-        contentContainerStyle={{ padding: space, paddingBottom: footer ? 24 : 48, maxWidth: 640, width: "100%", alignSelf: "center" }}>
+        contentContainerStyle={{ padding: space, paddingBottom: footer ? 24 : 48, maxWidth, width: "100%", alignSelf: "center" }}>
         {children}
       </ScrollView>
       {footer ? (
         <SafeAreaView edges={["bottom"]} style={{ backgroundColor: c.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.line }}>
-          <View style={{ padding: space, paddingBottom: 8, gap: 10, maxWidth: 640, width: "100%", alignSelf: "center" }}>{footer}</View>
+          <View style={{ padding: space, paddingBottom: 8, gap: 10, maxWidth, width: "100%", alignSelf: "center" }}>{footer}</View>
         </SafeAreaView>
       ) : null}
     </View>

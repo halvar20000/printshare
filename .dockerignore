@@ -1,6 +1,15 @@
 .git
 .github
-mobile
+# mobile/ is needed for the web app build stage, but not its installed or generated files
+mobile/node_modules
+mobile/android
+mobile/ios
+mobile/.expo
+mobile/dist
+releases
+.secrets
+.expo-token
+.hetzner-token
 homeassistant
 unraid
 tests

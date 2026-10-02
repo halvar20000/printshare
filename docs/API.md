@@ -438,6 +438,13 @@ sensitivity's threshold (low 0.75, medium 0.55, high 0.38), optionally pausing t
 
 All `409` in the cloud. `server_url` = this server as the ML API container reaches it (default `PRINTSHARE_URL`).
 
+## Web app login (0.28.0, cloud – docs/WEB.md)
+- `POST /api/auth/login {…, "cookie": true}` → the session goes into the HttpOnly cookie `pp3d_session` (Secure,
+  SameSite=Strict, 180 days) and the answer has `"token": null`. Requests then carry no Authorization header; changes
+  (anything but GET/HEAD) need `X-Requested-With: pocketprint3d`, else 403. `POST /api/auth/logout` and account deletion
+  clear the cookie. Apps keep using the token as before.
+- The cloud server serves the web app at `/` (app routes → `index.html`, `/api/*` never).
+
 ## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
 A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is
 built; forwarding the printer endpoints to a bridge comes with step 4.

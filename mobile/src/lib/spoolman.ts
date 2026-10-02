@@ -4,7 +4,7 @@
 // API: https://donkie.github.io/Spoolman/ (GET /api/v1/spool, PUT /api/v1/spool/{id}/use {use_weight}).
 // Cloud accounts without a server at home can keep their spools in the PocketPrint3D cloud instead (server 0.17.0,
 // same API under <cloud>/spoolman with the session token; creating/editing spools is PocketPrint3D's own shape).
-import type { PrinterStatus, Server } from "./api";
+import { authHeaders, type PrinterStatus, type Server } from "./api";
 import { getJSON, setJSON } from "./storage";
 
 export type Spool = {
@@ -129,7 +129,7 @@ export const loadSpoolmanUrl = async (server: Server) => (await getJSON<{ url: s
 export const CLOUD_SPOOLS = "cloud";
 /** The Spoolman behind a stored setting: the user's own server, or the cloud account's spools. */
 export const openSpoolman = (server: Server, url: string) => url === CLOUD_SPOOLS
-  ? new Spoolman(`${server.url.replace(/\/+$/, "")}/spoolman`, { Authorization: `Bearer ${server.token}` })
+  ? new Spoolman(`${server.url.replace(/\/+$/, "")}/spoolman`, authHeaders(server))
   : new Spoolman(url);
 export const saveSpoolmanUrl = (server: Server, url: string | null) =>
   setJSON(`ps_spoolman_${sk(server)}`, url?.trim() ? { url: url.trim() } : null);

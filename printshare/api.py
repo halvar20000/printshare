@@ -66,6 +66,8 @@ from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -108,7 +110,7 @@ async def _lifespan(_app):
     await BRIDGE_CLIENT.stop()
 
 
-app = FastAPI(title="PocketPrint3D", version="0.27.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.28.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -175,6 +177,11 @@ def _user_account(user: accounts.User, token: str) -> Account:
 _cloud_setup()
 
 
+SESSION_COOKIE = "pp3d_session"
+SESSION_COOKIE_DAYS = 180
+CSRF_HEADER = ("x-requested-with", "pocketprint3d")
+
+
 def _token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     return header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
@@ -182,6 +189,13 @@ def _token(request: Request) -> str:
 
 def auth(request: Request) -> Account:
     token = _token(request)
+    if not token and settings.cloud:
+        # the web app (docs/WEB.md): session in an HttpOnly cookie that page scripts can't read. SameSite=Strict keeps
+        # other sites from using it; changes additionally need a header that a plain form or link can't send.
+        token = request.cookies.get(SESSION_COOKIE, "")
+        if token and request.method not in ("GET", "HEAD", "OPTIONS") \
+                and request.headers.get(CSRF_HEADER[0]) != CSRF_HEADER[1]:
+            raise HTTPException(403, "request not allowed from this page")
     if settings.cloud:
         user = ACCOUNTS.user_for_token(token) if token else None
         if user is not None:
@@ -279,6 +293,12 @@ class LoginRequest(BaseModel):
     email: str
     code: str
     device: str | None = None       # e.g. "Pixel 8" - shown later in a list of logged-in devices
+    cookie: bool = False            # web app: keep the session in an HttpOnly cookie instead of returning it
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_COOKIE_DAYS * 86400, path="/", secure=True,
+                        httponly=True, samesite="strict")
 
 
 @app.post("/api/auth/code")
@@ -298,13 +318,17 @@ async def auth_code(req: CodeRequest, request: Request) -> dict[str, Any]:
 
 
 @app.post("/api/auth/login")
-async def auth_login(req: LoginRequest) -> dict[str, Any]:
-    """Step 2: the code from the e-mail -> a session token for this device (send it as `Authorization: Bearer`)."""
+async def auth_login(req: LoginRequest, response: Response) -> dict[str, Any]:
+    """Step 2: the code from the e-mail -> a session token for this device (send it as `Authorization: Bearer`).
+    With `cookie: true` (web app) the session goes into an HttpOnly cookie and `token` is null."""
     db = _cloud_only()
     try:
         user, token = await asyncio.to_thread(db.verify_code, req.email, req.code, req.device)
     except accounts.AccountError as e:
         raise HTTPException(e.status, str(e))
+    if req.cookie:
+        _set_session_cookie(response, token)
+        return {"token": None, "user": {"id": user.id, "email": user.email}}
     return {"token": token, "user": {"id": user.id, "email": user.email}}
 
 
@@ -318,14 +342,15 @@ def auth_me(acct: Account = Depends(auth)) -> dict[str, Any]:
 
 
 @app.post("/api/auth/logout")
-def auth_logout(acct: Account = Depends(auth)) -> dict[str, Any]:
+def auth_logout(response: Response, acct: Account = Depends(auth)) -> dict[str, Any]:
     if acct.cloud:
         ACCOUNTS.logout(acct.token)
+        response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
     return {"ok": True}
 
 
 @app.delete("/api/auth/account")
-async def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
+async def auth_delete_account(response: Response, confirm: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Delete the account and everything of it: printers, profiles, uploads, G-code, jobs (Apple/Google require
     this in the app). Needs ?confirm=true."""
     if not acct.cloud:
@@ -340,6 +365,7 @@ async def auth_delete_account(confirm: bool = False, acct: Account = Depends(aut
     ACCOUNTS.delete_user(acct.id)
     for bid in bridge_ids:
         await HUB.disconnect(bid, "the account was deleted")
+    response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
     return {"deleted": True}
 
 
@@ -1896,8 +1922,33 @@ async def print_(req: PrintRequest, acct: Account = Depends(auth)) -> dict[str, 
 
 
 # ---------- web app ----------
+# Cloud: the Expo web build (the same app as on the phone, docs/WEB.md). Home servers: the classic web page (printshare/web).
+WEBAPP_CSP = ("default-src 'self'; "
+              # the 3D viewers run in srcdoc iframes (inline module script, three.js from jsdelivr)
+              "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+              "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; "
+              "connect-src 'self' blob: data: https://cdn.jsdelivr.net; frame-src 'self' blob: about:; worker-src 'self' blob:; "
+              "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+WEBAPP_HEADERS = {"Content-Security-Policy": WEBAPP_CSP, "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff",
+                  "Referrer-Policy": "strict-origin-when-cross-origin",
+                  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), usb=(), serial=()"}
+
+
+def _webapp() -> Path | None:
+    d = Path(settings.webapp_dir)
+    return d if settings.cloud and (d / "index.html").is_file() else None
+
+
+def _webapp_index(d: Path) -> HTMLResponse:
+    return HTMLResponse((d / "index.html").read_text(encoding="utf-8"),
+                        headers={"Cache-Control": "no-cache", **WEBAPP_HEADERS})
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
+    d = _webapp()
+    if d is not None:
+        return _webapp_index(d)
     return HTMLResponse((WEB / "index.html").read_text(encoding="utf-8"),
                         headers={"Cache-Control": "no-cache"})
 
@@ -1911,3 +1962,28 @@ def manifest() -> FileResponse:
 def service_worker() -> FileResponse:
     # served from the root so its scope covers the whole app
     return FileResponse(WEB / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+
+# Web app (cloud): its files, and index.html for the app's own routes (/printers, /job/…). Answered only where no route
+# matched (404), so every API route - also ones added later - wins. Hashed bundles may be cached for long; index.html never.
+def _webapp_response(path: str) -> Response | None:
+    d = _webapp()
+    if d is None or path.startswith(("api/", "static/", "spoolman/")):
+        return None
+    target = (d / path).resolve()
+    if path and target.is_file() and target.is_relative_to(d.resolve()):
+        cache = "public, max-age=31536000, immutable" if path.startswith("_expo/static/") else "public, max-age=3600"
+        return FileResponse(target, headers={"Cache-Control": cache, **WEBAPP_HEADERS})
+    if "." in path.rsplit("/", 1)[-1]:
+        return None                                      # a missing file, not an app route
+    return _webapp_index(d)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_errors(request: Request, exc: StarletteHTTPException) -> Response:
+    if exc.status_code == 404 and request.method in ("GET", "HEAD") and exc.detail == "Not Found":
+        page = _webapp_response(request.url.path.lstrip("/"))
+        if page is not None:
+            return page
+    return await http_exception_handler(request, exc)

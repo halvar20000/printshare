@@ -770,6 +770,21 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   through the bridge), tested far away from home over mobile data. **A print started through the bridge works too** (Thomas,
   2026-10-02). Still open: Bambu.
 
+## Web app (2026-10-02, server 0.28.0) – docs/WEB.md
+- Thomas: the platform belongs on the desktop too, same account; later all prints through PocketPrint3D for spool management.
+  Plan: 1 web app (done here), 2 spool bookings in the account (bridge books), 3 "send from OrcaSlicer" (OctoPrint-compatible
+  upload per printer), 4 the same web app on home servers.
+- The Expo app exported for the web (`EXPO_PUBLIC_WEB_SAME_ORIGIN=1` → `WEB_APP`, `CLOUD_URL = location.origin`), built in
+  the Dockerfile's `webapp` stage (node:22, `--platform=$BUILDPLATFORM`) into `/opt/webapp`; `api.py` serves it at `/` in
+  cloud mode (`_webapp()`, catch-all route registered last; `settings.webapp_dir`). Caddy: `api.pocketprint3d.com,
+  app.pocketprint3d.com` same site block. **DNS record `app` (A/AAAA → 49.13.172.173) must exist.**
+- Session cookie `pp3d_session` (HttpOnly, Secure, SameSite=Strict) via `login {cookie: true}`; cookie-authenticated
+  changes need `X-Requested-With: pocketprint3d` (`authHeaders()` in the app). CSP etc. in `WEBAPP_HEADERS`.
+- Web specifics: drag & drop on the home screen, "Nur Handy" printers (no LAN from the browser: `WebLanError`) with G-code
+  download + bridge hint, no own-server mode, wider column ≥ 1100 px (`useContentWidth`).
+- Harness note: test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
+  /tmp/cloudtest/run_web.py, /tmp/bridgetest/home.py).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
