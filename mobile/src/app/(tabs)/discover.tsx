@@ -1,15 +1,16 @@
-// Search Printables / Thingiverse and open a model (spec MQ-05).
+// Search Printables / Thingiverse and open a model (spec MQ-05). MakerWorld can't be searched from outside: a card
+// sends the user there (share a model back to the app), and a MakerWorld link typed here opens its model page.
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, FlatList, Linking, Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Banner, Empty, Segmented, tap } from "@/components/ui";
+import { Banner, Button, Card, Empty, Segmented, tap } from "@/components/ui";
 import type { ModelHit, SortKey, Source } from "@/lib/api";
 import { useApp } from "@/lib/app";
-import { compact } from "@/lib/format";
+import { compact, extractLink, makerWorldId } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
 
 const MAX_W = 900;
@@ -67,6 +68,12 @@ export default function Discover() {
   const submit = (q = input) => {
     const v = q.trim();
     if (!v) return;
+    const mw = makerWorldId(extractLink(v));
+    if (mw) {
+      setInput("");
+      router.push({ pathname: "/model/[source]/[id]", params: { source: "makerworld", id: mw } });
+      return;
+    }
     setInput(v);
     if (v !== query) setHits([]);
     setQuery(v);
@@ -83,7 +90,8 @@ export default function Discover() {
   };
 
   const available = sources.filter(s => s.available);
-  const tvMissing = sources.some(s => s.id === "thingiverse" && !s.available);
+  // only the owner of a home server can add the token; cloud users can't do anything about it
+  const tvMissing = !server?.cloud && sources.some(s => s.id === "thingiverse" && !s.available);
   const inner = Math.min(width, MAX_W) - space * 2;
   const cols = inner > 560 ? 3 : 2;
   const cardW = (inner - (cols - 1) * 12) / cols;
@@ -144,6 +152,14 @@ export default function Discover() {
           </Pressable>
         ))}
       </View>
+      <Card style={{ padding: 16, marginTop: 24 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+          <Ionicons name="globe-outline" size={20} color={c.accent} style={{ marginRight: 8 }} />
+          <Text style={{ color: c.text, fontSize: 16, fontWeight: "700" }}>{t("makerworldTitle")}</Text>
+        </View>
+        <Text style={{ color: c.sub, fontSize: 14, lineHeight: 20, marginBottom: 12 }}>{t("makerworldText")}</Text>
+        <Button kind="secondary" title={t("makerworldOpen")} icon="open-outline" onPress={() => Linking.openURL("https://makerworld.com")} />
+      </Card>
       {tvMissing ? <Text style={{ color: c.sub, fontSize: 13, marginTop: 24, lineHeight: 18 }}>{t("thingiverseHint")}</Text> : null}
     </View>
   );
