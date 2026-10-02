@@ -197,6 +197,11 @@ class Settings:
     work_dir: str = "/data/work"
     gcode_dir: str = "/data/gcode"
     thingiverse_token: str = ""
+    # own Manyfold library (self-hosted model collection) as a model source; API key or OAuth app credentials
+    manyfold_url: str = ""
+    manyfold_token: str = ""
+    manyfold_client_id: str = ""
+    manyfold_client_secret: str = ""
     slice_timeout_s: int = 900
     max_parallel_slices: int = 1   # BE-01: further slice jobs wait in a queue
     keep_work_files: bool = False
@@ -276,6 +281,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
     # empty variables (e.g. unused fields of the Unraid template) must not clear the token
     s.api_token = os.environ.get("PRINTSHARE_API_TOKEN") or s.api_token
     s.thingiverse_token = os.environ.get("THINGIVERSE_TOKEN") or s.thingiverse_token
+    for key in ("url", "token", "client_id", "client_secret"):     # Unraid template / docker run
+        setattr(s, f"manyfold_{key}", os.environ.get(f"MANYFOLD_{key.upper()}") or getattr(s, f"manyfold_{key}"))
     if os.environ.get("PRINTSHARE_CLOUD", "").lower() in ("1", "true", "yes"):
         s.cloud = True
     s.brevo_api_key = os.environ.get("BREVO_API_KEY") or s.brevo_api_key

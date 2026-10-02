@@ -650,6 +650,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   error → G-code unchanged. Called in `Slicer.slice` right after copying the G-code. **Not yet seen on a real printer
   screen** (CC1, Prusa).
 
+## Manyfold library (2026-10-02, server 0.21.0)
+- API v0 OpenAPI read from manyfold.floppy.org.uk/api/v0/openapi.json (try.manyfold.app unreachable from here): JSON-LD,
+  `Accept: application/vnd.manyfold.v0+json`; `/models?page&order` (25 per page, `view.next`), `/models/{id}`
+  (`hasPart` with `encodingFormat`, `preview_file`, `spdx:license.licenseId`, `keywords`, `caption`),
+  `/models/{id}/model_files/{id}` (`contentUrl`, `filename`); auth bearer API key (Manyfold ≥ 0.132) or OAuth client
+  credentials (`/oauth/token`, scope "public read"); even public lists need auth. No search parameter.
+- `printshare/manyfold.py` (client, model list cached 5 min, never follows URLs outside the configured base,
+  `file_name()` adds the extension from the MIME type, config overlay `<config dir>/manyfold.yaml` 0600, `client_for()`
+  = None in the cloud), `search.ManyfoldSource` (word match on names, details of the page's hits in parallel for the
+  preview image), `fetch` (`manyfold:<id>` links and the library's own web URLs), API config + image proxy, Unraid
+  template fields. App: Settings → "Eigene Modell-Bibliothek" (own servers only), `api.imageUrl()` for server-relative
+  images, prepare uses `link`. Tested against a simulated Manyfold (tests/test_manyfold.py, also over HTTP in the web
+  build). **Not yet against a real Manyfold.**
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

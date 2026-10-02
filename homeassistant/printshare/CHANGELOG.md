@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.21.0
+- Your own Manyfold model library as a search source in the app ("Entdecken" → Manyfold): search, model pages with
+  pictures, print like a Printables model. Set it up in the app (Settings → Manyfold) or with MANYFOLD_URL / MANYFOLD_TOKEN.
+
 ## 0.20.0
 - Preview images in the G-code: the printer's screen (file list, print screen) shows a picture of the sliced model in
   the sizes and formats the printer profile asks for (PNG, QOI for Prusa, JPG). OrcaSlicer's command line made none.

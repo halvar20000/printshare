@@ -132,7 +132,8 @@ export default function Discover() {
             labels={Object.fromEntries(available.map(s => [s.id, s.name]))} />
         </View>
       ) : null}
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+      {/* own Manyfold library: no likes or makes to sort by */}
+      {source !== "manyfold" ? <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
         {(["relevant", "popular", "makes"] as SortKey[]).map(k => {
           const on = k === sort;
           return (
@@ -144,7 +145,7 @@ export default function Discover() {
             </Pressable>
           );
         })}
-      </View>
+      </View> : null}
       {error ? <View style={{ marginTop: 12 }}><Banner kind="error" text={error} /></View> : null}
     </View>
   );
@@ -197,7 +198,7 @@ export default function Discover() {
           <Pressable onPress={() => { tap(); router.push({ pathname: "/model/[source]/[id]", params: { source: h.source, id: h.id } }); }}
             accessibilityRole="button" accessibilityLabel={h.name}
             style={({ pressed }) => ({ width: cardW, borderRadius: radius, backgroundColor: c.card, overflow: "hidden", opacity: pressed ? 0.85 : 1 })}>
-            <Image source={h.thumbnail ? { uri: h.thumbnail } : undefined} contentFit="cover" transition={150}
+            <Image source={h.thumbnail ? { uri: api?.imageUrl(h.thumbnail) } : undefined} contentFit="cover" transition={150}
               recyclingKey={`${h.source}-${h.id}`}
               style={{ width: cardW, height: cardW * 0.75, backgroundColor: c.track }} />
             <View style={{ padding: 10 }}>

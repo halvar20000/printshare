@@ -139,6 +139,12 @@ export default function Settings() {
       ) : null}
 
       {server ? (
+        <Section title={t("manyfoldTitle")} footer={t("manyfoldSub")}>
+          <Row icon="library-outline" label="Manyfold" onPress={() => router.push("/manyfold")} />
+        </Section>
+      ) : null}
+
+      {server ? (
         <Section title={t("spoolman")}>
           <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
             value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />

@@ -403,6 +403,24 @@ the printer itself** on the home Wi-Fi (see `mobile/src/lib/lan/` for the Centau
 `POST /api/print {"link": "…", "printer": "centauri", "file": null, "start": true}` → `{"job": "…"}` – downloads,
 slices, uploads and starts without review. Not for the apps (no confirmation step).
 
+### Own Manyfold library (0.21.0, own servers only – never in the cloud)
+[Manyfold](https://manyfold.app) is a self-hosted 3D model library. When it is set up, `GET /api/sources` lists
+`{"id": "manyfold", "name": "Manyfold", "available": true}` and search/model details work like Printables. Hits carry
+`"link": "manyfold:<id>"` – **use `link` (if present) instead of `url` for `/api/files`, `/api/jobs`**; `url` is the model
+page in Manyfold (needs a Manyfold login in the browser). Images (`thumbnail`, `images`) are **server-relative**
+(`/api/manyfold/image/<model>/<file>`): prefix the server address and add `?token=` (image views can't send headers).
+
+| | |
+|---|---|
+| `GET /api/manyfold/config` | `{"configured", "url", "token_set", "client_set"}` (never the key) |
+| `PUT /api/manyfold/config` `{"url", "token"}` | checks the connection, stores it (`<config dir>/manyfold.yaml`, 0600) → `{"configured": true, "url", "models": 61}`; `400` with Manyfold's reason; `token` omitted = keep |
+| `DELETE /api/manyfold/config` | removes the app setting (`config.yaml` / env `MANYFOLD_URL`, `MANYFOLD_TOKEN`, `MANYFOLD_CLIENT_ID`, `MANYFOLD_CLIENT_SECRET` may still set it) |
+| `GET /api/manyfold/image/{model}/{file}` | a model image through the server (only `image/*`, not SVG) |
+
+All `409` in the cloud. The server reads Manyfold's API v0 (`/models`, `/models/{id}`, `/models/{id}/model_files/{id}`,
+`Accept: application/vnd.manyfold.v0+json`, bearer API key or OAuth client credentials); the JSON API has no search, so
+the model list (ids + names) is cached 5 minutes and searched on the server.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

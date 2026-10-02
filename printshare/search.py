@@ -36,6 +36,8 @@ class ModelHit:
     downloads: int | None = None
     makes: int | None = None
     license: str | None = None
+    # what to slice when it isn't `url` (Manyfold: "manyfold:<id>", its web page needs a login)
+    link: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -284,12 +286,72 @@ class MakerWorldSource:
             recommended={k: v for k, v in rec.items() if v}, files=[], download="external", variants=variants)
 
 
+# ---------------------------------------------------------------- Manyfold (own library, home servers only)
+class ManyfoldSource:
+    id = "manyfold"
+    name = "Manyfold"
+    available = True
+    searchable = True
+
+    def __init__(self, client) -> None:
+        self.client = client
+
+    def _images(self, mid: str, m: dict[str, Any]) -> list[str]:
+        """Image files of the model as proxy URLs of this server (the app can't log in to Manyfold), preview first."""
+        from .manyfold import file_id
+        preview = (m.get("preview_file") or {}).get("@id")
+        parts = [p for p in m.get("hasPart") or [] if isinstance(p, dict) and p.get("@id")
+                 and str(p.get("encodingFormat") or "").startswith("image/") and p.get("encodingFormat") != "image/svg+xml"]
+        parts.sort(key=lambda p: p["@id"] != preview)
+        return [f"/api/manyfold/image/{mid}/{file_id(p['@id'])}" for p in parts][:20]
+
+    def _hit(self, mid: str, m: dict[str, Any]) -> ModelHit:
+        lic = m.get("spdx:license") or {}
+        imgs = self._images(mid, m)
+        return ModelHit(source=self.id, id=mid, name=str(m.get("name") or mid), url=f"{self.client.base}/models/{mid}",
+                        thumbnail=imgs[0] if imgs else None, license=lic.get("licenseId") if isinstance(lic, dict) else None,
+                        link=f"manyfold:{mid}")
+
+    def search(self, q: str, page: int, sort: str) -> tuple[list[ModelHit], int | None]:
+        words = q.lower().split()
+        found = [m for m in self.client.models() if all(w in m["name"].lower() for w in words)]
+        if sort == "relevant":
+            found.sort(key=lambda m: (not m["name"].lower().startswith(words[0]) if words else False, m["name"].lower()))
+        chunk = found[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
+        from concurrent.futures import ThreadPoolExecutor
+
+        def detail(m: dict[str, str]) -> ModelHit:
+            try:
+                return self._hit(m["id"], self.client.model(m["id"]))
+            except FetchError:
+                return ModelHit(source=self.id, id=m["id"], name=m["name"], url=f"{self.client.base}/models/{m['id']}",
+                                link=f"manyfold:{m['id']}")
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            hits = list(pool.map(detail, chunk))
+        return hits, len(found)
+
+    def detail(self, mid: str) -> ModelDetail:
+        from .manyfold import file_name, is_sliceable
+        m = self.client.model(mid)
+        hit = self._hit(mid, m)
+        files = [{"name": file_name(p), "size": None} for p in m.get("hasPart") or []
+                 if isinstance(p, dict) and is_sliceable(p)]
+        keywords = [str(k) for k in m.get("keywords") or []]
+        return ModelDetail(**asdict(hit), images=self._images(mid, m), summary=str(m.get("caption") or "").strip(),
+                           description=text_from_html(m.get("description")), category=", ".join(keywords[:5]) or None,
+                           recommended={}, files=files)
+
+
 # ---------------------------------------------------------------- facade
 class Search:
-    def __init__(self, thingiverse_token: str = "", timeout: float = 20.0, http: httpx.Client | None = None):
+    def __init__(self, thingiverse_token: str = "", timeout: float = 20.0, http: httpx.Client | None = None,
+                 manyfold=None):
         self.http = http or httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": UA})
-        self.sources = {s.id: s for s in (PrintablesSource(self.http), ThingiverseSource(self.http, thingiverse_token),
-                                          MakerWorldSource(self.http))}
+        self.manyfold = manyfold
+        sources = [PrintablesSource(self.http), ThingiverseSource(self.http, thingiverse_token), MakerWorldSource(self.http)]
+        if manyfold is not None:
+            sources.append(ManyfoldSource(manyfold))
+        self.sources = {s.id: s for s in sources}
 
     def list_sources(self) -> list[dict[str, Any]]:
         """Sources for the search tabs (MakerWorld only has model pages: left out, older apps would offer a search)."""
@@ -313,7 +375,7 @@ class Search:
         return {"results": [h.as_dict() for h in hits], "total": total, "page": page, "has_more": more}
 
     def detail(self, source: str, model_id: str) -> dict[str, Any]:
-        if not re.fullmatch(r"\d{1,12}", model_id):
+        if not re.fullmatch(r"\d{1,12}" if source != "manyfold" else r"[A-Za-z0-9_-]{1,64}", model_id):
             raise FetchError("invalid model id")
         d = self._source(source).detail(model_id)
         out = asdict(d)

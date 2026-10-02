@@ -23,6 +23,7 @@ from . import model_info
 from .fetch import Fetcher, RemoteFile, choose_file
 from .printers import get_adapter
 from .slicer import Slicer
+from .manyfold import client_for as manyfold_client
 
 log = logging.getLogger("printshare")
 
@@ -78,7 +79,7 @@ def fetch_model(settings: Settings, link: str, file_choice: str | int | None = N
     """List + download a model file (blocking). Downloads are kept for a day, so looking at the
     colours of a model and slicing it later fetch the file only once."""
     say = say or (lambda msg: log.info(msg))
-    fetcher = Fetcher(settings.thingiverse_token)
+    fetcher = Fetcher(settings.thingiverse_token, manyfold=manyfold_client(settings))
     say("Looking up model files")
     chosen = choose_file(fetcher.list_files(link), file_choice)
     if chosen.source == "local":

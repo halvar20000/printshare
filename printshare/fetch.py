@@ -50,6 +50,8 @@ def parse_source(link: str) -> tuple[str, str]:
         return "thingiverse", m.group(1)
     if m := MAKERWORLD_LINK.search(link):
         return "makerworld", m.group(1)
+    if m := re.fullmatch(r"manyfold:([A-Za-z0-9_-]{1,64})", link):
+        return "manyfold", m.group(1)
     if link.startswith(("http://", "https://")):
         return "url", link
     if Path(link).exists():
@@ -58,13 +60,19 @@ def parse_source(link: str) -> tuple[str, str]:
 
 
 class Fetcher:
-    def __init__(self, thingiverse_token: str = "", timeout: float = 60.0):
+    def __init__(self, thingiverse_token: str = "", timeout: float = 60.0, manyfold=None):
         self.thingiverse_token = thingiverse_token
+        self.manyfold = manyfold          # manyfold.Manyfold of the user's own library (None: not set up)
         self.http = httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": UA})
 
     # ---------- listing ----------
     def list_files(self, link: str) -> list[RemoteFile]:
+        if self.manyfold and link.startswith(self.manyfold.base + "/models/"):   # the library's own web address
+            from .manyfold import model_id
+            link = f"manyfold:{model_id(link)}"
         source, ident = parse_source(link)
+        if source == "manyfold":
+            return self._manyfold_files(ident)
         if source == "makerworld":
             raise FetchError(MAKERWORLD_NO_DOWNLOAD)
         if source == "printables":
@@ -99,6 +107,16 @@ class Fetcher:
         return [RemoteFile("thingiverse", thing_id, str(f["id"]), f["name"], f.get("size"))
                 for f in r.json()]
 
+    def _manyfold_files(self, mid: str) -> list[RemoteFile]:
+        if not self.manyfold:
+            raise FetchError("Manyfold is not set up on this server")
+        from .manyfold import file_id, file_name, is_sliceable
+        m = self.manyfold.model(mid)
+        parts = [p for p in m.get("hasPart") or [] if isinstance(p, dict) and p.get("@id") and is_sliceable(p)]
+        if not parts:
+            raise FetchError("This Manyfold model has no printable files (STL, 3MF, OBJ, STEP)")
+        return [RemoteFile("manyfold", mid, file_id(p["@id"]), file_name(p), None) for p in parts]
+
     # ---------- download ----------
     def download(self, f: RemoteFile, dest_dir: Path) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -106,6 +124,10 @@ class Fetcher:
         target = dest_dir / safe
         if f.source == "local":
             return Path(f.file_id)
+        if f.source == "manyfold":
+            if not self.manyfold:
+                raise FetchError("Manyfold is not set up on this server")
+            return self.manyfold.download(f.model_id, f.file_id, target)
         if f.source == "printables":
             url = self._printables_link(f)
             headers = {}

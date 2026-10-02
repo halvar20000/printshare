@@ -13,6 +13,7 @@ from .fetch import FetchError, Fetcher
 from .pipeline import run_job
 from .printers import get_adapter
 from .slicer import Slicer
+from .manyfold import client_for as manyfold_client
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
                                       options=opts, leveling=False if a.no_leveling else None))
             print(json.dumps(res.as_dict(), indent=2))
         elif a.cmd == "files":
-            files = Fetcher(settings.thingiverse_token).list_files(a.link)
+            files = Fetcher(settings.thingiverse_token, manyfold=manyfold_client(settings)).list_files(a.link)
             for i, fl in enumerate([x for x in files if x.sliceable], 1):
                 print(f"{i:>2}: {fl.name}  {fl.size or ''}")
             for fl in (x for x in files if not x.sliceable):

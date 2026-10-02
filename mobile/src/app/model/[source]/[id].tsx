@@ -12,7 +12,8 @@ import { useApp } from "@/lib/app";
 import { compact } from "@/lib/format";
 import { space, useColors } from "@/lib/theme";
 
-const SOURCE_NAMES: Record<string, string> = { printables: "Printables", thingiverse: "Thingiverse", makerworld: "MakerWorld" };
+const SOURCE_NAMES: Record<string, string> = { printables: "Printables", thingiverse: "Thingiverse", makerworld: "MakerWorld",
+  manyfold: "Manyfold" };
 
 export default function Model() {
   const { source, id } = useLocalSearchParams<{ source: string; id: string }>();
@@ -60,7 +61,8 @@ export default function Model() {
       <Button title={t("openOn", { source: srcName })} icon="open-outline" onPress={() => Linking.openURL(model.url)} />
     ) : <>
       <Button title={t("printThis")} icon="print-outline" disabled={sliceable === 0}
-        onPress={() => router.push({ pathname: "/prepare", params: { link: model.url } })} />
+        onPress={() => router.push({ pathname: "/prepare", params: { link: model.link ?? model.url,
+          ...(model.link ? { fileName: model.name } : {}) } })} />
       <Button kind="plain" title={t("openOn", { source: srcName })} icon="open-outline" onPress={() => Linking.openURL(model.url)} />
     </>}>
       {model.images.length ? (
@@ -74,7 +76,7 @@ export default function Model() {
             onMomentumScrollEnd={e => setSlide(Math.round(e.nativeEvent.contentOffset.x / imgW))}
             style={{ width: imgW, borderRadius: 14, overflow: "hidden" }}
             renderItem={({ item }) => (
-              <Image source={{ uri: item }} contentFit="cover" transition={150}
+              <Image source={{ uri: api?.imageUrl(item) }} contentFit="cover" transition={150}
                 style={{ width: imgW, height: imgW * 0.75, backgroundColor: c.track }} />
             )}
           />

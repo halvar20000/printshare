@@ -101,11 +101,13 @@ export type JobSummary = {
   link: string; file: string | null; print_time: string | null; filament_g: number | null;
 };
 export type Upload = { id: string; link: string; name: string; size: number };
-export type Source = { id: "printables" | "thingiverse"; name: string; available: boolean };
+export type Source = { id: "printables" | "thingiverse" | "manyfold"; name: string; available: boolean };
 export type SortKey = "relevant" | "popular" | "makes";
 export type ModelHit = {
   source: Source["id"]; id: string; name: string; url: string; author: string | null; thumbnail: string | null;
   likes: number | null; downloads: number | null; makes: number | null; license: string | null;
+  /** what to slice when it isn't `url` (server 0.21.0, Manyfold: "manyfold:<id>") */
+  link?: string | null;
 };
 /** A filament of SpoolmanDB (one per name + material + colour; `weights` = sizes it is sold in). */
 export type FilamentPreset = {
@@ -193,6 +195,22 @@ export class Api {
   }
 
   /** Which address is in use, once known. */
+  /** Images the server serves itself (Manyfold previews, "/api/…"): full address with the key, as image views
+   *  can't send headers. Other addresses are returned as they are. */
+  imageUrl(u: string | null | undefined): string | undefined {
+    if (!u) return undefined;
+    if (!u.startsWith("/api/")) return u;
+    const base = activeAddress.get(this.key) ?? this.server.url;
+    return `${base}${u}${u.includes("?") ? "&" : "?"}token=${encodeURIComponent(this.server.token)}`;
+  }
+
+  /** Own Manyfold library (server 0.21.0, own servers only). */
+  manyfoldConfig = () => this.request<{ configured: boolean; url: string | null; token_set: boolean; client_set: boolean }>("/api/manyfold/config");
+  setManyfold = (url: string, token?: string) =>
+    this.request<{ configured: boolean; url: string; models: number }>("/api/manyfold/config",
+      { method: "PUT", body: { url, ...(token ? { token } : {}) }, timeout: 60000 });
+  removeManyfold = () => this.request<{ configured: boolean }>("/api/manyfold/config", { method: "DELETE" });
+
   route(): Route | null {
     const a = activeAddress.get(this.key);
     return !a ? null : a === this.server.url ? "home" : "remote";

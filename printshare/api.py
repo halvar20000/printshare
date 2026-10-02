@@ -11,6 +11,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
+  GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -68,6 +69,7 @@ from .cloud import accounts
 from .cloud.spools import Spools
 from . import orca_cloud
 from . import filament_db
+from . import manyfold as mf
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -88,7 +90,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.20.0")
+app = FastAPI(title="PocketPrint3D", version="0.21.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -927,6 +929,8 @@ def _resolve_link(acct: "Account", link: str) -> str:
         if not found:
             raise HTTPException(404, "uploaded file not found - please choose it again")
         return str(found[0])
+    if re.fullmatch(r"manyfold:[A-Za-z0-9_-]{1,64}", link):      # a model of the own Manyfold library (0.21.0)
+        return link
     if not link.startswith(("http://", "https://")):
         raise HTTPException(400, "link must be an http(s) URL")
     return link
@@ -962,7 +966,8 @@ async def upload(request: Request, name: str, acct: Account = Depends(auth)) -> 
 async def files(link: str, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     local = _resolve_link(acct, link)
     try:
-        listed = await asyncio.to_thread(Fetcher(acct.settings.thingiverse_token).list_files, local)
+        fetcher = Fetcher(acct.settings.thingiverse_token, manyfold=mf.client_for(acct.settings))
+        listed = await asyncio.to_thread(fetcher.list_files, local)
         fl = [f for f in listed if f.sliceable]
     except FetchError as e:
         raise HTTPException(400, str(e))
@@ -1104,10 +1109,76 @@ async def model_file(link: str, file: str | None = None, acct: Account = Depends
 
 # ---------- search (MQ-05/06) ----------
 def _search() -> Search:
+    """One search for the server; rebuilt when the Manyfold library is set up or changed (never in the cloud)."""
     global _SEARCH
-    if _SEARCH is None:
-        _SEARCH = Search(settings.thingiverse_token)
+    library = mf.client_for(settings)
+    if _SEARCH is None or _SEARCH.manyfold is not library:
+        _SEARCH = Search(settings.thingiverse_token, manyfold=library)
     return _SEARCH
+
+
+# ---------- own Manyfold library (home servers) ----------
+class ManyfoldSettings(BaseModel):
+    url: str = Field(..., max_length=300)
+    token: str | None = Field(None, max_length=500)            # None = keep the stored one
+    client_id: str | None = Field(None, max_length=200)
+    client_secret: str | None = Field(None, max_length=500)
+
+
+def _manyfold_home(acct: Account) -> None:
+    if acct.cloud or settings.cloud:
+        raise HTTPException(409, "Manyfold works with your own PocketPrint3D server, which can reach it at home")
+
+
+@app.get("/api/manyfold/config")
+def manyfold_config(acct: Account = Depends(auth)) -> dict[str, Any]:
+    _manyfold_home(acct)
+    cfg = mf.load_config(settings)
+    return {"configured": cfg.configured, "url": cfg.url or None, "token_set": bool(cfg.token),
+            "client_set": bool(cfg.client_id and cfg.client_secret)}
+
+
+@app.put("/api/manyfold/config")
+async def manyfold_config_set(req: ManyfoldSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _manyfold_home(acct)
+    url = req.url.strip().rstrip("/")
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.query or parts.fragment:
+        raise HTTPException(400, "the Manyfold address looks like http://192.168.1.20:3214")
+    old = mf.load_config(settings)
+    new = mf.ManyfoldConfig(url, old.token if req.token is None else req.token.strip(),
+                            old.client_id if req.client_id is None else req.client_id.strip(),
+                            old.client_secret if req.client_secret is None else req.client_secret.strip())
+    if not new.configured:
+        raise HTTPException(400, "enter an API key (Manyfold: your name → API keys) or OAuth app credentials")
+    try:
+        count = len(await asyncio.to_thread(mf.Manyfold(new).models, True))
+    except FetchError as e:
+        raise HTTPException(400, f"Manyfold: {e}")
+    mf.save_config(settings, new)
+    return {"configured": True, "url": url, "models": count}
+
+
+@app.delete("/api/manyfold/config")
+def manyfold_config_delete(acct: Account = Depends(auth)) -> dict[str, Any]:
+    _manyfold_home(acct)
+    mf.save_config(settings, None)
+    return {"configured": mf.load_config(settings).configured}      # config.yaml / environment may still set it
+
+
+@app.get("/api/manyfold/image/{model_id}/{file_id}")
+async def manyfold_image(model_id: str, file_id: str, acct: Account = Depends(auth)) -> Response:
+    _manyfold_home(acct)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", model_id) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", file_id):
+        raise HTTPException(400, "invalid id")
+    library = mf.client_for(settings)
+    if library is None:
+        raise HTTPException(404, "Manyfold is not set up")
+    try:
+        data, mime = await asyncio.to_thread(library.image, model_id, file_id)
+    except FetchError as e:
+        raise HTTPException(404, str(e))
+    return Response(data, media_type=mime, headers={"Cache-Control": "private, max-age=3600"})
 
 
 def _search_error(e: FetchError) -> HTTPException:

@@ -131,7 +131,7 @@ def test_download_is_cached(tmp_path, monkeypatch):
     calls = []
 
     class FakeFetcher:
-        def __init__(self, token=""):
+        def __init__(self, token="", manyfold=None):
             pass
 
         def list_files(self, link):
