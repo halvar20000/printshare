@@ -468,6 +468,21 @@ events `printer.state`, `watch.alert`, `job.progress`, `printers.changed`).
   `/api/jobs/{job}/gcode`); 401 for other tokens, 404 for other accounts' jobs.
 - `GET /api/admin/stats` adds `bridges`, `bridges_online`.
 
+### Bridge mode of a home server (0.25.0)
+On the user's own server (not in the cloud), with the server's token:
+- `GET /api/bridge` → `{"enabled", "state": "off|pairing|connecting|connected|error", "code": "K7Q4-M2ZX" | null,
+  "code_expires_in", "paired", "account", "cloud", "bridge_id", "connected_since", "error"}` – the code is what the user
+  enters in the app (`POST /api/bridges/pair` on the cloud).
+- `POST /api/bridge {"enabled": bool}` – switch bridge mode on/off (kept in `bridge.yaml`; else config `bridge: true` /
+  env `PRINTSHARE_BRIDGE=1`). `POST /api/bridge/reset` – forget the pairing, show a new code.
+- Methods the bridge answers: docs/BRIDGE.md section 6. `printer.add {"printer": {"name", "type", "machine"?, "cosmos"?},
+  "sealed": "<pp3d-seal-v1 blob of {address, password?, api_key?}>"}` → the printer as in `printers.list`;
+  `printer.update {"printer": id, …}` (address/secrets kept unless sealed again), `printer.remove {"printer"}` (only
+  printers added this way); `job.send {"printer", "job", "start", "confirm", "leveling"?, "lanes"?, "spool_id"?}` →
+  `{"state": "started|uploaded", "file"}`, errors `confirm_required`, `busy`, `download_failed`, `send_failed`;
+  `printer.camera.snapshot {"printer", "w"?}` → `{"jpeg": base64, "type"}`; `discover` → `[{"type", "address", "name",
+  "cosmos"?, "detail"?, "added"}]`. Error codes: `invalid`, `unknown_printer`, `busy`, `confirm_required`, `offline`.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

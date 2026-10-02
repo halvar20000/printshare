@@ -729,6 +729,17 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `printer.state`/`printers.changed` cached, close codes 4401/4426/4400/4000/4001, MIN_VERSION 0.24.0). `websockets` is now
   a dependency (uvicorn's WebSocket support + the bridge client later). Tests run a real uvicorn in a thread with a
   `websockets` fake bridge (`tests/test_bridges.py`). Caddy proxies WebSockets without extra config.
+- **Step 3 (bridge mode of the server) done, 0.25.0:** `printshare/bridge/` - `client.py` (`BridgeClient`: identity +
+  X25519 keys in `<config dir>/bridge.yaml` 0600, pairing (code in the log + `GET /api/bridge`), WSS loop with backoff,
+  4401/4001 → forget token and pair again, 4426 → wait 1 h; `download_gcode` only from the cloud's job endpoint),
+  `dispatch.py` (methods call the server's own endpoint functions with `Account("local")`, so all checks are the same;
+  HTTPException → error codes), `registry.py` (`printers-added.yaml` 0600, merged by `load_settings`, config.yaml ids win),
+  `discovery.py` (Python port of the app's rules; `lan_subnet` / PRINTSHARE_LAN_SUBNET for Docker bridge networks),
+  `seal.py` ("pp3d-seal-v1" = X25519 + HKDF-SHA256 + ChaCha20-Poly1305, chosen over libsodium sealed boxes because
+  CryptoKit/@noble have the parts). Switch: config `bridge: true`, env PRINTSHARE_BRIDGE=1 (Unraid template field
+  "Connect to PocketPrint3D Cloud") or `POST /api/bridge`. New deps: `cryptography`. Test: home server as a subprocess
+  against the in-process cloud and fake printers (pair → online → status/pause → job.send → sealed printer.add/remove →
+  removed from the app → new code).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

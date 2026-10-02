@@ -213,6 +213,10 @@ class Settings:
     brevo_api_key: str = ""
     limit_slices_per_day: int = 30
     limit_upload_mb: int = 100
+    # bridge mode (docs/BRIDGE.md): this server connects to PocketPrint3D Cloud for remote access to its printers
+    bridge: bool = False
+    bridge_url: str = "https://api.pocketprint3d.com"
+    lan_subnet: str = ""               # printer search when broadcasts don't work (Docker bridge network), e.g. 192.168.1.0/24
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
         if not self.printers:
@@ -277,6 +281,14 @@ def load_settings(path: str | Path | None = None) -> Settings:
     raw.setdefault("config_dir", str(config_dir))
     for p in raw.pop("printers", []) or []:
         printers.append(printer_from_config(p, config_dir, profiles_dir))
+    # printers added from the app through the bridge (bridge/registry.py); config.yaml wins on equal ids
+    from .bridge import registry
+    for p in registry.load(config_dir):
+        if all(x.id != p.get("id") for x in printers):
+            try:
+                printers.append(printer_from_config(p, config_dir, profiles_dir))
+            except (TypeError, ValueError):
+                continue
     s = Settings(printers=printers, **raw)
     # empty variables (e.g. unused fields of the Unraid template) must not clear the token
     s.api_token = os.environ.get("PRINTSHARE_API_TOKEN") or s.api_token
@@ -287,6 +299,10 @@ def load_settings(path: str | Path | None = None) -> Settings:
         s.cloud = True
     s.brevo_api_key = os.environ.get("BREVO_API_KEY") or s.brevo_api_key
     s.mail = os.environ.get("PRINTSHARE_MAIL") or s.mail
+    if os.environ.get("PRINTSHARE_BRIDGE", "").lower() in ("1", "true", "yes"):
+        s.bridge = True
+    s.bridge_url = os.environ.get("PRINTSHARE_BRIDGE_URL") or s.bridge_url
+    s.lan_subnet = os.environ.get("PRINTSHARE_LAN_SUBNET") or s.lan_subnet
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

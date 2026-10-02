@@ -1,10 +1,10 @@
 # PocketPrint3D bridge – concept (2026-10-02)
 
-Status: **step 2 (cloud side) built in 0.24.0** – pairing, bridge tokens, WebSocket hub, G-code endpoint for bridges
-(`printshare/cloud/bridges.py`, `printshare/cloud/hub.py`, `tests/test_bridges.py`, endpoints in `docs/API.md` "Bridges").
-Next: step 1 (Bambu, after Sunday's probe) and step 3 (the bridge client). Builds on `docs/CLOUD.md` ("Step 2 – bridge"). Shared contract for the
-server, the Android app (Expo) and the iOS app (Swift, Dominique): when something here is built, its endpoints go into
-`docs/API.md` in the same commit.
+Status: **steps 2 + 3 built** – cloud side in 0.24.0 (`printshare/cloud/bridges.py`, `cloud/hub.py`), bridge mode of the
+server in 0.25.0 (`printshare/bridge/`: `client.py` pairing + socket loop, `dispatch.py` methods on top of the server's own
+endpoint functions, `registry.py` printers added from the app, `discovery.py`, `seal.py`). Tests: `tests/test_bridges.py`,
+`tests/test_bridge_client.py` (home server as a separate process against simulated printers). Next: step 4 (cloud
+forwarding of the printer endpoints), step 5 (app), step 1 (Bambu, after Sunday's probe).
 
 ## 1. Goal
 
@@ -133,10 +133,15 @@ printers), `POST /api/bridges/pair`, `DELETE /api/bridges/{id}`, `POST /api/brid
 - **NF-05:** `job.send` with `start: true` and heater/fan changes during a print need `confirm: true`, which the cloud
   only sets when the app request carried it (user tapped "Drucken" in the confirmation dialog). The bridge logs every
   start with user and job.
-- **Secrets stay at home, end-to-end:** when a printer is added from the app, the PrusaLink password / OctoPrint key /
-  Bambu access code is encrypted in the app with the bridge's public key (X25519 sealed box: libsodium/tweetnacl in the
-  apps, PyNaCl on the bridge) and passed through the cloud as an opaque blob. The cloud stores neither the secrets nor
-  the printer addresses. The private key never leaves `bridge.yaml`.
+- **Secrets stay at home, end-to-end:** when a printer is added from the app, its address and the PrusaLink password /
+  OctoPrint key / Bambu access code are encrypted in the app with the bridge's public key and passed through the cloud
+  as an opaque blob. The cloud stores neither the secrets nor the printer addresses. The private key never leaves
+  `bridge.yaml`. Scheme **"pp3d-seal-v1"** (`printshare/bridge/seal.py`), chosen so that every platform has the parts
+  built in (Swift CryptoKit, `@noble/curves` + `@noble/ciphers` + `@noble/hashes` in JS, `cryptography` in Python):
+  ephemeral X25519 key pair `e`; `shared = X25519(e, bridge public key)`; `key = HKDF-SHA256(shared, salt = e.public ‖
+  bridge public key, info = "pp3d-seal-v1", 32 bytes)`; `blob = base64(e.public ‖ ChaCha20-Poly1305(key, nonce = 12 zero
+  bytes, JSON))`. The key is new for every message, so the fixed nonce is safe. Plaintext JSON: `{"address", "password"?,
+  "api_key"?, "access_code"?}`.
 - **Tokens:** bridge token stored hashed in the cloud, revocable from the app; pairing codes short-lived and rate limited.
 - **Limits:** G-code ≤ 200 MB, one `job.send` per printer at a time, camera snapshots ≤ 1 per 2 s per printer,
   requests per bridge per minute capped. Versions: the cloud can refuse bridges below `min_version` (security fixes).
@@ -179,7 +184,7 @@ needed, done.
   directly when the phone is home and the printer answers (faster upload), else the bridge.
 - "Drucker hinzufügen" on a bridge: the list comes from `POST /api/bridges/{id}/discover` (same UI as the Wi-Fi search).
 - Android (Expo, me) and iOS (Swift, Dominique) build against the same endpoints; sealed boxes: `tweetnacl` (JS) and
-  CryptoKit has no X25519 sealed box → `swift-sodium` or a small libsodium-compatible implementation.
+  "pp3d-seal-v1" (section 7) is built from CryptoKit parts (Curve25519.KeyAgreement, HKDF, ChaChaPoly).
 
 ## 11. Later
 

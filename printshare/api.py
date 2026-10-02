@@ -72,6 +72,8 @@ from .cloud import accounts
 from .cloud.spools import Spools
 from .cloud.bridges import Bridges
 from .cloud.hub import BridgeError, BridgeHub
+from .bridge.client import BridgeClient
+from .bridge.dispatch import dispatch as bridge_dispatch
 from . import orca_cloud
 from . import filament_db
 from . import manyfold as mf
@@ -100,10 +102,13 @@ settings = load_settings()
 async def _lifespan(_app):
     if not settings.cloud:
         WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
+        BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
     yield
+    await BRIDGE_CLIENT.stop()
 
 
-app = FastAPI(title="PocketPrint3D", version="0.24.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.25.0", lifespan=_lifespan)
+BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -329,6 +334,38 @@ def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
     return {**ACCOUNTS.stats(), "spools": SPOOLS.count(), "bridges": BRIDGES.count(), "bridges_online": HUB.count(),
             "jobs_in_memory": len(JOBS),
             "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
+
+
+# ---------- bridge mode: this server as a bridge for PocketPrint3D Cloud (docs/BRIDGE.md, 0.25.0) ----------
+class BridgeSwitch(BaseModel):
+    enabled: bool
+
+
+def _bridge_home(acct: Account) -> None:
+    if settings.cloud or acct.cloud or acct.id == "admin":
+        raise HTTPException(404, "bridge mode is for home servers")
+
+
+@app.get("/api/bridge")
+def bridge_state(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Bridge mode of this home server: on/off, pairing code to enter in the app, connection, paired account."""
+    _bridge_home(acct)
+    return BRIDGE_CLIENT.public()
+
+
+@app.post("/api/bridge")
+def bridge_switch(req: BridgeSwitch, acct: Account = Depends(auth)) -> dict[str, Any]:
+    _bridge_home(acct)
+    BRIDGE_CLIENT.set_enabled(req.enabled)
+    return BRIDGE_CLIENT.public()
+
+
+@app.post("/api/bridge/reset")
+def bridge_reset(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Forget the pairing (e.g. to connect another account): a new code is shown."""
+    _bridge_home(acct)
+    BRIDGE_CLIENT.forget()
+    return BRIDGE_CLIENT.public()
 
 
 # ---------- cloud mode: bridges at home (docs/BRIDGE.md) ----------

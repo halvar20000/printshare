@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.25.0
+- Bridge mode: your PocketPrint3D server can connect to a free PocketPrint3D Cloud account, so the app reaches your
+  printers from anywhere - only an outgoing connection, no port forwarding. Switch it on (Unraid: "Connect to
+  PocketPrint3D Cloud"), enter the pairing code from the log in the app. Printer passwords and keys added through the
+  app are encrypted for your server only; the cloud can't read them. (The app side follows in the next app version.)
+
 ## 0.24.0
 - PocketPrint3D Cloud: groundwork for bridges at home (docs/BRIDGE.md) - pairing with a code, bridge tokens and the
   connection the bridge keeps open to the cloud. Nothing changes for self-hosted servers yet; the bridge mode itself
