@@ -37,12 +37,13 @@
       <div class="card"><h3>Sliced for you</h3><p>OrcaSlicer 2.4.2 with the right profile for your printer – about 1000 printer models and a large filament library built in. Print time, filament, a 3D view of the model and a 2D/3D preview of the sliced layers before anything starts.</p></div>
       <div class="card"><h3>Pictures on the printer</h3><p>The G-code carries a preview image in the sizes and formats your printer's screen expects (PNG, QOI for Prusa) – you see what's printing right on the printer.</p></div>
       <div class="card"><h3>Exact times for Klipper</h3><p>For Klipper printers the print time is recalculated with your printer's own speed and acceleration limits (klipper_estimator) – often 10–20 % closer than the slicer.</p></div>
-      <div class="card"><h3>Your printer, live</h3><p>Progress, temperatures, pause, resume and cancel. With your own server also camera, temperature charts, fans, light, speed and switching the printer on or off through Home Assistant.</p></div>
+      <div class="card"><h3>Your printer, live</h3><p>Progress, temperatures, pause, resume and cancel. With your own server or a bridge also camera, temperature charts, fans, light, speed and switching the printer on or off through Home Assistant.</p></div>
+      <div class="card"><h3>Print from anywhere</h3><p>Your PocketPrint3D server at home – Unraid, Home Assistant, Docker or a small Raspberry Pi – becomes a bridge: enter its code in the app once, and you reach its printers from anywhere. Status, camera pictures, controls and printing over mobile data. Outgoing connection only: no port forwarding, no VPN, your printers stay off the internet.</p></div>
       <div class="card"><h3>AI failure detection</h3><p>With Obico's ML API on your server, camera pictures are checked while printing; a likely failure (spaghetti, detaching) shows in the app and can pause the print – also on the Centauri Carbon with stock firmware.</p></div>
       <div class="card"><h3>Multicolour</h3><p>Choose the slot of your AFC unit (e.g. CANVAS) for every colour – the material follows the filament in the slot.</p></div>
       <div class="card"><h3>Spoolman &amp; NFC spools</h3><p>Pick the spool per colour, get a warning when one won't be enough, the used filament is booked after the print. Add spools from the open SpoolmanDB or by holding the phone to an OpenPrintTag NFC spool. No Spoolman at home? Keep your spools in your account.</p></div>
       <div class="card"><h3>Your own profiles</h3><p>Upload your OrcaSlicer printer, quality and material profiles – or paste the link of a public Orca Cloud bundle. They are used for slicing right away.</p></div>
-      <div class="card"><h3>Safe by design</h3><p>Nothing starts without your confirmation. Your printer is never exposed to the internet; with the cloud, its address and passwords stay on your phone.</p></div>
+      <div class="card"><h3>Safe by design</h3><p>Nothing starts without your confirmation. Your printer is never exposed to the internet; with the cloud, its address and passwords stay on your phone – or, with a bridge, are encrypted so that only your server at home can read them.</p></div>
       <div class="card"><h3>Free</h3><p>No subscription, no ads, no tracking. Open source under the MIT licence.</p></div>
     </div>
   </section>
@@ -68,12 +69,13 @@
       <li><strong>Install the app</strong> and log in with your e-mail address (you get a 6-digit code, no password).</li>
       <li><strong>Add your printer</strong>: type, model and its address on your home Wi-Fi. The address stays on your phone.</li>
       <li><strong>Print</strong>: slicing runs on our server in Germany; at home the app sends the G-code over your Wi-Fi straight to the printer.</li>
+      <li><strong>Away from home (optional)</strong>: run a bridge at home – the small <code>printshare-bridge</code> Docker image, or your own PocketPrint3D server with <em>Connect to PocketPrint3D Cloud</em> switched on – and enter its code in the app under <em>Settings → Advanced → Print from anywhere</em>.</li>
     </ol>
     <h3>Your own server – everything stays at home</h3>
     <ol class="steps">
       <li><strong>Install the PocketPrint3D server</strong> on Unraid (template), Home Assistant (add-on) or any Docker host.</li>
       <li><strong>Connect the app</strong>: open the server's web page, go to <em>Settings → Connect the app</em> and scan the QR code.</li>
-      <li><strong>Print</strong> – at home and, with Tailscale or similar, from anywhere. Only here: camera and printer control, your Manyfold library, exact Klipper times and AI failure detection.</li>
+      <li><strong>Print</strong> – at home, and from anywhere: switch on <em>Connect to PocketPrint3D Cloud</em> and your server becomes a bridge for your cloud account (or use Tailscale). Only with your own server: your Manyfold library, exact Klipper times and AI failure detection.</li>
     </ol>
     <p style="color:var(--muted)">Both are free. Details and installation: <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
   </section>
