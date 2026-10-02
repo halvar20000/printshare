@@ -456,6 +456,19 @@ POST /spoolman/api/v1/spool
 - Android: Settings → Spoolman → "In der Cloud" stores `cloud` instead of an address (`CLOUD_SPOOLS` in
   `mobile/src/lib/spoolman.ts`); spool list `app/spools.tsx`, form `app/spool/[id].tsx` (copy for a stack of equal spools).
 
+### Filament presets from SpoolmanDB (0.19.0)
+For adding spools: [SpoolmanDB](https://github.com/Donkie/SpoolmanDB) (MIT, Donkie and contributors) – the server loads
+`https://donkie.github.io/SpoolmanDB/filaments.json` at most once a day (kept on disk, an older copy is used when GitHub
+Pages is down) and condenses it to one entry per brand + name + material + colour.
+
+| | |
+|---|---|
+| `GET /api/filament-db/brands` | `[{"name": "ELEGOO", "count": 97}, …]` (67 brands, sorted case-insensitively) |
+| `GET /api/filament-db/filaments?brand=ELEGOO&diameter=1.75` | `[{"id", "name": "Red", "material": "PLA", "color_hex": "EA140E", "color_hexes": null, "density": 1.26, "extruder_temp": 210, "bed_temp": 60, "finish": null, "translucent": false, "glow": false, "weights": [{"weight": 1000, "spool_weight": 154}], "diameter": 1.75}, …]` sorted by material, name; `404` unknown brand, `503` database not available |
+
+Android: spool form → "Aus Datenbank wählen" → brand → filament fills vendor, name, material, colour, weight and sends
+`spool_weight` + `filament.density` along.
+
 ## Profiles (own OrcaSlicer presets)
 | | |
 |---|---|

@@ -10,6 +10,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
+  GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -66,6 +67,7 @@ from pydantic import BaseModel, Field
 from .cloud import accounts
 from .cloud.spools import Spools
 from . import orca_cloud
+from . import filament_db
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -86,7 +88,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.18.1")
+app = FastAPI(title="PocketPrint3D", version="0.19.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -1003,6 +1005,33 @@ async def profiles_upload(request: Request, filename: str = "profile.json", acct
         return await asyncio.to_thread(user_profiles.store, acct.settings.config_dir, filename, content, lib)
     except user_profiles.ProfileUploadError as e:
         raise _profile_error(e)
+
+
+# ---------- SpoolmanDB: filament presets for adding spools ----------
+_FILAMENT_DB: filament_db.FilamentDb | None = None
+
+
+def _filament_db() -> filament_db.FilamentDb:
+    global _FILAMENT_DB
+    if _FILAMENT_DB is None:
+        _FILAMENT_DB = filament_db.FilamentDb(Path(settings.work_dir) / "cache")
+    return _FILAMENT_DB
+
+
+@app.get("/api/filament-db/brands")
+async def filament_brands(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    try:
+        return await asyncio.to_thread(_filament_db().brand_list)
+    except filament_db.FilamentDbError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.get("/api/filament-db/filaments")
+async def filament_list(brand: str, diameter: float = 1.75, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    try:
+        return await asyncio.to_thread(_filament_db().filaments, brand, diameter)
+    except filament_db.FilamentDbError as e:
+        raise HTTPException(404 if "unknown brand" in str(e) else 503, str(e))
 
 
 class OrcaCloudImport(BaseModel):

@@ -267,6 +267,8 @@ const de = {
   spoolComment: "Notiz", spoolRemainingHint: "Volle Spule = Filament ohne Spulenkörper (meist 1000 g). Angebrochene Spule: wiegen und das Leergewicht abziehen.",
   spoolCopy: "Als neue Spule kopieren", spoolArchive: "Archivieren (leer)", spoolUnarchive: "Wieder aktiv",
   spoolDelete: "Spule löschen", spoolDeleteQ: "Spule #{id} löschen?",
+  spoolFromDb: "Aus Datenbank wählen", spoolDbCount: "{n} Filamente",
+  spoolDbHint: "Hersteller und Filament aus SpoolmanDB (offene Filament-Datenbank) – füllt Bezeichnung, Material, Farbe und Gewicht aus.",
 };
 
 type Strings = typeof de;
@@ -513,6 +515,8 @@ const en: Strings = {
   spoolComment: "Note", spoolRemainingHint: "Full spool = filament without the spool itself (usually 1000 g). Opened spool: weigh it and subtract the empty spool's weight.",
   spoolCopy: "Copy as a new spool", spoolArchive: "Archive (empty)", spoolUnarchive: "Active again",
   spoolDelete: "Delete spool", spoolDeleteQ: "Delete spool #{id}?",
+  spoolFromDb: "Choose from the database", spoolDbCount: "{n} filaments",
+  spoolDbHint: "Brand and filament from SpoolmanDB (open filament database) – fills in name, material, colour and weight.",
 };
 
 export type Lang = "de" | "en";

@@ -1,10 +1,12 @@
 // One cloud spool (server 0.17.0): brand, name, material, colour, weights, location; copy, archive, delete.
-// id "new" adds one; ?copy=<id> starts from an existing spool (a stack of identical spools).
+// id "new" adds one; ?copy=<id> starts from an existing spool (a stack of identical spools). "From the database" fills
+// the fields from SpoolmanDB (server 0.19.0): brand -> filament.
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
-import { Banner, Button, Divider, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
+import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
+import type { FilamentPreset } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { CLOUD_SPOOLS, openSpoolman, type SpoolInput } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
@@ -20,7 +22,7 @@ const num = (v: string) => {
 export default function SpoolForm() {
   const { id, copy } = useLocalSearchParams<{ id: string; copy?: string }>();
   const isNew = id === "new";
-  const { server, t } = useApp();
+  const { server, api, t } = useApp();
   const c = useColors();
   const router = useRouter();
   const [loaded, setLoaded] = useState(isNew && !copy);
@@ -32,6 +34,13 @@ export default function SpoolForm() {
   const [remaining, setRemaining] = useState("");
   const [location, setLocation] = useState("");
   const [comment, setComment] = useState("");
+  const [spoolWeight, setSpoolWeight] = useState<number | null>(null);    // empty spool, from the database
+  const [density, setDensity] = useState<number | null>(null);
+  const [sheet, setSheet] = useState<"brand" | "filament" | null>(null);
+  const [brands, setBrands] = useState<{ name: string; count: number }[] | null>(null);
+  const [brand, setBrand] = useState<string | null>(null);
+  const [presets, setPresets] = useState<FilamentPreset[] | null>(null);
+  const [dbError, setDbError] = useState("");
   const [archived, setArchived] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +63,28 @@ export default function SpoolForm() {
     }).catch(e => { setError((e as Error).message); setLoaded(true); });
   }, [server, id, copy, isNew]);
 
+  useEffect(() => {
+    if (!api || sheet !== "brand" || brands) return;
+    api.filamentBrands().then(setBrands).catch(e => { setDbError((e as Error).message); setSheet(null); });
+  }, [api, sheet, brands]);
+  useEffect(() => {
+    if (!api || !brand) return;
+    api.filamentPresets(brand).then(setPresets).catch(e => { setDbError((e as Error).message); setSheet(null); });
+  }, [api, brand]);
+  const presetChoices = useMemo(() => (presets ?? []).map((p, i) => ({
+    value: String(i), label: p.name || p.material, group: p.material,
+    sub: [p.weights.map(w => `${w.weight} g`).join(" / "), p.extruder_temp ? `${p.extruder_temp} °C` : null, p.finish]
+      .filter(Boolean).join(" · "),
+  })), [presets]);
+  const applyPreset = (p: FilamentPreset) => {
+    setVendor(brand ?? ""); setName(p.name); setMaterial(p.material);
+    if (p.color_hex) setColor(`#${p.color_hex.replace("#", "").slice(0, 6).toUpperCase()}`);
+    const w = p.weights[0];
+    if (w?.weight) setWeight(String(w.weight));
+    setSpoolWeight(w?.spool_weight ?? null);
+    setDensity(p.density);
+  };
+
   const hex = /^#?[0-9A-Fa-f]{6}$/.test(color.trim()) ? `#${color.trim().replace("#", "").toUpperCase()}` : null;
   const valid = !!hex && (weight.trim() === "" || num(weight) != null) && (remaining.trim() === "" || num(remaining) != null);
 
@@ -63,7 +94,8 @@ export default function SpoolForm() {
     setError("");
     const body: SpoolInput = {
       filament: { vendor: vendor.trim() || null, name: name.trim() || null, material: material.trim() || null,
-                  color_hex: hex, weight: num(weight) },
+                  color_hex: hex, weight: num(weight), ...(density ? { density } : {}) },
+      ...(spoolWeight != null ? { spool_weight: spoolWeight } : {}),
       location: location.trim() || null, comment: comment.trim() || null, ...extra,
     };
     if (remaining.trim()) body.remaining_weight = num(remaining);
@@ -104,6 +136,12 @@ export default function SpoolForm() {
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={() => save()} loading={busy} disabled={!valid} />}>
       <Stack.Screen options={{ title: isNew ? t("spoolNew") : t("spoolEdit", { id }) }} />
       {error ? <Banner kind="error" text={error} /> : null}
+      {dbError ? <Banner kind="warn" text={dbError} /> : null}
+
+      <Section footer={t("spoolDbHint")}>
+        <Row icon="library-outline" label={t("spoolFromDb")} value={brand ?? undefined}
+          onPress={() => { tap(); setDbError(""); setSheet("brand"); }} />
+      </Section>
 
       <Section>
         {field(t("spoolVendor"), vendor, setVendor, { maxLength: 64 }, "Elegoo")}
@@ -168,6 +206,14 @@ export default function SpoolForm() {
           <Row icon="trash-outline" label={t("spoolDelete")} danger onPress={remove} />
         </Section>
       ) : null}
+      <PickerSheet visible={sheet === "brand"} title={t("spoolVendor")} value={brand} searchLabel={t("search")} closeLabel="OK"
+        choices={(brands ?? []).map(b => ({ value: b.name, label: b.name, sub: t("spoolDbCount", { n: b.count }) }))}
+        onPick={v => { setBrand(v); setPresets(null); setTimeout(() => setSheet("filament"), 50); }}
+        onClose={() => setSheet(s => (s === "brand" ? null : s))} />
+      <PickerSheet visible={sheet === "filament" && !!presets} title={brand ?? ""} value={null} searchLabel={t("search")}
+        closeLabel="OK" choices={presetChoices}
+        onPick={v => { const p = presets?.[Number(v)]; if (p) applyPreset(p); }} onClose={() => setSheet(null)} />
+      {(sheet === "brand" && !brands) || (sheet === "filament" && !presets) ? <ActivityIndicator color={c.accent} /> : null}
     </Screen>
   );
 }

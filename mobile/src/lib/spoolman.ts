@@ -16,7 +16,8 @@ export type Spool = {
 /** Create / change a spool in the PocketPrint3D cloud (not a real Spoolman: there a spool needs a filament id). */
 export type SpoolInput = {
   filament?: { name?: string | null; vendor?: string | null; material?: string | null; color_hex?: string | null;
-               weight?: number | null };
+               weight?: number | null; density?: number | null };
+  spool_weight?: number | null;
   remaining_weight?: number | null; location?: string | null; comment?: string | null; archived?: boolean;
 };
 

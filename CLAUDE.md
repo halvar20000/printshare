@@ -578,7 +578,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   has the choice "In der Cloud" / "Eigener Spoolman" (cloud accounts only); `app/spools.tsx` + `app/spool/[id].tsx`.
   Web build flow tested (add, copy with 40 g, print, 3.7 g booked on the server).
 - Privacy policy (`site/privacy/`) got the cloud section 6 (DE binding + EN) on 2026-10-02 - Thomas to review.
-- Open: export/import in Spoolman's format, SpoolmanDB presets when adding, automatic G-code/upload cleanup (BE-05).
+- Open: export/import in Spoolman's format, automatic G-code/upload cleanup (BE-05).
+- SpoolmanDB presets (0.19.0): `printshare/filament_db.py` (daily download of the 4.6 MB `filaments.json` to
+  `<work_dir>/cache/spoolmandb-filaments.json`, condensed 8120 → 4707 entries; brand names as in the DB, e.g. `ELEGOO`,
+  `eSun`), `/api/filament-db/brands|filaments`; app spool form "Aus Datenbank wählen" (PickerSheet brand → filament,
+  grouped by material). Web build checked live (ELEGOO → Red PLA → #EA140E, 1000 g, spool 154 g, density 1.26).
 
 ## MakerWorld, light version (2026-10-02, server 0.17.1)
 - Probed 2026-10-02: `GET https://makerworld.com/api/v1/design-service/design/<id>` answers JSON without login (also with our

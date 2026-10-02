@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.19.0
+- Filament presets from SpoolmanDB (open filament database, 67 brands) for adding spools in the app: brand → filament
+  fills in name, material, colour, weight and spool weight.
+
 ## 0.18.1
 - Orca Cloud import: only public bundles can be read without an Orca account (private ones only open for whitelisted,
   logged-in Orca users) - texts and the error message say so and point to exporting the presets in OrcaSlicer.

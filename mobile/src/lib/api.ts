@@ -107,6 +107,12 @@ export type ModelHit = {
   source: Source["id"]; id: string; name: string; url: string; author: string | null; thumbnail: string | null;
   likes: number | null; downloads: number | null; makes: number | null; license: string | null;
 };
+/** A filament of SpoolmanDB (one per name + material + colour; `weights` = sizes it is sold in). */
+export type FilamentPreset = {
+  id: string | null; name: string; material: string; color_hex: string | null; color_hexes: string[] | null;
+  density: number | null; extruder_temp: number | null; bed_temp: number | null; finish: string | null;
+  weights: { weight: number; spool_weight: number | null }[]; diameter: number;
+};
 export type ModelDetail = ModelHit & {
   images: string[]; summary: string; description: string; category: string | null;
   recommended: Partial<{ nozzle: string; layer_height: string; material: string; weight_g: number; print_hours: number }>;
@@ -362,6 +368,10 @@ export class Api {
     this.rawUpload<UserProfile[]>(`/api/profiles?filename=${encodeURIComponent(name)}`, uri);
 
   /** Import a bundle shared on cloud.orcaslicer.com (server 0.18.0, issue #7) - no Orca account needed. */
+  /** SpoolmanDB filament presets for adding spools (server 0.19.0). */
+  filamentBrands = () => this.request<{ name: string; count: number }[]>("/api/filament-db/brands", { timeout: 60000 });
+  filamentPresets = (brand: string) =>
+    this.request<FilamentPreset[]>(`/api/filament-db/filaments?brand=${encodeURIComponent(brand)}`, { timeout: 60000 });
   importOrcaCloud = (link: string) =>
     this.request<{ bundle: { name: string | null; author: string | null; version: string | null };
                    imported: UserProfile[]; skipped: { name: string | null; error: string }[] }>(
