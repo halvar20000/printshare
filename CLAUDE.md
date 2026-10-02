@@ -764,6 +764,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   is on; web page card "Unterwegs drucken" (switch, big code, state, "Mit anderem Konto koppeln"); README section 6;
   `deploy/bridge/docker-compose.yml` (host network for the printer search).
 
+## First real bridge test (Thomas, 2026-10-02)
+- Tower (Unraid container 0.26.0, `PRINTSHARE_BRIDGE=true`) paired with Thomas' cloud account from the Android app
+  (aab 32); the cloud log showed `bridge … connected (0.26.0, 2 printers)`. **Works, including the camera** (snapshots
+  through the bridge), tested far away from home over mobile data. Not yet recorded: a print started through the bridge, Bambu.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
