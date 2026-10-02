@@ -621,7 +621,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `CookieManager.removeAllCookies` + `flush` + `WebStorage.deleteAllData` on the main queue; iOS `WKWebsiteDataStore`).
   Created with `create-expo-module --local` (non-interactive), autolinked from `modules/`. Native → new app build.
 - **Checked 2026-10-02 (Thomas, Galaxy S24 Ultra):** login with e-mail + password works in the app's WebView.
-  Still to check: the login survives an app restart; downloads on the site don't start a system download.
+  The login survives an app restart, and the site's Download button opens the app's model page (no system download).
 
 ## OpenPrintTag NFC spools (2026-10-02, app only, Android)
 - Spec read from specs.openprinttag.org (Docsify: `nfc_data_format.md`, `nfc_technical_details.md`,
