@@ -114,6 +114,18 @@ export default function Discover() {
           accessibilityLabel={t("searchPlaceholder")}
           style={{ flex: 1, color: c.text, fontSize: 17, paddingVertical: 13, marginLeft: 8 }} />
       </View>
+      {/* the website itself with the user's own Printables login (issue #16) */}
+      <Pressable onPress={() => { tap(); router.push("/printables"); }} accessibilityRole="button"
+        accessibilityLabel={t("printablesWebOpen")}
+        style={{ flexDirection: "row", alignItems: "center", marginTop: 10, paddingVertical: 10, paddingHorizontal: 12,
+          borderRadius: 12, backgroundColor: c.card }}>
+        <Ionicons name="globe-outline" size={20} color={c.accent} style={{ marginRight: 10 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{t("printablesWebOpen")}</Text>
+          <Text style={{ color: c.sub, fontSize: 13 }}>{t("printablesWebOpenSub")}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={c.sub} />
+      </Pressable>
       {available.length > 1 ? (
         <View style={{ marginTop: 12 }}>
           <Segmented values={available.map(s => s.id)} value={source} onChange={changeSource}

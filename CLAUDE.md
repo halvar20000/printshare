@@ -604,6 +604,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   3D (gestures belong to the viewer). Lines, not extrusion tubes (data size). Needs internet for three.js like the
   model view. Checked in the web build with a real Orca G-code (cone on a ring, 153 layers; slider, hidden infill).
 
+## Printables website in the app (issue #16, 2026-10-02, like Dominique's iOS 0.7.90)
+- `app/printables.tsx` + `components/PrintablesWeb(.web).tsx`: printables.com in a WebView, the user logs in on the site
+  (no API/OAuth for third parties; Prusa terms Art. 2.4 forbid passing the password). Persistent: `incognito={false}`,
+  `sharedCookiesEnabled`, `thirdPartyCookiesEnabled`, `domStorageEnabled`. URL changes by pushState are reported by an
+  injected script (history.pushState/replaceState/popstate → postMessage) besides `onNavigationStateChange`.
+  "Mit PocketPrint3D drucken" when the URL is `printables.com/(xx/)?model/<id>` → `model/printables/<id>`. Android has no
+  `onFileDownload` → downloads stopped in `onShouldStartLoadWithRequest` (files.printables.com, model file extensions);
+  `target=_blank` via `onOpenWindow` in the same view; mailto/tel to the system. Google login is blocked in WebViews.
+- Logout needs native code: local Expo module `mobile/modules/web-data` (`WebData.clearAsync()`: Android
+  `CookieManager.removeAllCookies` + `flush` + `WebStorage.deleteAllData` on the main queue; iOS `WKWebsiteDataStore`).
+  Created with `create-expo-module --local` (non-interactive), autolinked from `modules/`. Native → new app build.
+- **To check on a real phone:** the login survives an app restart; downloads on the site don't start a system download.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

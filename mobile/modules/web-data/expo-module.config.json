@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["WebDataModule"]
+  },
+  "android": {
+    "modules": ["io.github.halvar20000.webdata.WebDataModule"]
+  }
+}
