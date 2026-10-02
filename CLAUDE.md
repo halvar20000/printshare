@@ -476,6 +476,10 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   Brevo account "pocketprint3d" (free, 300 mails/day), domain authenticated (brevo-code TXT, DKIM CNAMEs
   brevo1/brevo2._domainkey, our DMARC p=reject kept), sender no-reply@pocketprint3d.com, API key IP-locked to the
   server (49.13.172.173, 2a01:4f8:1c1f:8852::1) - call Brevo's API from the server, not from Tower.
+- Thingiverse in the cloud since 2026-10-02: own Thingiverse app for the cloud, its **App Token** (32 hex characters; the
+  64-character Client Secret gives 401) as `THINGIVERSE_TOKEN` in `/opt/pocketprint3d/secrets.env` (copy in
+  `.secrets/thingiverse-cloud-token` on Tower). Without it `/api/sources` reports Thingiverse unavailable and the app hides
+  the Printables/Thingiverse switch.
   End-to-end test 2026-10-01: code mail arrived in the inbox, login, printer added, cube sliced on the server (2 s).
   Thomas' account exists (thomasherbrig@ipomme.fr, printer "centauri-carbon").
 - Not yet: web page login, app login + LAN relay (Android: me, iOS: Dominique per docs/API.md), job persistence

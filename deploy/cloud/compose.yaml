@@ -6,7 +6,8 @@ services:
     restart: unless-stopped
     environment:
       PRINTSHARE_URL: https://api.pocketprint3d.com
-    # secrets.env (0600, only on the server, never in git): PRINTSHARE_CLOUD=1, PRINTSHARE_MAIL=brevo, BREVO_API_KEY=…
+    # secrets.env (0600, only on the server, never in git): PRINTSHARE_CLOUD=1, PRINTSHARE_MAIL=brevo, BREVO_API_KEY=…,
+    # THINGIVERSE_TOKEN=… (app token of the Thingiverse app for the cloud)
     env_file:
       - path: secrets.env
         required: false
