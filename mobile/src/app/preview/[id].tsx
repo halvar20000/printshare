@@ -1,14 +1,18 @@
-// G-code layer viewer (spec SL-06/SL-07): top view per layer, colours by line type, layer slider.
+// G-code layer viewer (spec SL-06/SL-07): top view per layer, colours by line type, layer slider; 3D view of all layers
+// up to the slider position (issue #4, lib/gcode3d.ts).
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Slider from "@react-native-community/slider";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import Svg, { G, Path, Rect } from "react-native-svg";
 
-import { Button, Card, Empty, Segmented, tap } from "@/components/ui";
+import { Banner, Button, Card, Empty, Segmented, tap } from "@/components/ui";
+import type { ViewerMessage } from "@/components/Model3D";
+import { Viewer3D } from "@/components/Viewer3D";
 import type { Preview } from "@/lib/api";
 import { useApp } from "@/lib/app";
+import { gcode3dHtml } from "@/lib/gcode3d";
 import { space, useColors } from "@/lib/theme";
 
 // Similar to OrcaSlicer's own preview colours, readable on light and dark backgrounds.
@@ -51,6 +55,8 @@ export default function PreviewScreen() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());   // "type:3" / "color:1"
   const [modePref, setModePref] = useState<Mode | null>(null);
   const [view, setView] = useState<"model" | "plate">("model");
+  const [dim, setDim] = useState<"2d" | "3d">("2d");
+  const [err3d, setErr3d] = useState("");
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
@@ -98,6 +104,23 @@ export default function PreviewScreen() {
     for (let y = 10; y < frame.bedH; y += 10) d += `M0 ${frame.bedH - y}H${frame.bedW}`;
     return d;
   }, [frame]);
+  // 3D: the same colours, hidden lines and slider position as the 2D view
+  const html3d = useMemo(() => gcode3dHtml({ bg: c.input, grid: c.line }), [c.input, c.line]);
+  const viewArg = useMemo(() => {
+    if (!data) return null;
+    const keys = mode === "color" ? tools : data.types.map((_, k) => k);
+    const colors = Object.fromEntries(keys.map(k => [k, mode === "color"
+      ? data.filament_colors?.[k] ?? FALLBACK[k % FALLBACK.length]
+      : TYPE_COLORS[data.types[k]] ?? FALLBACK[k % FALLBACK.length]]));
+    const off = [...hidden].filter(h => h.startsWith(`${mode}:`)).map(h => Number(h.split(":")[1]));
+    return { layer, mode, colors, hidden: off };
+  }, [data, mode, tools, hidden, layer]);
+  const calls3d = useMemo(() => [data ? { name: "setData", arg: data } : null,
+    viewArg ? { name: "view", arg: viewArg } : null], [data, viewArg]);
+  const on3d = useCallback((m: ViewerMessage) => {
+    if (m.type === "error") setErr3d(m.message ?? "3D");
+    if (m.type === "loaded") setErr3d("");
+  }, []);
   const present = useMemo(() => {
     const s = new Set<number>();
     data?.layers[layer]?.paths.forEach(p => s.add(keyOf(p, mode, v2)));
@@ -128,10 +151,17 @@ export default function PreviewScreen() {
   const step = (d: number) => { tap(); setLayer(l => Math.min(last, Math.max(0, l + d))); };
 
   return (
-    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space, maxWidth: 640, width: "100%", alignSelf: "center" }}>
+    <ScrollView style={{ backgroundColor: c.bg }} scrollEnabled={dim === "2d"}
+      contentContainerStyle={{ padding: space, maxWidth: 640, width: "100%", alignSelf: "center" }}>
       <View style={{ marginBottom: 12 }}>
-        <Segmented values={["model", "plate"]} value={view} onChange={v => setView(v as "model" | "plate")}
-          labels={{ model: t("fitModel"), plate: t("wholePlate") }} />
+        <Segmented values={["2d", "3d"]} value={dim} onChange={v => { tap(); setDim(v as "2d" | "3d"); }}
+          labels={{ "2d": t("gcode2d"), "3d": t("gcode3d") }} />
+        {dim === "2d" ? (
+          <View style={{ marginTop: 8 }}>
+            <Segmented values={["model", "plate"]} value={view} onChange={v => setView(v as "model" | "plate")}
+              labels={{ model: t("fitModel"), plate: t("wholePlate") }} />
+          </View>
+        ) : null}
         {tools.length > 1 ? (
           <View style={{ marginTop: 8 }}>
             <Segmented values={["color", "type"]} value={mode} onChange={v => setModePref(v as Mode)}
@@ -139,6 +169,15 @@ export default function PreviewScreen() {
           </View>
         ) : null}
       </View>
+      {dim === "3d" ? (
+        <>
+          {err3d ? <Banner kind="error" text={`${t("preview3dError")} (${err3d})`} /> : null}
+          <Card style={{ padding: 0, marginBottom: 14, backgroundColor: c.input, height: size, overflow: "hidden" }}>
+            <Viewer3D html={html3d} calls={calls3d} onMessage={on3d} />
+          </Card>
+          <Text style={{ color: c.sub, fontSize: 12, textAlign: "center", marginTop: -8, marginBottom: 10 }}>{t("gcode3dHint")}</Text>
+        </>
+      ) : (
       <Card style={{ padding: 0, marginBottom: 14, backgroundColor: c.input }}>
         <Svg width={size} height={size} viewBox={`${frame.x} ${frame.y} ${frame.w} ${frame.h}`}
           accessibilityLabel={t("layerOf", { n: layer + 1, total: last + 1 })}>
@@ -160,6 +199,7 @@ export default function PreviewScreen() {
           ))}
         </Svg>
       </Card>
+      )}
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <Text style={{ color: c.text, fontSize: 17, fontWeight: "700" }}>{t("layerOf", { n: layer + 1, total: last + 1 })}</Text>

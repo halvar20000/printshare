@@ -593,6 +593,17 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   "Auf MakerWorld öffnen" button. Web build checked with the live MakerWorld data. A real MakerWorld 3MF (Bambu Studio project)
   has not been sliced through PocketPrint3D yet.
 
+## 3D G-code preview (issue #4, 2026-10-02, app only)
+- `lib/gcode3d.ts`: three.js page (same jsdelivr three@0.170 as the model view) - `setData(preview)` once, `view({layer,
+  mode, colors, hidden})` on every change. All layers in ONE `LineSegments` buffer (positions + vertex colours, G-code
+  x/y/z → three.js x/z/-y, centred on the bed); the slider only sets `drawRange` (no rebuild); the current layer is a
+  second geometry using `subarray` views (no copy) in full colour, the layers below dimmed via the material colour
+  (#8a8a8a multiplies the vertex colours). Rebuild only when mode/colours/hidden types change.
+- `components/Viewer3D(.web).tsx`: generic WebView/iframe bridge, `calls=[{name, arg}]` re-sent when `arg` changes
+  (identity). Preview screen: switch "2D (Schicht) | 3D", same slider/legend/colour mode; the ScrollView doesn't scroll in
+  3D (gestures belong to the viewer). Lines, not extrusion tubes (data size). Needs internet for three.js like the
+  model view. Checked in the web build with a real Orca G-code (cone on a ring, 153 layers; slider, hidden infill).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
