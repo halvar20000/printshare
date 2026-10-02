@@ -142,6 +142,10 @@ class Accounts:
                 self.db.execute("UPDATE sessions SET last_used = ? WHERE token_hash = ?", (now, _hash(token)))
         return User(row["id"], row["email"])
 
+    def user(self, user_id: str) -> User | None:
+        rows = self._q("SELECT id, email FROM users WHERE id = ?", (user_id,))
+        return User(rows[0]["id"], rows[0]["email"]) if rows else None
+
     def logout(self, token: str) -> None:
         self._q("DELETE FROM sessions WHERE token_hash = ?", (_hash(token),))
 

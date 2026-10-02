@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.0
+- PocketPrint3D Cloud: groundwork for bridges at home (docs/BRIDGE.md) - pairing with a code, bridge tokens and the
+  connection the bridge keeps open to the cloud. Nothing changes for self-hosted servers yet; the bridge mode itself
+  comes in the next versions.
+
 ## 0.23.0
 - AI failure detection with Obico's ML API (runs as its own container): while printing, camera pictures are checked;
   a likely failure shows in the app with the picture and can pause the print automatically. Works for every printer

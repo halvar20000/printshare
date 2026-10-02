@@ -438,6 +438,36 @@ sensitivity's threshold (low 0.75, medium 0.55, high 0.38), optionally pausing t
 
 All `409` in the cloud. `server_url` = this server as the ML API container reaches it (default `PRINTSHARE_URL`).
 
+## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
+A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is
+built; forwarding the printer endpoints to a bridge comes with step 4.
+
+**Pairing (bridge side, no login):**
+- `POST /api/bridge/pair/start {"bridge_id", "public_key"?, "version"?, "name"?}` → `{"code": "K7Q4-M2ZX", "poll",
+  "expires_in": 600}`. `bridge_id` 8–64 of `[A-Za-z0-9-]` (a UUID), `public_key` = X25519, 32 bytes base64. 20 per IP/hour (429).
+- `POST /api/bridge/pair/poll {"bridge_id", "poll"}` → `{"status": "waiting", "expires_in"}` until the user entered the
+  code, then once `{"status": "paired", "token": "pp3db_…", "account": "<e-mail>"}`; 404 unknown, 410 expired.
+
+**App (session token):**
+- `POST /api/bridges/pair {"code", "name"?}` → bridge (below). The code is accepted with or without dash, any case;
+  404 unknown/expired, 429 after 5 wrong codes in 15 min, 409 at 10 bridges. Pairing a bridge again (e.g. after a
+  reset) replaces its token; another account taking it over removes it from the old one.
+- `GET /api/bridges` → `[{"id", "name", "version", "public_key", "created", "last_seen", "online", "connected",
+  "printers": [{"id", "name", "type", "machine", "capabilities"}]}]` (printers as the bridge reports them; never
+  addresses or secrets). Home servers answer `[]`.
+- `PATCH /api/bridges/{id} {"name"}`, `DELETE /api/bridges/{id}` (token revoked, connection closed with 4001).
+
+**Bridge connection:** `WS /api/bridge/ws`, header `Authorization: Bearer pp3db_…`. First frame `{"type": "hello",
+"version", "printers"}` → `{"type": "welcome", "bridge_id", "min_version", "methods"}`. Close codes: 4401 unknown token
+(pair again), 4426 version below `min_version` (0.24.0), 4400 no hello within 10 s, 4000 replaced by a newer connection of
+the same bridge, 4001 removed from the account. Requests/responses/events as in docs/BRIDGE.md section 6 (methods:
+`printers.list`, `printer.status`, `printer.control`, `printer.controls`, `printer.adjust`, `printer.temperatures`,
+`printer.camera.snapshot`, `printer.power`, `job.send`, `watch.state`, `watch.mute`, `discover`, `printer.add|update|remove`;
+events `printer.state`, `watch.alert`, `job.progress`, `printers.changed`).
+- `GET /api/bridge/jobs/{job}/gcode?lanes=` (bridge token) – the G-code of a job of the bridge's account (same as
+  `/api/jobs/{job}/gcode`); 401 for other tokens, 404 for other accounts' jobs.
+- `GET /api/admin/stats` adds `bridges`, `bridges_online`.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

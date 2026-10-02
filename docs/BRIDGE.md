@@ -1,6 +1,8 @@
 # PocketPrint3D bridge – concept (2026-10-02)
 
-Status: **concept, nothing implemented yet.** Builds on `docs/CLOUD.md` ("Step 2 – bridge"). Shared contract for the
+Status: **step 2 (cloud side) built in 0.24.0** – pairing, bridge tokens, WebSocket hub, G-code endpoint for bridges
+(`printshare/cloud/bridges.py`, `printshare/cloud/hub.py`, `tests/test_bridges.py`, endpoints in `docs/API.md` "Bridges").
+Next: step 1 (Bambu, after Sunday's probe) and step 3 (the bridge client). Builds on `docs/CLOUD.md` ("Step 2 – bridge"). Shared contract for the
 server, the Android app (Expo) and the iOS app (Swift, Dominique): when something here is built, its endpoints go into
 `docs/API.md` in the same commit.
 

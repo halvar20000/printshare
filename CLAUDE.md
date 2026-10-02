@@ -722,6 +722,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   secrets end-to-end with the bridge's X25519 key, slim image without Orca, Bambu adapter on the bridge). Nothing built yet.
 - Thomas' Bambu P1S found on the LAN 2026-10-02: 192.168.86.20 and .53 (ports 8883 + 990, TLS certs "BBL CA", CN = serial
   `01P0…`); no SSDP answer to unicast M-SEARCH from this container.
+- **Step 2 (cloud side) done, server 0.24.0:** `cloud/bridges.py` (tables `bridges`, `bridge_pairings`, `bridge_pair_fails`;
+  8-char codes from an alphabet without 0/O/1/I, 10 min; tokens `pp3db_…` stored hashed, the fresh token kept in the pairing
+  row only until the bridge polls it; re-pairing replaces the token/owner; max 10 per account), `cloud/hub.py` (`BridgeHub`:
+  one socket per bridge, hello → welcome, `call()` with per-method timeouts and the fixed METHODS list, events
+  `printer.state`/`printers.changed` cached, close codes 4401/4426/4400/4000/4001, MIN_VERSION 0.24.0). `websockets` is now
+  a dependency (uvicorn's WebSocket support + the bridge client later). Tests run a real uvicorn in a thread with a
+  `websockets` fake bridge (`tests/test_bridges.py`). Caddy proxies WebSockets without extra config.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

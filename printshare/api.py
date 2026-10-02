@@ -13,6 +13,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
   GET|PUT|DELETE /api/failure-detection/config · /api/printers/{id}/watch/frame|mute   AI failure detection (0.23.0, own servers)
+  POST /api/bridge/pair/start|poll · POST /api/bridges/pair · GET|PATCH|DELETE /api/bridges · WS /api/bridge/ws   bridges (0.24.0, cloud)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -61,7 +62,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -69,6 +70,8 @@ from pydantic import BaseModel, Field
 
 from .cloud import accounts
 from .cloud.spools import Spools
+from .cloud.bridges import Bridges
+from .cloud.hub import BridgeError, BridgeHub
 from . import orca_cloud
 from . import filament_db
 from . import manyfold as mf
@@ -100,7 +103,7 @@ async def _lifespan(_app):
     yield
 
 
-app = FastAPI(title="PocketPrint3D", version="0.23.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.24.0", lifespan=_lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -128,15 +131,19 @@ class Account:
 ACCOUNTS: accounts.Accounts | None = None
 MAILER: Mailer | None = None
 SPOOLS: Spools | None = None
+BRIDGES: Bridges | None = None
+HUB = BridgeHub()
 
 
 def _cloud_setup() -> None:
-    global ACCOUNTS, MAILER, SPOOLS
+    global ACCOUNTS, MAILER, SPOOLS, BRIDGES
     if not settings.cloud:
-        ACCOUNTS = MAILER = SPOOLS = None
+        ACCOUNTS = MAILER = SPOOLS = BRIDGES = None
         return
     ACCOUNTS = accounts.Accounts(settings.cloud_db)
     SPOOLS = Spools(ACCOUNTS)
+    BRIDGES = Bridges(ACCOUNTS)
+    HUB.on_seen = BRIDGES.seen
     MAILER = BrevoMailer(settings.brevo_api_key) if settings.mail == "brevo" else LogMailer()
 
 
@@ -297,7 +304,7 @@ def auth_logout(acct: Account = Depends(auth)) -> dict[str, Any]:
 
 
 @app.delete("/api/auth/account")
-def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
+async def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Delete the account and everything of it: printers, profiles, uploads, G-code, jobs (Apple/Google require
     this in the app). Needs ?confirm=true."""
     if not acct.cloud:
@@ -308,7 +315,10 @@ def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) ->
         JOBS.pop(jid, None)
     for d in (acct.settings.config_dir, acct.settings.work_dir, acct.settings.gcode_dir):
         shutil.rmtree(d, ignore_errors=True)
+    bridge_ids = [b["id"] for b in BRIDGES.list(acct.id)]
     ACCOUNTS.delete_user(acct.id)
+    for bid in bridge_ids:
+        await HUB.disconnect(bid, "the account was deleted")
     return {"deleted": True}
 
 
@@ -316,8 +326,132 @@ def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) ->
 def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
     if acct.id != "admin":
         raise HTTPException(403, "operator only")
-    return {**ACCOUNTS.stats(), "spools": SPOOLS.count(), "jobs_in_memory": len(JOBS),
+    return {**ACCOUNTS.stats(), "spools": SPOOLS.count(), "bridges": BRIDGES.count(), "bridges_online": HUB.count(),
+            "jobs_in_memory": len(JOBS),
             "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
+
+
+# ---------- cloud mode: bridges at home (docs/BRIDGE.md) ----------
+def _bridges() -> Bridges:
+    if not settings.cloud or BRIDGES is None:
+        raise HTTPException(404, "bridges exist only in PocketPrint3D Cloud")
+    return BRIDGES
+
+
+def _bridge_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+
+
+def _bridge_out(b: dict[str, Any]) -> dict[str, Any]:
+    live = HUB.info(b["id"])
+    return {**{k: b[k] for k in ("id", "name", "version", "public_key", "created", "last_seen")},
+            "online": live["online"], "printers": live["printers"], "connected": live["connected"]}
+
+
+class BridgePairStart(BaseModel):
+    bridge_id: str
+    public_key: str | None = None      # X25519, base64 - the apps seal printer secrets with it
+    version: str | None = None
+    name: str | None = None            # suggestion, e.g. the host name; the user can change it
+
+
+class BridgePairPoll(BaseModel):
+    bridge_id: str
+    poll: str
+
+
+class BridgePair(BaseModel):
+    code: str
+    name: str | None = None
+
+
+class BridgeRename(BaseModel):
+    name: str
+
+
+@app.post("/api/bridge/pair/start")
+def bridge_pair_start(req: BridgePairStart, request: Request) -> dict[str, Any]:
+    """Bridge (no login yet): get a pairing code to show at home."""
+    return _bridge_call(_bridges().start_pairing, req.bridge_id, req.public_key, req.version, req.name,
+                        _client_ip(request))
+
+
+@app.post("/api/bridge/pair/poll")
+def bridge_pair_poll(req: BridgePairPoll) -> dict[str, Any]:
+    """Bridge: {"status": "waiting"} until the user entered the code, then once {"status": "paired", "token"}."""
+    return _bridge_call(_bridges().poll_pairing, req.bridge_id, req.poll)
+
+
+@app.post("/api/bridges/pair")
+def bridges_pair(req: BridgePair, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """App: the code shown by the bridge → the bridge belongs to this account."""
+    if not acct.cloud:
+        raise HTTPException(404, "bridges exist only in PocketPrint3D Cloud")
+    return _bridge_out(_bridge_call(_bridges().confirm_pairing, acct.id, req.code, req.name))
+
+
+@app.get("/api/bridges")
+def bridges_list(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    if not acct.cloud:
+        return []
+    return [_bridge_out(b) for b in _bridges().list(acct.id)]
+
+
+@app.patch("/api/bridges/{bridge_id}")
+def bridges_rename(bridge_id: str, req: BridgeRename, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(404, "unknown bridge")
+    return _bridge_out(_bridge_call(_bridges().rename, acct.id, bridge_id, req.name))
+
+
+@app.delete("/api/bridges/{bridge_id}")
+async def bridges_delete(bridge_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Remove a bridge: its token stops working and its connection is closed."""
+    if not acct.cloud or not _bridges().delete(acct.id, bridge_id):
+        raise HTTPException(404, "unknown bridge")
+    await HUB.disconnect(bridge_id)
+    return {"deleted": bridge_id}
+
+
+def _bridge_from_request(token: str) -> dict[str, Any]:
+    bridge = _bridges().for_token(token) if token else None
+    if bridge is None:
+        raise HTTPException(401, "unknown bridge token - pair the bridge again")
+    return bridge
+
+
+@app.websocket("/api/bridge/ws")
+async def bridge_socket(ws: WebSocket) -> None:
+    """The bridge's own connection (opened by the bridge; Authorization: Bearer <bridge token>)."""
+    header = ws.headers.get("authorization", "")
+    token = header.removeprefix("Bearer ").strip()
+    bridge = BRIDGES.for_token(token) if (settings.cloud and BRIDGES is not None and token) else None
+    await ws.accept()
+    if bridge is None:           # accepted first, so the bridge sees the reason (4401 = pair again)
+        await ws.close(4401, "unknown bridge token - pair the bridge again")
+        return
+    await HUB.serve(ws, bridge)
+
+
+@app.get("/api/bridge/jobs/{job_id}/gcode")
+async def bridge_gcode(job_id: str, request: Request, lanes: str | None = None) -> FileResponse:
+    """A bridge fetches the G-code of a job of its own account (job.send)."""
+    bridge = _bridge_from_request(_token(request))
+    user = ACCOUNTS.user(bridge["user_id"])
+    if user is None:
+        raise HTTPException(401, "unknown bridge token - pair the bridge again")
+    return await download_gcode(job_id, lanes, _user_account(user, ""))
+
+
+async def bridge_call(acct: Account, bridge_id: str, method: str, params: dict[str, Any] | None = None) -> Any:
+    """A request to one of the account's bridges; errors become HTTP errors with a clear text."""
+    try:
+        return await HUB.call(bridge_id, acct.id, method, params)
+    except BridgeError as e:
+        raise HTTPException(e.status, str(e))
 
 
 @app.get("/api/machines")
