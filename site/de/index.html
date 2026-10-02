@@ -32,11 +32,15 @@
   <section>
     <h2>Was die App kann</h2>
     <div class="grid">
-      <div class="card"><h3>Finden und drucken</h3><p>In der App auf Printables und Thingiverse suchen oder einen Link aus dem Browser teilen. Auch MakerWorld: Link in der App öffnen, das 3MF in MakerWorld laden und mit der App teilen.</p></div>
+      <div class="card"><h3>Finden und drucken</h3><p>In der App auf Printables und Thingiverse suchen oder printables.com mit deinem eigenen Konto öffnen – mit deinen Likes und Sammlungen. Auch MakerWorld: Link in der App öffnen, das 3MF in MakerWorld laden und mit der App teilen.</p></div>
+      <div class="card"><h3>Deine eigene Bibliothek</h3><p>Manyfold läuft bei dir zu Hause? Deine Modellsammlung erscheint als Suchquelle neben Printables – suchen, Bilder ansehen, drucken.</p></div>
       <div class="card"><h3>Geslict für dich</h3><p>OrcaSlicer 2.4.2 mit dem passenden Profil für deinen Drucker – rund 1000 Druckermodelle und eine große Filament-Bibliothek eingebaut. Druckzeit, Filament, 3D-Ansicht des Modells und 2D/3D-Vorschau der Schichten, bevor etwas startet.</p></div>
+      <div class="card"><h3>Bilder am Drucker</h3><p>Der G-Code bringt ein Vorschaubild in den Größen und Formaten mit, die das Display deines Druckers erwartet (PNG, QOI für Prusa) – du siehst direkt am Drucker, was gedruckt wird.</p></div>
+      <div class="card"><h3>Genaue Zeiten für Klipper</h3><p>Für Klipper-Drucker wird die Druckzeit mit den Geschwindigkeits- und Beschleunigungsgrenzen deines Druckers neu berechnet (klipper_estimator) – oft 10–20 % genauer als der Slicer.</p></div>
       <div class="card"><h3>Dein Drucker, live</h3><p>Fortschritt, Temperaturen, Pausieren, Fortsetzen und Abbrechen. Mit eigenem Server außerdem Kamera, Temperaturverlauf, Lüfter, Licht, Geschwindigkeit und Ein-/Ausschalten über Home Assistant.</p></div>
+      <div class="card"><h3>KI-Fehlererkennung</h3><p>Mit Obicos ML-API auf deinem Server werden beim Drucken Kamerabilder geprüft; ein wahrscheinlicher Fehldruck (Spaghetti, Ablösen) erscheint in der App und kann den Druck pausieren – auch beim Centauri Carbon mit Original-Firmware.</p></div>
       <div class="card"><h3>Mehrfarbig</h3><p>Für jede Farbe den Slot deiner AFC-Einheit (z. B. CANVAS) wählen – das Material folgt dem Filament im Slot.</p></div>
-      <div class="card"><h3>Spoolman</h3><p>Spule pro Farbe wählen, Warnung, wenn eine nicht mehr reicht, und nach dem Druck wird der Verbrauch abgebucht. Kein Spoolman zu Hause? Deine Spulen liegen dann in deinem PocketPrint3D-Konto.</p></div>
+      <div class="card"><h3>Spoolman &amp; NFC-Spulen</h3><p>Spule pro Farbe wählen, Warnung, wenn eine nicht mehr reicht, nach dem Druck wird der Verbrauch abgebucht. Spulen aus der offenen SpoolmanDB anlegen oder das Handy an eine OpenPrintTag-NFC-Spule halten. Kein Spoolman zu Hause? Deine Spulen liegen dann in deinem Konto.</p></div>
       <div class="card"><h3>Eigene Profile</h3><p>Eigene OrcaSlicer-Profile für Drucker, Qualität und Material hochladen – oder den Link eines öffentlichen Orca-Cloud-Bundles einfügen. Sie werden sofort zum Slicen genutzt.</p></div>
       <div class="card"><h3>Sicher gebaut</h3><p>Nichts startet ohne deine Bestätigung. Dein Drucker ist nie aus dem Internet erreichbar; mit der Cloud bleiben seine Adresse und Passwörter auf deinem Handy.</p></div>
       <div class="card"><h3>Kostenlos</h3><p>Kein Abo, keine Werbung, kein Tracking. Open Source unter der MIT-Lizenz.</p></div>
@@ -69,14 +73,14 @@
     <ol class="steps">
       <li><strong>PocketPrint3D-Server installieren</strong> auf Unraid (Vorlage), Home Assistant (Add-on) oder einem beliebigen Docker-Rechner.</li>
       <li><strong>App verbinden</strong>: die Webseite des Servers öffnen, <em>Einstellungen → App verbinden</em>, QR-Code scannen.</li>
-      <li><strong>Drucken</strong> – zu Hause und mit Tailscale o. Ä. auch von unterwegs.</li>
+      <li><strong>Drucken</strong> – zu Hause und mit Tailscale o. Ä. auch von unterwegs. Nur hier: Kamera und Druckersteuerung, deine Manyfold-Bibliothek, genaue Klipper-Zeiten und KI-Fehlererkennung.</li>
     </ol>
     <p style="color:var(--muted)">Beides ist kostenlos. Details und Installation: <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
   </section>
 
   <footer>
     <a href="/privacy/">Datenschutz</a><a href="/impressum/">Impressum</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
-    <div style="margin-top:10px">PocketPrint3D ist ein unabhängiges Open-Source-Projekt (MIT-Lizenz) und gehört zu keinem Druckerhersteller, Printables, Thingiverse, MakerWorld oder OrcaSlicer.</div>
+    <div style="margin-top:10px">PocketPrint3D ist ein unabhängiges Open-Source-Projekt (MIT-Lizenz) und gehört zu keinem Druckerhersteller, Printables, Thingiverse, MakerWorld, OrcaSlicer, Obico, Manyfold oder Spoolman.</div>
   </footer>
 </div>
 </body>

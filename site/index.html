@@ -32,11 +32,15 @@
   <section>
     <h2>What it does</h2>
     <div class="grid">
-      <div class="card"><h3>Find and print</h3><p>Search Printables and Thingiverse in the app, or share a link from the browser. MakerWorld models too: open the link in the app, download the 3MF in MakerWorld and share it back.</p></div>
+      <div class="card"><h3>Find and print</h3><p>Search Printables and Thingiverse in the app, or open printables.com with your own login to see your likes and collections. MakerWorld models too: open the link in the app, download the 3MF in MakerWorld and share it back.</p></div>
+      <div class="card"><h3>Your own library</h3><p>Running Manyfold at home? Your model collection shows up as a search source next to Printables – search, pictures, print.</p></div>
       <div class="card"><h3>Sliced for you</h3><p>OrcaSlicer 2.4.2 with the right profile for your printer – about 1000 printer models and a large filament library built in. Print time, filament, a 3D view of the model and a 2D/3D preview of the sliced layers before anything starts.</p></div>
+      <div class="card"><h3>Pictures on the printer</h3><p>The G-code carries a preview image in the sizes and formats your printer's screen expects (PNG, QOI for Prusa) – you see what's printing right on the printer.</p></div>
+      <div class="card"><h3>Exact times for Klipper</h3><p>For Klipper printers the print time is recalculated with your printer's own speed and acceleration limits (klipper_estimator) – often 10–20 % closer than the slicer.</p></div>
       <div class="card"><h3>Your printer, live</h3><p>Progress, temperatures, pause, resume and cancel. With your own server also camera, temperature charts, fans, light, speed and switching the printer on or off through Home Assistant.</p></div>
+      <div class="card"><h3>AI failure detection</h3><p>With Obico's ML API on your server, camera pictures are checked while printing; a likely failure (spaghetti, detaching) shows in the app and can pause the print – also on the Centauri Carbon with stock firmware.</p></div>
       <div class="card"><h3>Multicolour</h3><p>Choose the slot of your AFC unit (e.g. CANVAS) for every colour – the material follows the filament in the slot.</p></div>
-      <div class="card"><h3>Spoolman</h3><p>Pick the spool for every colour, get a warning when one won't be enough, and the used filament is booked after the print. No Spoolman at home? Keep your spools in your PocketPrint3D account.</p></div>
+      <div class="card"><h3>Spoolman &amp; NFC spools</h3><p>Pick the spool per colour, get a warning when one won't be enough, the used filament is booked after the print. Add spools from the open SpoolmanDB or by holding the phone to an OpenPrintTag NFC spool. No Spoolman at home? Keep your spools in your account.</p></div>
       <div class="card"><h3>Your own profiles</h3><p>Upload your OrcaSlicer printer, quality and material profiles – or paste the link of a public Orca Cloud bundle. They are used for slicing right away.</p></div>
       <div class="card"><h3>Safe by design</h3><p>Nothing starts without your confirmation. Your printer is never exposed to the internet; with the cloud, its address and passwords stay on your phone.</p></div>
       <div class="card"><h3>Free</h3><p>No subscription, no ads, no tracking. Open source under the MIT licence.</p></div>
@@ -69,14 +73,14 @@
     <ol class="steps">
       <li><strong>Install the PocketPrint3D server</strong> on Unraid (template), Home Assistant (add-on) or any Docker host.</li>
       <li><strong>Connect the app</strong>: open the server's web page, go to <em>Settings → Connect the app</em> and scan the QR code.</li>
-      <li><strong>Print</strong> – at home and, with Tailscale or similar, from anywhere.</li>
+      <li><strong>Print</strong> – at home and, with Tailscale or similar, from anywhere. Only here: camera and printer control, your Manyfold library, exact Klipper times and AI failure detection.</li>
     </ol>
     <p style="color:var(--muted)">Both are free. Details and installation: <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
   </section>
 
   <footer>
     <a href="/privacy/">Privacy</a><a href="/impressum/">Legal notice</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
-    <div style="margin-top:10px">PocketPrint3D is an independent open-source project (MIT licence), not affiliated with any printer manufacturer, Printables, Thingiverse, MakerWorld or OrcaSlicer.</div>
+    <div style="margin-top:10px">PocketPrint3D is an independent open-source project (MIT licence), not affiliated with any printer manufacturer, Printables, Thingiverse, MakerWorld, OrcaSlicer, Obico, Manyfold or Spoolman.</div>
   </footer>
 </div>
 </body>
