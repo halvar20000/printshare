@@ -441,6 +441,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   in `mobile/`. The server API is the shared contract → **`docs/API.md`** (keep it in sync: every new endpoint
   goes into it in the same commit; changes additive only). Cloud concept with steps, Hetzner, legal: **`docs/CLOUD.md`**.
 
+## Product principle (Thomas, 2026-10-02): simple by default, powerful when you want it
+- The apps are for people who want the ease of Bambu Handy (non-technical users) - with much more under the hood.
+- Every feature is checked: does it add a step, field or technical term for a beginner? Then it is automatic, or
+  optional and default off, grouped under an "advanced" area (own server, Manyfold, AI failure detection, own Spoolman,
+  profile uploads, plugins/bridge). Beginners never need to install anything; remote access/bridge is an optional,
+  guided step later.
+- Biggest open beginner hurdles (2026-10-02): typing the printer's IP address (→ automatic discovery on the Wi-Fi:
+  Centauri UDP broadcast, mDNS for Klipper/PrusaLink/OctoPrint), OctoPrint API key (→ OctoPrint's app-key approval
+  flow), long printer-model list, many advanced rows in the settings, first start (cloud should be the obvious default).
+
 ## Name: PocketPrint3D (decided 2026-09-30)
 - "PrintShare" sounded like paper printing (an established paper-printing app has that name) and "share" doesn't
   describe the app. New brand **PocketPrint3D** ("the 3D printer in your pocket"); domain **pocketprint3d.com**
