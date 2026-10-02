@@ -702,6 +702,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `app/failure-detection.tsx`. Web build tested end-to-end with a fake ML API fetching frames over HTTP and FakeMoonraker
   (alert, pause, false alarm). **Not yet with the real ml_api / a real failed print.** No push notifications yet.
 
+## Beginner audit steps 1 + 2 (2026-10-02, Android app)
+- `docs/BEGINNER-AUDIT.md`. Step 1 (build 30): welcome screen (cloud sign-up first, own server as a small link), first-printer
+  card, plate check inside the "Drucken" confirmation, `errorText()` translates LAN/new server errors, plainer wording,
+  settings group advanced things under "Erweitert".
+- Step 2: printers found on the Wi-Fi. `mobile/modules/lan-discovery` (Kotlin: `wifiAddressAsync` via ConnectivityManager
+  LinkProperties, `udpProbeAsync` = DatagramSocket broadcast; iOS stub, web stub with `globalThis.__lanDiscovery` for tests),
+  `lib/lan/discover.ts` (platform-independent): SDCP `M99999` → UDP 3000 (255.255.255.255 + subnet broadcast); HTTP probe of
+  the /24 (24 workers, 1.5 s): Moonraker `/server/info` on 80 then 7125 (+ `/printer/objects/list`: a `*cosmos*` macro =
+  COSMOS, `/printer/info` hostname), PrusaLink `/api/v1/info` 401 digest realm "Printer API", OctoPrint web page.
+  Real network from this container (2026-10-02): Thomas' CC answered in 2.5 s (`Data.Name/MachineName/BrandName/MainboardIP/
+  FirmwareVersion`), whole /24 scanned in 12.9 s, no false positives. Node test against the fakes (all four types). **Not yet
+  on a real phone** (needs the next build).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

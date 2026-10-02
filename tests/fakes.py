@@ -153,6 +153,9 @@ class FakeMoonraker:
     async def info(self, request: web.Request) -> web.Response:
         return web.json_response({"result": {"klippy_state": "ready"}})
 
+    async def printer_info(self, request: web.Request) -> web.Response:
+        return web.json_response({"result": {"state": "ready", "hostname": "voron"}})
+
     async def upload(self, request: web.Request) -> web.Response:
         form = await request.post()
         f = form["file"]
@@ -233,6 +236,7 @@ class FakeMoonraker:
         app = web.Application(client_max_size=64 * 1024 * 1024)
         app.router.add_post("/printer/print/{action}", self.control)
         app.router.add_get("/server/info", self.info)
+        app.router.add_get("/printer/info", self.printer_info)
         app.router.add_post("/server/files/upload", self.upload)
         app.router.add_get("/printer/objects/query", self.query)
         app.router.add_get("/printer/objects/list", self.objects_list)
@@ -364,12 +368,18 @@ class FakeOctoPrint(_FakeHTTP):
     @web.middleware
     async def auth(self, request: web.Request, handler):
         # on OctoPi the webcam (mjpg-streamer behind /webcam/) needs no API key
-        if not request.path.startswith("/webcam/") and request.headers.get("X-Api-Key") != self.api_key:
+        # the web page (login screen) loads without a key, like on a real OctoPrint
+        if request.path != "/" and not request.path.startswith("/webcam/") and request.headers.get("X-Api-Key") != self.api_key:
             return web.json_response({"error": "Forbidden"}, status=403)
         return await handler(request)
 
+    async def page(self, request: web.Request) -> web.Response:
+        return web.Response(text="<!DOCTYPE html><html><head><title>OctoPrint Login</title></head><body></body></html>",
+                            content_type="text/html")
+
     def routes(self, app: web.Application) -> None:
         app.middlewares.append(self.auth)
+        app.router.add_get("/", self.page)
         app.router.add_post("/api/files/local", self.upload)
         app.router.add_get("/api/job", self.get_job)
         app.router.add_post("/api/job", self.post_job)

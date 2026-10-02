@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["LanDiscoveryModule"]
+  },
+  "android": {
+    "modules": ["io.github.halvar20000.landiscovery.LanDiscoveryModule"]
+  }
+}

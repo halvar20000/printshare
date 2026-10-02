@@ -12,7 +12,10 @@ in the web build against the real server (cloud mode); the same applies to the i
   now the confirmation dialog of "Drucken" ("Ist die Druckplatte leer und PLA geladen? …"), no hidden switch;
   `errorText()`/`friendlyError()` translate the LAN and newer server messages; settings group Spoolman, Manyfold and
   failure detection under "Erweitert"; cloud "Über" text no longer says "no cloud".
-- Open: 1 (find printers on the Wi-Fi – step 2), 9, P3.
+- **Step 2 done (2026-10-02):** 1 – "Drucker hinzufügen" searches the Wi-Fi by itself (Centauri by SDCP UDP, Klipper/COSMOS,
+  PrusaLink, OctoPrint by a short HTTP probe of the /24); one tap fills type, address (and COSMOS, name). The form opens
+  only after a pick or "Adresse selbst eingeben". Native module `mobile/modules/lan-discovery` (Android).
+- Open: 9, P3; model preselection for Prusa/OctoPrint (their API needs the password/key first).
 
 ## P1 – people get stuck here
 

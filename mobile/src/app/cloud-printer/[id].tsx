@@ -1,13 +1,16 @@
 // Cloud: a printer of the account - name, type, OrcaSlicer model - and how the app reaches it on the home Wi-Fi
 // (address, PrusaLink password, API key: stored only on this phone, docs/CLOUD.md). id "new" adds a printer.
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Switch, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync } from "@/components/ui";
 import { errorText, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { lanPrinter } from "@/lib/lan";
+import { discoverPrinters, NoWifiError, type Found } from "@/lib/lan/discover";
+import LanDiscovery from "../../../modules/lan-discovery/src/LanDiscoveryModule";
 import { loadAccess, saveAccess } from "@/lib/printerAccess";
 import { space, useColors } from "@/lib/theme";
 
@@ -35,6 +38,45 @@ export default function CloudPrinter() {
   const [error, setError] = useState("");
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
+  // finding printers on the Wi-Fi (new printers only): the form opens when one is picked or "enter yourself" is tapped
+  const [found, setFound] = useState<Found[]>([]);
+  const [scan, setScan] = useState<{ pct: number } | "done" | "nowifi" | null>(isNew ? { pct: 0 } : null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [manual, setManual] = useState(!isNew);
+  const [known, setKnown] = useState<string[]>([]);
+  const scanRun = useRef(0);
+
+  const runScan = () => {
+    const run = ++scanRun.current;
+    const live = () => scanRun.current === run;
+    discoverPrinters({ wifi: () => LanDiscovery.wifiAddressAsync(), udp: (m, p, ts, ms) => LanDiscovery.udpProbeAsync(m, p, ts, ms) },
+      f => { if (live()) setFound(l => [...l, f]); }, () => !live(),
+      (done, total) => { if (live() && (done % 8 === 0 || done === total)) setScan({ pct: Math.round(done * 100 / total) }); })
+      .then(() => { if (live()) setScan("done"); })
+      .catch(e => { if (live()) setScan(e instanceof NoWifiError ? "nowifi" : "done"); });
+  };
+  useEffect(() => {
+    if (!isNew || !server) return;
+    loadAccess(server).then(a => setKnown(Object.values(a).map(x => x.address.replace(/^https?:\/\//, "")))).catch(() => {});
+    runScan();
+    const runs = scanRun;
+    return () => { runs.current++; };                        // stop when the screen closes
+  }, [isNew, server]);
+  const startScan = () => {
+    setFound([]);
+    setScan({ pct: 0 });
+    runScan();
+  };
+  const pick = (f: Found) => {
+    setPicked(f.address);
+    setType(f.type);
+    setAddress(f.address);
+    setCosmos(!!f.cosmos);
+    // Centauri / Klipper report a real name; for Prusa and OctoPrint the model (chosen below) names the printer
+    setName(f.type === "elegoo_sdcp" || f.type === "moonraker" ? f.name : "");
+    setTest(null);
+    setError("");
+  };
 
   useEffect(() => {
     if (!api || !server || isNew) return;
@@ -124,10 +166,45 @@ export default function CloudPrinter() {
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
-      disabled={missingModel} />}>
+      disabled={missingModel || (isNew && !address.trim())} />}>
       <Stack.Screen options={{ title: isNew ? t("addPrinter") : name || t("printer") }} />
       {error ? <Banner kind="error" text={error} /> : null}
 
+      {isNew ? (
+        <Section title={t("lanFindTitle")} footer={found.length ? t("discoverHint") : undefined}>
+          {found.map((f, i) => {
+            const added = known.includes(f.address);
+            return (
+              <View key={f.address}>
+                {i ? <Divider /> : null}
+                <Row icon="print-outline" label={f.name}
+                  sub={[t.table.printerTypes[f.type], f.address, added ? t("discoverAdded") : null].filter(Boolean).join(" · ")}
+                  right={picked === f.address ? <Ionicons name="checkmark-circle" size={22} color={c.accent} /> : undefined}
+                  onPress={() => pick(f)} />
+              </View>
+            );
+          })}
+          {found.length ? <Divider /> : null}
+          {scan && typeof scan === "object" ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: space }}>
+              <ActivityIndicator color={c.accent} />
+              <Text style={{ color: c.sub, fontSize: 15 }}>{t("discoverRunning", { pct: scan.pct })}</Text>
+            </View>
+          ) : (
+            <>
+              {scan === "nowifi" || (scan === "done" && !found.length) ? (
+                <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, padding: space }}>
+                  {t(scan === "nowifi" ? "discoverNoWifi" : "discoverNone")}
+                </Text>
+              ) : null}
+              <Row icon="refresh" label={t("discoverAgain")} onPress={startScan} />
+            </>
+          )}
+          {!manual && !picked ? <><Divider /><Row icon="create-outline" label={t("discoverManual")} onPress={() => setManual(true)} /></> : null}
+        </Section>
+      ) : null}
+
+      {manual || picked ? (<>
       <Section title={t("printerType")} footer={t.table.printerTypeHints[type]}>
         <Row icon="print-outline" label={typeLabel(type)} value={t("change")} onPress={() => setSheet("type")} />
         {type === "moonraker" ? (
@@ -183,6 +260,8 @@ export default function CloudPrinter() {
         <TextInput value={name} onChangeText={setName} placeholder={autoName} placeholderTextColor={c.sub}
           accessibilityLabel={t("printerName")} style={input} maxLength={60} />
       </Section>
+
+      </>) : null}
 
       {!isNew ? (
         <Section>
