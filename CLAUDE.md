@@ -767,7 +767,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 ## First real bridge test (Thomas, 2026-10-02)
 - Tower (Unraid container 0.26.0, `PRINTSHARE_BRIDGE=true`) paired with Thomas' cloud account from the Android app
   (aab 32); the cloud log showed `bridge … connected (0.26.0, 2 printers)`. **Works, including the camera** (snapshots
-  through the bridge), tested far away from home over mobile data. Not yet recorded: a print started through the bridge, Bambu.
+  through the bridge), tested far away from home over mobile data. **A print started through the bridge works too** (Thomas,
+  2026-10-02). Still open: Bambu.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
