@@ -125,6 +125,19 @@ def ha_form(path: Path = HA_OPTIONS) -> dict[str, Any] | None:
             "server_url": opts.get("server_url", ""), "remote_url": opts.get("remote_url", "")}
 
 
+def apply_addon_options(env: "os._Environ | dict[str, str] | None" = None, ha_options: Path = HA_OPTIONS) -> None:
+    """Home Assistant add-on: options that work through the environment (bridge mode, docs/BRIDGE.md)."""
+    env = os.environ if env is None else env
+    if not ha_options.is_file():
+        return
+    opts = json.loads(ha_options.read_text(encoding="utf-8") or "{}")
+    if opts.get("cloud_bridge"):
+        env["PRINTSHARE_BRIDGE"] = "1"
+    if str(opts.get("lan_subnet") or "").strip():
+        env["PRINTSHARE_LAN_SUBNET"] = str(opts["lan_subnet"]).strip()
+    env.setdefault("PRINTSHARE_NAME", "Home Assistant")
+
+
 def ensure_config(config_path: str | Path, env: Mapping[str, str] | None = None,
                   ha_options: Path = HA_OPTIONS) -> dict[str, Any]:
     """Create or refresh config.yaml; returns {"token", "managed", "printers"} for the start banner."""
@@ -197,6 +210,8 @@ def banner(info: dict[str, Any], url: str, remote: str = "") -> str:
     lines.append(f"Printers: {names}" if names else
                  "No printer configured yet - add one in the container / add-on settings.")
     lines.append(f"Access token: {info['token'] or '(none)'}")
+    if os.environ.get("PRINTSHARE_BRIDGE", "").lower() in ("1", "true", "yes"):
+        lines.append("PocketPrint3D Cloud: bridge mode on - the pairing code for the app follows below")
     if url:
         from .cli import pairing_link
         lines.append(f"App: scan this code (Settings > Connect server) or enter {url} and the token")

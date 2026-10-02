@@ -42,6 +42,13 @@ const I18N = {
     profile_delete: "Löschen", profile_delete_q: "Profil „{name}“ löschen?",
     profile_based_on: "basiert auf {name}", profile_own_start: "eigener Startcode", profile_in_use: "verwendet von {printers}",
     profile_kinds: { machine: "Drucker", process: "Qualität", filament: "Material", unknown: "unbekannt" },
+    bridge_title: "Unterwegs drucken",
+    bridge_hint: "Verbindet diesen Server mit deinem kostenlosen PocketPrint3D-Cloud-Konto. Dann erreicht die App seine Drucker von überall – nur über eine ausgehende Verbindung, nichts muss im Router freigegeben werden.",
+    bridge_on: "Mit PocketPrint3D Cloud verbinden",
+    bridge_off_state: "Aus.", bridge_pairing: "Gib diesen Code in der App ein (Einstellungen → Erweitert → Unterwegs drucken). Er gilt noch {min} Min.",
+    bridge_connecting: "Verbinde mit {cloud} …", bridge_connected: "Verbunden mit dem Konto {account}.",
+    bridge_error: "Fehler: {error}", bridge_code_hint: "Nach Ablauf erscheint automatisch ein neuer Code.",
+    bridge_reset: "Mit anderem Konto koppeln", bridge_reset_q: "Kopplung mit {account} lösen und einen neuen Code anzeigen?",
     pair_title: "App verbinden",
     pair_hint: "In der PocketPrint3D-App unter Einstellungen → Server verbinden → QR-Code scannen. Der Code enthält das Zugangs-Token – nicht öffentlich zeigen.",
     pair_url: "Adresse zu Hause", pair_remote: "Adresse unterwegs (optional, z. B. Tailscale)",
@@ -132,6 +139,13 @@ const I18N = {
     profile_delete: "Delete", profile_delete_q: "Delete profile “{name}”?",
     profile_based_on: "based on {name}", profile_own_start: "own start code", profile_in_use: "used by {printers}",
     profile_kinds: { machine: "Printer", process: "Quality", filament: "Material", unknown: "unknown" },
+    bridge_title: "Print from anywhere",
+    bridge_hint: "Connects this server to your free PocketPrint3D Cloud account. The app then reaches its printers from anywhere – through an outgoing connection only, nothing has to be opened in your router.",
+    bridge_on: "Connect to PocketPrint3D Cloud",
+    bridge_off_state: "Off.", bridge_pairing: "Enter this code in the app (Settings → Advanced → Print from anywhere). It is valid for {min} more min.",
+    bridge_connecting: "Connecting to {cloud} …", bridge_connected: "Connected to the account {account}.",
+    bridge_error: "Error: {error}", bridge_code_hint: "A new code appears by itself when this one expires.",
+    bridge_reset: "Pair with another account", bridge_reset_q: "Unpair from {account} and show a new code?",
     pair_title: "Connect the app",
     pair_hint: "In the PocketPrint3D app: Settings → Connect server → Scan QR code. The code contains the access token – don't show it publicly.",
     pair_url: "Home address", pair_remote: "Away address (optional, e.g. Tailscale)",
@@ -251,7 +265,7 @@ function show(view) {
   });
   if (view === "jobs") loadJobs();
   if (view === "printer") pollPrinters();
-  if (view === "settings") { loadPairing(); loadProfiles(); loadPower(); }
+  if (view === "settings") { loadPairing(); loadProfiles(); loadPower(); loadBridge(); }
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -942,6 +956,39 @@ async function switchPower(p, on) {
   } catch (e) { alert(e.message); }
   setTimeout(pollPrinters, 1500);
 }
+
+// ---------- bridge mode (docs/BRIDGE.md) ----------
+const B = { timer: 0, state: null };
+async function loadBridge() {
+  clearTimeout(B.timer);
+  if (!store.get("ps_token") || current !== "settings") return;
+  let r;
+  try { r = await api("/api/bridge"); } catch { $("bridge-card").hidden = true; return; }   // cloud server: no bridge mode
+  B.state = r;
+  $("bridge-card").hidden = false;
+  $("bridge-on").checked = r.enabled;
+  const text = !r.enabled ? t("bridge_off_state")
+    : r.state === "pairing" && r.code ? t("bridge_pairing", { min: Math.max(1, Math.ceil((r.code_expires_in || 0) / 60)) })
+    : r.state === "connected" ? t("bridge_connected", { account: r.account || "?" })
+    : r.state === "error" ? t("bridge_error", { error: r.error || "?" })
+    : t("bridge_connecting", { cloud: r.cloud.replace(/^https?:\/\//, "") }) + (r.error ? " " + r.error : "");
+  $("bridge-state").textContent = text;
+  const showCode = r.enabled && r.state === "pairing" && !!r.code;
+  $("bridge-code").textContent = showCode ? r.code : "";
+  $("bridge-code").hidden = $("bridge-code-hint").hidden = !showCode;
+  $("bridge-reset").hidden = !(r.enabled && r.paired);
+  // keep it fresh while it changes (code appears, gets entered, connection comes up)
+  if (r.enabled) B.timer = setTimeout(loadBridge, r.state === "connected" ? 15000 : 3000);
+}
+$("bridge-on").onchange = async () => {
+  try { await post("/api/bridge", { enabled: $("bridge-on").checked }); } catch (e) { alert(e.message); }
+  setTimeout(loadBridge, 800);
+};
+$("bridge-reset").onclick = async () => {
+  if (!confirm(t("bridge_reset_q", { account: B.state?.account || "?" }))) return;
+  try { await post("/api/bridge/reset", {}); } catch (e) { alert(e.message); }
+  setTimeout(loadBridge, 1500);
+};
 
 // ---------- pairing code for the app (issue #10) ----------
 const P = { shown: false, timer: 0, edited: false };

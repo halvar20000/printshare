@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.0
+- Print from anywhere: new add-on option "Connect to PocketPrint3D Cloud" (bridge mode). The add-on's web page shows the
+  pairing code and the connection under Settings → Print from anywhere.
+- New slim image `ghcr.io/halvar20000/printshare-bridge` for people who only want the bridge (no slicing at home).
+
 ## 0.26.0
 - PocketPrint3D Cloud: printers of a connected bridge show up in the account by themselves, and status, pause/resume/
   cancel, temperatures, fans/light, camera pictures, power and sending a print go through the bridge - from anywhere.

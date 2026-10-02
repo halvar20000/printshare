@@ -1,0 +1,25 @@
+# PocketPrint3D bridge (docs/BRIDGE.md): the same server package without OrcaSlicer - slicing happens in
+# PocketPrint3D Cloud, this container only talks to the printers at home and keeps an outgoing connection to the cloud.
+# ~150 MB instead of >1 GB; amd64 + arm64 (also a Raspberry Pi Zero 2 W / Pi 3/4/5 with a 64-bit OS).
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PRINTSHARE_CONFIG=/config/config.yaml \
+    PRINTSHARE_BRIDGE=1
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY printshare ./printshare
+RUN pip install --no-cache-dir . && printshare --help >/dev/null
+
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="PocketPrint3D Bridge" \
+      org.opencontainers.image.description="Reach your 3D printers from anywhere with the PocketPrint3D app - outgoing connection only" \
+      org.opencontainers.image.source="https://github.com/halvar20000/printshare" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}"
+
+VOLUME ["/config", "/data"]
+EXPOSE 8484
+ENTRYPOINT ["printshare"]
+CMD ["bridge"]

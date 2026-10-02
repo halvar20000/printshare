@@ -22,5 +22,14 @@ configuration:
   thingiverse_token:
     name: Thingiverse app token
     description: Only needed for Thingiverse links (thingiverse.com/developers).
+  cloud_bridge:
+    name: Connect to PocketPrint3D Cloud
+    description: >-
+      Bridge mode: the PocketPrint3D app reaches these printers from anywhere through your free PocketPrint3D Cloud
+      account (outgoing connection only). The log and the web page show a pairing code - enter it in the app
+      (Settings > Advanced > Print from anywhere).
+  lan_subnet:
+    name: Home network for the printer search
+    description: Optional, bridge mode, e.g. 192.168.1.0/24 - lets the app search printers through the bridge.
 network:
   8484/tcp: Web app and API for the PocketPrint3D app

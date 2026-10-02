@@ -756,6 +756,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   checked). New deps: expo-crypto (native → new build), @noble/*. Default bridge name: PRINTSHARE_NAME or host name, but
   "PocketPrint3D Server" for Docker container ids. Web-build flow checked: pair → printer card → pause → add printer via
   bridge → slice → print (1.5 MB G-code arrived at the simulated Voron with print=true).
+- **Step 6 (packaging) done, 0.27.0:** `printshare bridge` (= serve with PRINTSHARE_BRIDGE=1); `Dockerfile.bridge`
+  (python:3.12-slim, no Orca, CMD bridge) built by the `bridge`/`bridge-publish` jobs of docker.yml (native amd64 + arm64,
+  smoke test: `/api/bridge` enabled) → `ghcr.io/halvar20000/printshare-bridge` (**set the GHCR package to public once**,
+  like the main image); `config._machine_defaults` skips when the Orca profiles dir is missing (bridge image);
+  `bootstrap.apply_addon_options` (HA `cloud_bridge`, `lan_subnet`, name "Home Assistant"); start banner says bridge mode
+  is on; web page card "Unterwegs drucken" (switch, big code, state, "Mit anderem Konto koppeln"); README section 6;
+  `deploy/bridge/docker-compose.yml` (host network for the printer search).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

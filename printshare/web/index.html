@@ -192,6 +192,19 @@
       <button type="button" id="power-save" class="primary" data-t="save">Speichern</button>
       <button type="button" id="power-remove" class="danger" data-t="power_remove" hidden>Entfernen</button>
     </div>
+    <!-- bridge mode: the app reaches these printers from anywhere through PocketPrint3D Cloud (docs/BRIDGE.md) -->
+    <div class="card" id="bridge-card" hidden>
+      <h2 data-t="bridge_title">Unterwegs drucken</h2>
+      <p class="hint" data-t="bridge_hint"></p>
+      <label class="check">
+        <input type="checkbox" id="bridge-on">
+        <span data-t="bridge_on">Mit PocketPrint3D Cloud verbinden</span>
+      </label>
+      <p id="bridge-state" class="hint"></p>
+      <p id="bridge-code" class="code" hidden></p>
+      <p id="bridge-code-hint" class="hint" data-t="bridge_code_hint" hidden></p>
+      <button type="button" id="bridge-reset" class="ghost" data-t="bridge_reset" hidden>Mit anderem Konto koppeln</button>
+    </div>
     <!-- pairing code for the native app (issue #10) -->
     <div class="card" id="pair-card" hidden>
       <h2 data-t="pair_title">App verbinden</h2>

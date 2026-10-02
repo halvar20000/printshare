@@ -213,6 +213,24 @@ The app then shows *Switch on* while the printer is off, and *Switch off* in the
 switching off asks first and is refused while a print is running. The token stays on the server
 (`printers.d/<printer>.yaml`, readable only by the owner) and is never sent back to the app or browser.
 
+## 6. Print from anywhere – bridge mode (optional)
+
+With a free **PocketPrint3D Cloud** account the app reaches the printers of this server from anywhere: the server
+keeps one *outgoing* connection to the cloud (no port forwarding, no VPN, the printers are never exposed). Details:
+[`docs/BRIDGE.md`](docs/BRIDGE.md).
+
+- **Unraid:** set *Connect to PocketPrint3D Cloud* to `true` (or add the variable `PRINTSHARE_BRIDGE=true`).
+- **Home Assistant:** add-on option *Connect to PocketPrint3D Cloud*.
+- **Docker:** `-e PRINTSHARE_BRIDGE=1`, or the web page → *Settings → Print from anywhere*.
+- **Only a bridge, no slicing at home** (small image, also for a Raspberry Pi with a 64-bit OS):
+  [`deploy/bridge/docker-compose.yml`](deploy/bridge/docker-compose.yml) with `ghcr.io/halvar20000/printshare-bridge`.
+
+The log and the web page then show a pairing code. In the app (cloud account): *Settings → Erweitert → Unterwegs
+drucken*, enter the code. The server's printers appear in the account; status, camera pictures, controls and printing
+work from everywhere. More printers can be added from the app through the bridge – their addresses and passwords are
+encrypted for this server only. In Docker's bridge network the printer search needs your home network as
+`PRINTSHARE_LAN_SUBNET` (e.g. `192.168.1.0/24`), or use host networking.
+
 ## Notes and limits (P0)
 
 * **Printables** has no official API. PocketPrint3D uses the website's own endpoint (search, model details, download), only on the user's behalf; files are never stored for others. Paid and premium models are not shown.

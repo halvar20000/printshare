@@ -143,3 +143,5 @@ button:active:not(:disabled) { transform: scale(.99); }
 .profiles .name { font-weight: 600; word-break: break-word; }
 .profiles .meta { font-size: 13px; color: var(--muted); }
 .profiles button { width: auto; margin: 0; min-height: 40px; }
+.code { font-size: 32px; font-weight: 700; letter-spacing: 0.12em; text-align: center; margin: 14px 0 0;
+  font-variant-numeric: tabular-nums; color: var(--fg); }

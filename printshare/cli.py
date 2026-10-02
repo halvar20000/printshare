@@ -52,12 +52,15 @@ def main(argv: list[str] | None = None) -> int:
                     help="optional address away from home, e.g. http://100.64.1.2:8484 (Tailscale)")
 
     sub.add_parser("serve", help="run the web UI / API")
+    sub.add_parser("bridge", help="run as a bridge for PocketPrint3D Cloud (serve with bridge mode on, docs/BRIDGE.md)")
     sub.add_parser("printers", help="list configured printers")
 
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    if a.cmd == "serve":
+    if a.cmd == "bridge":
+        os.environ["PRINTSHARE_BRIDGE"] = "1"
+    if a.cmd in ("serve", "bridge"):
         # Unraid template / Home Assistant add-on: create or refresh config.yaml from the form
         from . import bootstrap
         cfg_path = a.config or os.environ.get("PRINTSHARE_CONFIG", "/config/config.yaml")
@@ -67,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"Error in the printer settings: {e}", file=sys.stderr)
             return 1
+        bootstrap.apply_addon_options()          # HA add-on: bridge switch, LAN subnet, name -> environment
         print(bootstrap.banner(info, bootstrap.server_url(), bootstrap.remote_url()), flush=True)
     settings = load_settings(a.config)
 
@@ -96,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{pc.id:<16} {pc.type:<12} {pc.host or pc.url}  [{pc.slicing.machine}]")
         elif a.cmd == "pair":
             print_pairing(a.url, settings.api_token, a.remote_url)
-        elif a.cmd == "serve":
+        elif a.cmd in ("serve", "bridge"):
             import uvicorn
             uvicorn.run("printshare.api:app", host="0.0.0.0", port=8484)
     except (FetchError, KeyError, ValueError, RuntimeError) as e:

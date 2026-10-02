@@ -1,0 +1,18 @@
+# PocketPrint3D bridge (docs/BRIDGE.md): reach the printers at home from anywhere with the PocketPrint3D app.
+# Slim image without OrcaSlicer (the cloud slices). After `docker compose up -d`, the log shows a pairing code:
+#   docker compose logs -f bridge
+# Enter it in the app: Settings → Erweitert → Unterwegs drucken → Brücke verbinden.
+# Then add printers from the app ("Drucker über die Brücke hinzufügen") or in /config/config.yaml.
+services:
+  bridge:
+    image: ghcr.io/halvar20000/printshare-bridge:latest
+    container_name: pocketprint3d-bridge
+    restart: unless-stopped
+    # host networking: the printer search sees the home network (Centauri broadcasts need it)
+    network_mode: host
+    environment:
+      - PRINTSHARE_NAME=Zuhause            # shown in the app
+      # - PRINTSHARE_API_TOKEN=…           # fixed token for the local web page (else generated and shown in the log)
+    volumes:
+      - ./config:/config                   # config.yaml, bridge.yaml (pairing + key, keep it private), printers-added.yaml
+      - ./data:/data

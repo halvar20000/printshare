@@ -1,11 +1,11 @@
 # PocketPrint3D bridge – concept (2026-10-02)
 
-Status: **steps 2–5 built** – cloud side in 0.24.0 (`printshare/cloud/bridges.py`, `cloud/hub.py`), bridge mode of the
-server in 0.25.0 (`printshare/bridge/`: `client.py`, `dispatch.py`, `registry.py`, `discovery.py`, `seal.py`), cloud
-forwarding in 0.26.0, Android app (Settings → Erweitert → "Unterwegs drucken": `app/bridges.tsx`, bridge mode of
-`cloud-printer/[id].tsx`, `lib/seal.ts`, `printerAccess.viaServer`). Tests: `tests/test_bridges.py`,
-`tests/test_bridge_client.py`; app checked in the web build against a real cloud + home bridge process. Next: step 6
-(packaging), step 1 (Bambu, after Sunday's probe).
+Status: **steps 2–6 built** – cloud side in 0.24.0 (`printshare/cloud/bridges.py`, `cloud/hub.py`), bridge mode of the
+server in 0.25.0 (`printshare/bridge/`), cloud forwarding in 0.26.0, Android app (Settings → Erweitert → "Unterwegs
+drucken"), packaging in 0.27.0: `printshare bridge`, `Dockerfile.bridge` → `ghcr.io/halvar20000/printshare-bridge`
+(amd64 + arm64, CI smoke test), HA add-on options `cloud_bridge` / `lan_subnet`, Unraid fields, web page card
+"Unterwegs drucken" (code + state), `deploy/bridge/docker-compose.yml`. Open: step 1 (Bambu, after Sunday's probe),
+step 7 (Pi image), a real phone + real printer test.
 
 ## 1. Goal
 

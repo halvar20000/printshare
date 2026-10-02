@@ -1,5 +1,5 @@
 name: PocketPrint3D
-version: "0.26.0"
+version: "0.27.0"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
@@ -25,6 +25,8 @@ options:
   remote_url: ""
   api_token: ""
   thingiverse_token: ""
+  cloud_bridge: false
+  lan_subnet: ""
 schema:
   printers:
     - name: str
@@ -41,3 +43,5 @@ schema:
   remote_url: str?
   api_token: password?
   thingiverse_token: password?
+  cloud_bridge: bool?
+  lan_subnet: str?

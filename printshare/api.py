@@ -108,7 +108,7 @@ async def _lifespan(_app):
     await BRIDGE_CLIENT.stop()
 
 
-app = FastAPI(title="PocketPrint3D", version="0.26.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.27.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")

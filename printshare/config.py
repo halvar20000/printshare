@@ -242,6 +242,8 @@ def _machine_defaults(sl: dict[str, Any], profiles_dir: str, printer_id: str) ->
     missing = [k for k in ("process", "filament") if not sl.get(k)]
     if not missing:
         return
+    if not Path(profiles_dir).is_dir():          # bridge image without OrcaSlicer: the cloud slices
+        return
     from .profiles import ProfileError, ProfileLibrary
     try:
         preset = ProfileLibrary.cached(profiles_dir).resolve("machine", machine)

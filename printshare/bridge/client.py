@@ -179,7 +179,8 @@ class BridgeClient:
             except asyncio.CancelledError:
                 raise
             except Exception as e:  # noqa: BLE001 - never let the loop die
-                self.state, self.last_error = "error", str(e)[:300]
+                msg = f"PocketPrint3D Cloud not reachable ({self.base_url()})" if isinstance(e, httpx.HTTPError) else str(e)
+                self.state, self.last_error = "error", msg[:300]
                 log.warning("bridge: %s", e)
                 await self._sleep(backoff + random.random())
                 backoff = min(backoff * 2, 60)

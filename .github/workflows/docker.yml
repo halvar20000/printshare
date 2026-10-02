@@ -1,6 +1,7 @@
 # Tests, then builds the PocketPrint3D image for amd64 + arm64 on native runners and publishes
 # ghcr.io/halvar20000/printshare with the tags :latest and :<version from pyproject.toml>.
 # The Unraid template and the Home Assistant add-on install this image.
+# Also the slim bridge image ghcr.io/halvar20000/printshare-bridge (Dockerfile.bridge, no OrcaSlicer, docs/BRIDGE.md).
 name: Docker image
 
 on:
@@ -15,6 +16,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/halvar20000/printshare
+  BRIDGE_IMAGE: ghcr.io/halvar20000/printshare-bridge
 
 jobs:
   test:
@@ -140,3 +142,93 @@ jobs:
             -t "$IMAGE:latest" -t "$IMAGE:${{ steps.v.outputs.version }}" \
             $(printf "$IMAGE@sha256:%s " *)
           docker buildx imagetools inspect "$IMAGE:latest"
+
+  bridge:
+    # the slim bridge image: built natively per architecture, checked, then tagged together
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (local check)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.bridge
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ steps.v.outputs.version }}
+          load: true
+          tags: bridge-check
+          cache-from: type=gha,scope=bridge-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=bridge-${{ matrix.arch }}
+      - name: Smoke test - starts, answers, shows its bridge state
+        run: |
+          docker run -d --name b -p 8484:8484 -e PRINTSHARE_API_TOKEN=t -e PRINTSHARE_BRIDGE_URL=http://127.0.0.1:9 bridge-check
+          for i in $(seq 30); do curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge && break; sleep 1; done
+          curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge | grep -q '"enabled":true'
+          docker logs b | tail -20
+          docker rm -f b
+      - name: Push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.bridge
+          platforms: ${{ matrix.platform }}
+          build-args: VERSION=${{ steps.v.outputs.version }}
+          outputs: type=image,name=${{ env.BRIDGE_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=bridge-${{ matrix.arch }}
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-digest-${{ matrix.arch }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  bridge-publish:
+    needs: bridge
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: bridge-digest-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create multi-arch tags
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t "$BRIDGE_IMAGE:latest" -t "$BRIDGE_IMAGE:${{ steps.v.outputs.version }}" \
+            $(printf "$BRIDGE_IMAGE@sha256:%s " *)
+          docker buildx imagetools inspect "$BRIDGE_IMAGE:latest"
