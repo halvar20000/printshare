@@ -234,6 +234,19 @@ const de = {
   bookingAsk: "„{file}“ auf {printer}: Druck abgebrochen oder Ende verpasst. Wie viel abbuchen?",
   bookingWaits: "wartet auf das Druckende", bookAll: "Alles ({g} g)", bookPart: "{g} g ({pct} %)", bookNone: "Nichts",
   booked: "Spoolman: {g} g von {spool} abgebucht",
+  // cloud spools (server 0.17.0)
+  spoolsWhere: "Wo sind deine Spulen?", spoolsInCloud: "In der Cloud", spoolsOwnServer: "Eigener Spoolman",
+  spoolsCloudHint: "Ohne Server zu Hause: deine Spulen liegen in deinem PocketPrint3D-Konto. Später kannst du sie zu einem eigenen Spoolman mitnehmen.",
+  spoolsCloudOn: "Spulen in der Cloud", spoolsManage: "Spulen verwalten", spoolsCount: "{n} Spulen",
+  spoolsUseCloud: "Spulen in der Cloud verwenden",
+  spoolAdd: "Spule hinzufügen", spoolNew: "Neue Spule", spoolEdit: "Spule #{id}", spoolsEmpty: "Noch keine Spulen",
+  spoolsEmptySub: "Lege deine Spulen an – dann warnt die App, wenn eine nicht mehr reicht, und bucht den Verbrauch ab.",
+  spoolsArchived: "Archivierte zeigen",
+  spoolVendor: "Hersteller", spoolName: "Bezeichnung", spoolMaterial: "Material", spoolColor: "Farbe",
+  spoolWeight: "Volle Spule (g)", spoolRemaining: "Noch drauf (g)", spoolOther: "Andere", spoolLocation: "Lagerort",
+  spoolComment: "Notiz", spoolRemainingHint: "Volle Spule = Filament ohne Spulenkörper (meist 1000 g). Angebrochene Spule: wiegen und das Leergewicht abziehen.",
+  spoolCopy: "Als neue Spule kopieren", spoolArchive: "Archivieren (leer)", spoolUnarchive: "Wieder aktiv",
+  spoolDelete: "Spule löschen", spoolDeleteQ: "Spule #{id} löschen?",
 };
 
 type Strings = typeof de;
@@ -449,6 +462,18 @@ const en: Strings = {
   bookingAsk: "“{file}” on {printer}: print cancelled or its end was missed. How much should be booked?",
   bookingWaits: "waiting for the print to end", bookAll: "All ({g} g)", bookPart: "{g} g ({pct} %)", bookNone: "Nothing",
   booked: "Spoolman: {g} g booked on {spool}",
+  spoolsWhere: "Where are your spools?", spoolsInCloud: "In the cloud", spoolsOwnServer: "Own Spoolman",
+  spoolsCloudHint: "No server at home: your spools are kept in your PocketPrint3D account. You can take them to your own Spoolman later.",
+  spoolsCloudOn: "Spools in the cloud", spoolsManage: "Manage spools", spoolsCount: "{n} spools",
+  spoolsUseCloud: "Use spools in the cloud",
+  spoolAdd: "Add spool", spoolNew: "New spool", spoolEdit: "Spool #{id}", spoolsEmpty: "No spools yet",
+  spoolsEmptySub: "Add your spools – the app then warns when one won't be enough and books the used filament.",
+  spoolsArchived: "Show archived",
+  spoolVendor: "Brand", spoolName: "Name", spoolMaterial: "Material", spoolColor: "Colour",
+  spoolWeight: "Full spool (g)", spoolRemaining: "Left on it (g)", spoolOther: "Other", spoolLocation: "Location",
+  spoolComment: "Note", spoolRemainingHint: "Full spool = filament without the spool itself (usually 1000 g). Opened spool: weigh it and subtract the empty spool's weight.",
+  spoolCopy: "Copy as a new spool", spoolArchive: "Archive (empty)", spoolUnarchive: "Active again",
+  spoolDelete: "Delete spool", spoolDeleteQ: "Delete spool #{id}?",
 };
 
 export type Lang = "de" | "en";

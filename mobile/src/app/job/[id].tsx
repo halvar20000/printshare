@@ -14,7 +14,7 @@ import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/
 import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
-import { addBooking, loadLastSpools, loadSpoolmanUrl, saveLastSpools, spoolLabel, Spoolman, type Spool } from "@/lib/spoolman";
+import { addBooking, loadLastSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
 import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -184,10 +184,10 @@ export default function JobScreen() {
     if (server && printerId) loadLastSpools(server, printerId).then(setLastSpools);
   }, [server, printerId]);
   useEffect(() => {
-    if (!smUrl || !reviewing) return;
-    new Spoolman(smUrl).spools().then(list => { setSpools(list); setSmError(""); })
+    if (!smUrl || !reviewing || !server) return;
+    openSpoolman(server, smUrl).spools().then(list => { setSpools(list); setSmError(""); })
       .catch(e => setSmError((e as Error).message));
-  }, [smUrl, reviewing]);
+  }, [smUrl, reviewing, server]);
   const tracker = pstatus && pstatus !== "offline" ? pstatus.spoolman ?? null : null;
   const printerBooks = !!tracker?.connected;               // Moonraker books the filament itself
   const afcSpools = printerBooks && printerLanes.length > 0; // ... on the spools AFC assigned to the slots

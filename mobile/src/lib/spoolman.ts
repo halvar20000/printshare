@@ -1,13 +1,23 @@
 // Spoolman (spec MA-07): choose the spool per colour, check what's left, book the used filament after the print.
 // The app talks to Spoolman itself on the home Wi-Fi (like to the printers in cloud mode); the address stays on
 // this phone. Printers whose Moonraker has its own [spoolman] link book the filament themselves (status "spoolman").
-// API: https://donkie.github.io/Spoolman/ (GET /api/v1/spool, PUT /api/v1/spool/{id}/use {use_weight})
+// API: https://donkie.github.io/Spoolman/ (GET /api/v1/spool, PUT /api/v1/spool/{id}/use {use_weight}).
+// Cloud accounts without a server at home can keep their spools in the PocketPrint3D cloud instead (server 0.17.0,
+// same API under <cloud>/spoolman with the session token; creating/editing spools is PocketPrint3D's own shape).
 import type { PrinterStatus, Server } from "./api";
 import { getJSON, setJSON } from "./storage";
 
 export type Spool = {
   id: number; name: string; vendor: string | null; material: string | null; color: string | null;
   remaining_g: number | null; location: string | null;
+  /** for editing cloud spools */
+  filament_g: number | null; initial_g: number | null; comment: string | null; archived: boolean;
+};
+/** Create / change a spool in the PocketPrint3D cloud (not a real Spoolman: there a spool needs a filament id). */
+export type SpoolInput = {
+  filament?: { name?: string | null; vendor?: string | null; material?: string | null; color_hex?: string | null;
+               weight?: number | null };
+  remaining_weight?: number | null; location?: string | null; comment?: string | null; archived?: boolean;
 };
 
 export class SpoolmanError extends Error {}
@@ -18,7 +28,7 @@ export class Spoolman {
   private base: string | null = null;
   private candidates: string[];
 
-  constructor(address: string) {
+  constructor(address: string, private headers: Record<string, string> = {}) {
     const a = address.trim().replace(/\/+$/, "").replace(/\/api\/v1$/, "");
     const url = /^https?:\/\//.test(a) ? a : `http://${a}`;
     // Spoolman listens on 7912 unless a port or a proxy path is given
@@ -31,7 +41,8 @@ export class Spoolman {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       return await fetch(`${await this.resolve()}/api/v1${path}`, { method, signal: ctrl.signal,
-        headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+        headers: { ...this.headers, ...(body ? { "Content-Type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined });
     } catch (e) {
       if (e instanceof SpoolmanError) throw e;
       throw new SpoolmanError("Spoolman not reachable");
@@ -46,7 +57,7 @@ export class Spoolman {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
       try {
-        const r = await fetch(`${base}/api/v1/info`, { signal: ctrl.signal });
+        const r = await fetch(`${base}/api/v1/info`, { signal: ctrl.signal, headers: this.headers });
         if (r.ok && "version" in (await r.json())) return (this.base = base);
       } catch { /* try the next one */ } finally {
         clearTimeout(timer);
@@ -62,10 +73,10 @@ export class Spoolman {
   }
 
   /** Spools that are not archived, recently used first; empty ones (0 g left, not archived yet) at the end. */
-  async spools(): Promise<Spool[]> {
-    const r = await this.call("GET", "/spool?allow_archived=false&sort=last_used:desc,id:asc");
+  async spools(archived = false): Promise<Spool[]> {
+    const r = await this.call("GET", `/spool?allow_archived=${archived}&sort=last_used:desc,id:asc`);
     if (!r.ok) throw new SpoolmanError(`Spoolman answered HTTP ${r.status}`);
-    const list = ((await r.json()) as Raw[]).filter(s => !s.archived).map(toSpool);
+    const list = ((await r.json()) as Raw[]).filter(s => archived || !s.archived).map(toSpool);
     const empty = (s: Spool) => s.remaining_g != null && s.remaining_g < 1;
     return [...list.filter(s => !empty(s)), ...list.filter(empty)];
   }
@@ -77,6 +88,20 @@ export class Spoolman {
     if (!r.ok) throw new SpoolmanError(`Spoolman answered HTTP ${r.status}`);
     return toSpool(await r.json());
   }
+
+  // ---------- PocketPrint3D cloud spools only ----------
+  private async send(method: string, path: string, body?: unknown): Promise<Raw> {
+    const r = await this.call(method, path, body);
+    if (!r.ok) {
+      let detail = "";
+      try { detail = (await r.json()).detail; } catch { /* plain status */ }
+      throw new SpoolmanError(typeof detail === "string" && detail ? detail : `HTTP ${r.status}`);
+    }
+    return r.json();
+  }
+  create = async (spool: SpoolInput) => toSpool(await this.send("POST", "/spool", spool));
+  update = async (id: number, spool: SpoolInput) => toSpool(await this.send("PATCH", `/spool/${id}`, spool));
+  remove = async (id: number) => { await this.send("DELETE", `/spool/${id}`); };
 }
 
 function toSpool(s: Raw): Spool {
@@ -86,6 +111,9 @@ function toSpool(s: Raw): Spool {
     id: Number(s.id), name: f.name ?? "", vendor: f.vendor?.name ?? null, material: f.material ?? null,
     color: /^[0-9A-Fa-f]{6}/.test(hex) ? `#${hex.slice(0, 6).toUpperCase()}` : null,
     remaining_g: typeof s.remaining_weight === "number" ? s.remaining_weight : null, location: s.location ?? null,
+    filament_g: typeof f.weight === "number" ? f.weight : null,
+    initial_g: typeof s.initial_weight === "number" ? s.initial_weight : null,
+    comment: s.comment ?? null, archived: !!s.archived,
   };
 }
 
@@ -96,6 +124,12 @@ export const spoolLabel = (s: Spool) => [`#${s.id}`, s.vendor, s.name || s.mater
 const sk = (server: Server) => (server.email ?? server.url).replace(/[^\w.-]/g, "_");
 
 export const loadSpoolmanUrl = async (server: Server) => (await getJSON<{ url: string }>(`ps_spoolman_${sk(server)}`))?.url ?? null;
+/** Stored instead of an address: the spools are kept in the PocketPrint3D cloud account. */
+export const CLOUD_SPOOLS = "cloud";
+/** The Spoolman behind a stored setting: the user's own server, or the cloud account's spools. */
+export const openSpoolman = (server: Server, url: string) => url === CLOUD_SPOOLS
+  ? new Spoolman(`${server.url.replace(/\/+$/, "")}/spoolman`, { Authorization: `Bearer ${server.token}` })
+  : new Spoolman(url);
 export const saveSpoolmanUrl = (server: Server, url: string | null) =>
   setJSON(`ps_spoolman_${sk(server)}`, url?.trim() ? { url: url.trim() } : null);
 
@@ -198,7 +232,7 @@ export async function settleBookings(server: Server, statuses: Record<string, Pr
 
 /** Book a share of a booking (1 = all); spools already booked are removed from it, so a retry never books twice. */
 async function bookUses(server: Server, url: string, b: Booking, part: number, list: Booking[]): Promise<void> {
-  const sm = new Spoolman(url);
+  const sm = openSpoolman(server, url);
   while (b.uses.length) {
     const u = b.uses[0];
     const grams = u.grams * part;

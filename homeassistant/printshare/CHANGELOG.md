@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.0
+- Cloud mode only: spools per account in Spoolman's API shapes (`/spoolman/api/v1/…`), for app users without a Spoolman
+  at home. The self-hosted add-on is unchanged (use your own Spoolman there).
+
 ## 0.16.0
 - Spoolman (for the apps): the printer status tells whether Klipper's Moonraker books the used filament in Spoolman
   itself, and AFC lanes report their spool; "send" can set Moonraker's active spool. The Android app chooses the

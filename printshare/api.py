@@ -8,6 +8,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET /api/auth/me · POST /api/auth/logout · DELETE /api/auth/account?confirm=true · GET /api/admin/stats (operator)
   POST /api/printers · PATCH|DELETE /api/printers/{id}   the account's printers (no addresses)
   GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
+  /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   GET  /api/pairing?url=&remote=   pairing link + QR code (SVG) for the app, shown in the web UI (#10)
   GET  /api/printers
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
@@ -62,6 +63,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .cloud import accounts
+from .cloud.spools import Spools
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -82,7 +84,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
 settings = load_settings()
-app = FastAPI(title="PocketPrint3D", version="0.16.0")
+app = FastAPI(title="PocketPrint3D", version="0.17.0")
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
@@ -109,14 +111,16 @@ class Account:
 
 ACCOUNTS: accounts.Accounts | None = None
 MAILER: Mailer | None = None
+SPOOLS: Spools | None = None
 
 
 def _cloud_setup() -> None:
-    global ACCOUNTS, MAILER
+    global ACCOUNTS, MAILER, SPOOLS
     if not settings.cloud:
-        ACCOUNTS = MAILER = None
+        ACCOUNTS = MAILER = SPOOLS = None
         return
     ACCOUNTS = accounts.Accounts(settings.cloud_db)
+    SPOOLS = Spools(ACCOUNTS)
     MAILER = BrevoMailer(settings.brevo_api_key) if settings.mail == "brevo" else LogMailer()
 
 
@@ -296,7 +300,7 @@ def auth_delete_account(confirm: bool = False, acct: Account = Depends(auth)) ->
 def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
     if acct.id != "admin":
         raise HTTPException(403, "operator only")
-    return {**ACCOUNTS.stats(), "jobs_in_memory": len(JOBS),
+    return {**ACCOUNTS.stats(), "spools": SPOOLS.count(), "jobs_in_memory": len(JOBS),
             "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
 
 
@@ -389,6 +393,83 @@ def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict[str, 
         raise HTTPException(404, f"Unknown printer {printer_id!r}")
     user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})     # its profile/power settings too
     return {"deleted": printer_id}
+
+
+# ---------- cloud: spools of the account, in Spoolman's API shapes (docs/API.md "Spoolman") ----------
+class SpoolFilament(BaseModel):
+    name: str | None = Field(None, max_length=64)
+    vendor: str | None = Field(None, max_length=64)
+    material: str | None = Field(None, max_length=64)
+    color_hex: str | None = Field(None, pattern=r"^#?[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+    density: float | None = Field(None, gt=0.3, le=5)        # g/cm³
+    diameter: float | None = Field(None, gt=0.5, le=5)       # mm
+    weight: float | None = Field(None, gt=0, le=20000)       # g of filament on a new spool
+
+
+class SpoolChange(BaseModel):
+    filament: SpoolFilament | None = None
+    initial_weight: float | None = Field(None, gt=0, le=20000)
+    remaining_weight: float | None = Field(None, ge=0, le=20000)
+    spool_weight: float | None = Field(None, ge=0, le=5000)
+    location: str | None = Field(None, max_length=64)
+    comment: str | None = Field(None, max_length=1024)
+    archived: bool | None = None
+
+
+class SpoolUse(BaseModel):
+    use_weight: float | None = Field(None, ge=-20000, le=20000)
+    use_length: float | None = Field(None, ge=-1e7, le=1e7)
+
+
+def _spool_user(acct: Account = Depends(auth)) -> str:
+    if not acct.cloud or SPOOLS is None:
+        raise HTTPException(404, "spools are kept in the cloud only - at home use your own Spoolman")
+    return acct.id
+
+
+def _spools_call(fn, *args, **kw):
+    try:
+        return fn(*args, **kw)
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+
+
+@app.get("/spoolman/api/v1/info")
+def spools_info(user: str = Depends(_spool_user)) -> dict[str, Any]:
+    return {"version": app.version, "name": "PocketPrint3D", "debug_mode": False, "automatic_backups": True,
+            "data_dir": "", "logs_dir": "", "backups_dir": "", "db_type": "sqlite", "external_db_name": ""}
+
+
+@app.get("/spoolman/api/v1/spool")
+def spools_list(allow_archived: bool = False, user: str = Depends(_spool_user)) -> list[dict[str, Any]]:
+    """Like Spoolman's GET /spool: recently used first (other filter/sort parameters are accepted and ignored)."""
+    return SPOOLS.list(user, allow_archived)
+
+
+@app.post("/spoolman/api/v1/spool")
+def spools_create(req: SpoolChange, user: str = Depends(_spool_user)) -> dict[str, Any]:
+    return _spools_call(SPOOLS.create, user, req.model_dump(exclude_unset=True))
+
+
+@app.get("/spoolman/api/v1/spool/{num}")
+def spools_get(num: int, user: str = Depends(_spool_user)) -> dict[str, Any]:
+    return _spools_call(SPOOLS.get, user, num)
+
+
+@app.patch("/spoolman/api/v1/spool/{num}")
+def spools_update(num: int, req: SpoolChange, user: str = Depends(_spool_user)) -> dict[str, Any]:
+    return _spools_call(SPOOLS.update, user, num, req.model_dump(exclude_unset=True))
+
+
+@app.delete("/spoolman/api/v1/spool/{num}")
+def spools_delete(num: int, user: str = Depends(_spool_user)) -> dict[str, Any]:
+    _spools_call(SPOOLS.delete, user, num)
+    return {"deleted": num}
+
+
+@app.put("/spoolman/api/v1/spool/{num}/use")
+def spools_use(num: int, req: SpoolUse, user: str = Depends(_spool_user)) -> dict[str, Any]:
+    return _spools_call(SPOOLS.use, user, num, req.use_weight, req.use_length)
 
 
 @app.get("/api/pairing")

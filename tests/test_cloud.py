@@ -225,6 +225,8 @@ def test_local_server_has_no_accounts(api_local):
         assert c.post("/api/auth/code", json={"email": "a@example.com"}).status_code == 404
         assert c.post("/api/printers", headers={"Authorization": "Bearer test-token"},
                       json={"name": "x", "type": "moonraker"}).status_code == 409
+        r = c.get("/spoolman/api/v1/spool", headers={"Authorization": "Bearer test-token"})
+        assert r.status_code == 404 and "own Spoolman" in r.json()["detail"]
 
 
 @pytest.fixture
@@ -273,3 +275,60 @@ def test_machine_models_and_prusa_printer(cloud):
         assert r.status_code == 200 and r.json()["type"] == "octoprint"
         d = c.get("/api/printers/mk4s/options", headers=a).json()["defaults"]
         assert d["filament"] == "Elegoo PLA @ECC" and d["process"] == "0.20mm Standard @Elegoo CC 0.4 nozzle"
+
+
+def test_spools_in_the_cloud(cloud):
+    """A small Spoolman per account (0.17.0): Spoolman's shapes, numbered per account, kept apart, booked by /use."""
+    api = cloud
+    with TestClient(api.app) as c:
+        a, b = login(api, c, "spool-a@example.com"), login(api, c, "spool-b@example.com")
+        assert c.get("/spoolman/api/v1/spool").status_code == 401
+        assert c.get("/spoolman/api/v1/info", headers=a).json()["name"] == "PocketPrint3D"
+        assert c.get("/spoolman/api/v1/spool", headers=a).json() == []
+        r = c.post("/spoolman/api/v1/spool", headers=a, json={
+            "filament": {"vendor": "Elegoo", "name": "Rapid PLA+ Black", "material": "PLA", "color_hex": "#000000",
+                         "weight": 1000}, "location": "Shelf"})
+        assert r.status_code == 200, r.text
+        s1 = r.json()
+        assert s1["id"] == 1 and s1["remaining_weight"] == 1000 and s1["filament"]["vendor"]["name"] == "Elegoo"
+        assert s1["filament"]["color_hex"] == "000000" and s1["archived"] is False
+        # opened spool: remaining given, no initial weight -> initial = remaining
+        s2 = c.post("/spoolman/api/v1/spool", headers=a, json={"filament": {"material": "PETG"}, "remaining_weight": 300}).json()
+        assert s2["id"] == 2 and s2["remaining_weight"] == 300 and s2["initial_weight"] == 300
+        # the other account has its own numbering and doesn't see these
+        assert c.post("/spoolman/api/v1/spool", headers=b, json={"filament": {"material": "ABS"}}).json()["id"] == 1
+        assert [s["id"] for s in c.get("/spoolman/api/v1/spool", headers=b).json()] == [1]
+        assert c.get("/spoolman/api/v1/spool/2", headers=b).status_code == 404
+        # booking like the app does with a real Spoolman
+        u = c.put("/spoolman/api/v1/spool/1/use", headers=a, json={"use_weight": 11.4}).json()
+        assert u["remaining_weight"] == 988.6 and u["used_weight"] == 11.4 and u["last_used"]
+        assert u["used_length"] == pytest.approx(11.4 / 1.24 * 1000 / (3.14159265 * 0.875 ** 2), rel=1e-3)
+        u = c.put("/spoolman/api/v1/spool/1/use", headers=a, json={"use_length": 1000}).json()
+        assert u["used_weight"] == pytest.approx(11.4 + 2.98, abs=0.01)
+        assert c.put("/spoolman/api/v1/spool/1/use", headers=a, json={}).status_code == 400
+        assert c.put("/spoolman/api/v1/spool/9/use", headers=a, json={"use_weight": 1}).status_code == 404
+        # recently used first
+        assert [s["id"] for s in c.get("/spoolman/api/v1/spool", headers=a).json()] == [1, 2]
+        # edit: weigh the spool again, other colour; archive
+        e = c.patch("/spoolman/api/v1/spool/1", headers=a, json={"remaining_weight": 500, "filament": {"color_hex": "FF0000"}}).json()
+        assert e["remaining_weight"] == 500 and e["filament"]["color_hex"] == "FF0000" and e["filament"]["name"] == "Rapid PLA+ Black"
+        assert c.patch("/spoolman/api/v1/spool/2", headers=a, json={"archived": True}).json()["archived"] is True
+        assert [s["id"] for s in c.get("/spoolman/api/v1/spool", headers=a).json()] == [1]
+        assert len(c.get("/spoolman/api/v1/spool?allow_archived=true", headers=a).json()) == 2
+        assert c.patch("/spoolman/api/v1/spool/1", headers=a, json={"filament": {"color_hex": "red"}}).status_code == 422
+        assert c.delete("/spoolman/api/v1/spool/2", headers=a).json() == {"deleted": 2}
+        assert c.get("/api/admin/stats", headers=ADMIN).json()["spools"] == 2
+        # the account goes, its spools too
+        assert c.delete("/api/auth/account?confirm=true", headers=a).status_code == 200
+        assert c.get("/api/admin/stats", headers=ADMIN).json()["spools"] == 1
+
+
+def test_spool_limit(cloud, monkeypatch):
+    from printshare.cloud import spools
+    monkeypatch.setattr(spools, "MAX_SPOOLS", 2)
+    with TestClient(cloud.app) as c:
+        a = login(cloud, c, "many@example.com")
+        for _ in range(2):
+            assert c.post("/spoolman/api/v1/spool", headers=a, json={}).status_code == 200
+        r = c.post("/spoolman/api/v1/spool", headers=a, json={})
+        assert r.status_code == 400 and "at most 2 spools" in r.json()["detail"]

@@ -554,6 +554,17 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   Real Spoolman 0.27.0 on Tower (http://192.168.86.230:7912, Thomas, 44 spools) read fine 2026-10-02 (nothing booked yet);
   empty spools (0 g, not archived) are listed last, the picker groups by material. The CC1's file name after COMPLETED is assumed to stay (else the app asks).
 
+## Spools in the cloud (2026-10-02, server 0.17.0)
+- `printshare/cloud/spools.py`: table `spools` in the cloud DB (per-user `num`, `used_weight`, `archived`, JSON `data` with
+  `filament{name,vendor,material,color_hex,density,diameter,weight}` + initial/spool weight, location, comment; ON DELETE
+  CASCADE with the user). API `/spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use` (GET/use = Spoolman's shapes; POST/
+  PATCH = own simple shape), 500 per account, 404 on home servers, `spools` count in `/api/admin/stats`.
+- App: `openSpoolman(server, url)` - stored `cloud` = `<server.url>/spoolman` with the session token; Settings → Spoolman
+  has the choice "In der Cloud" / "Eigener Spoolman" (cloud accounts only); `app/spools.tsx` + `app/spool/[id].tsx`.
+  Web build flow tested (add, copy with 40 g, print, 3.7 g booked on the server).
+- Privacy policy (`site/privacy/`) got the cloud section 6 (DE binding + EN) on 2026-10-02 - Thomas to review.
+- Open: export/import in Spoolman's format, SpoolmanDB presets when adding, automatic G-code/upload cleanup (BE-05).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

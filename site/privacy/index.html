@@ -17,7 +17,7 @@
 
   <!-- Deutsche Fassung (maßgeblich) -->
   <h1 id="de">Datenschutzerklärung</h1>
-  <p class="muted">Stand: 30. September 2026</p>
+  <p class="muted">Stand: 2. Oktober 2026</p>
 
   <h2>1. Verantwortlicher</h2>
   <p>Thomas Herbrig<br>62a rue du Rhin<br>68680 Kembs<br>Frankreich<br>
@@ -25,23 +25,32 @@
 
   <h2>2. Worum es geht</h2>
   <p>PocketPrint3D ist ein kostenloses Open-Source-Projekt. Es besteht aus einer App (Android, iOS) und einer
-    Server-Software. Die Server-Software betreibst <strong>du selbst</strong> bei dir zu Hause (z. B. auf Unraid, in Home
-    Assistant oder mit Docker). Die App spricht nur mit diesem, deinem eigenen Server. <strong>Wir – der Anbieter –
-    erhalten dabei keine Daten von dir</strong>: kein Konto, kein Tracking, keine Werbung, keine Analyse- oder Absturzdienste.</p>
+    Server-Software. Du kannst sie auf zwei Arten nutzen:</p>
+  <ul>
+    <li><strong>Eigener Server:</strong> Die Server-Software betreibst <strong>du selbst</strong> bei dir zu Hause (z. B. auf
+      Unraid, in Home Assistant oder mit Docker), die App spricht nur mit diesem Server. <strong>Wir – der Anbieter – erhalten
+      dabei keine Daten von dir</strong> (Abschnitt 4).</li>
+    <li><strong>PocketPrint3D Cloud:</strong> Du meldest dich mit deiner E-Mail-Adresse an, das Slicen läuft auf unserem
+      Server. Welche Daten wir dafür verarbeiten, steht in Abschnitt 6.</li>
+  </ul>
+  <p>In beiden Fällen gilt: kein Tracking, keine Werbung, keine Analyse- oder Absturzdienste.</p>
 
   <h2>3. Die App</h2>
   <ul>
     <li><strong>Auf deinem Gerät gespeichert:</strong> die Adresse(n) deines Servers und dessen Zugangs-Token (im sicheren
       Speicher des Geräts, iOS-Schlüsselbund bzw. Android Keystore) sowie Einstellungen wie Sprache und zuletzt gewählte
-      Drucker/Materialien. Diese Daten verlassen dein Gerät nur in Richtung deines eigenen Servers.</li>
+      Drucker/Materialien. Mit der Cloud außerdem: die Adressen und Zugangsdaten deiner Drucker (PrusaLink-Passwort,
+      OctoPrint-API-Key) und die Adresse eines eigenen Spoolman – diese bleiben <strong>nur auf deinem Gerät</strong>, die App
+      spricht damit direkt im Heimnetz mit dem Drucker.</li>
     <li><strong>Verbindungen:</strong> Die App verbindet sich mit deinem eigenen Server. Vorschaubilder von Modellen lädt sie
       direkt von den Servern von Printables (Prusa Research a.s., Tschechien) bzw. Thingiverse (UltiMaker, USA/Niederlande);
       dabei erhalten diese deine IP-Adresse, wie bei jedem Aufruf ihrer Webseiten. Deren Datenschutzerklärungen gelten:
       <a href="https://www.prusa3d.com/page/privacy-policy_231258/">Printables</a>,
       <a href="https://www.thingiverse.com/legal/privacy">Thingiverse</a>.</li>
     <li><strong>Kamera:</strong> nur zum Scannen des Kopplungs-QR-Codes deines Servers. Es werden keine Bilder gespeichert oder gesendet.</li>
-    <li><strong>Lokales Netzwerk:</strong> um deinen Server bzw. Drucker im Heimnetz zu erreichen.</li>
-    <li><strong>Dateien:</strong> Modell- oder Profildateien, die du auswählst oder mit der App teilst, werden an deinen eigenen Server übertragen.</li>
+    <li><strong>Lokales Netzwerk:</strong> um deinen Server, deine Drucker und – falls eingerichtet – deinen Spoolman im Heimnetz zu erreichen.</li>
+    <li><strong>Dateien:</strong> Modell- oder Profildateien, die du auswählst oder mit der App teilst, werden an deinen eigenen
+      Server bzw. – mit der Cloud – an unseren Server übertragen.</li>
     <li><strong>App-Stores:</strong> Beim Herunterladen der App verarbeiten Google (Google Play) bzw. Apple (App Store) Daten
       nach ihren eigenen Datenschutzerklärungen.</li>
   </ul>
@@ -59,42 +68,68 @@
     EU-US Data Privacy Framework zertifiziert. Details: <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub-Datenschutzerklärung</a>.
     Die Webseite setzt keine Cookies und verwendet kein Tracking.</p>
 
-  <h2>6. Geplanter Online-Dienst</h2>
-  <p>Ein gehosteter PocketPrint3D-Dienst (Konto, Slicen in der Cloud) ist geplant, aber noch nicht in Betrieb. Bevor er startet,
-    wird diese Datenschutzerklärung entsprechend ergänzt.</p>
+  <h2>6. PocketPrint3D Cloud</h2>
+  <p>Wenn du dich in der App bei der PocketPrint3D Cloud anmeldest, verarbeiten wir zur Bereitstellung des Dienstes
+    (Art. 6 Abs. 1 lit. b DSGVO) folgende Daten:</p>
+  <ul>
+    <li><strong>Konto:</strong> deine E-Mail-Adresse, Zeitpunkt der Anmeldung. Anmelde-Codes und Sitzungsschlüssel speichern
+      wir nur als Prüfsumme (Hash); den Gerätenamen, den die App bei der Anmeldung mitsendet.</li>
+    <li><strong>Missbrauchsschutz:</strong> die IP-Adresse beim Anfordern eines Anmelde-Codes (Begrenzung der Anfragen,
+      Art. 6 Abs. 1 lit. f DSGVO); sie wird mit dem Code nach etwa einer Stunde gelöscht. Die Zahl der Slice-Vorgänge pro
+      Tag (für das Tageslimit).</li>
+    <li><strong>Drucker:</strong> Name, Typ und gewähltes Druckermodell – <strong>keine</strong> Adressen oder Zugangsdaten.</li>
+    <li><strong>Modelle und Druckdateien:</strong> Dateien, die du hochlädst, Modelle, die der Server in deinem Auftrag von
+      Printables oder Thingiverse lädt (zwischengespeichert für 24 Stunden), eigene Slicer-Profile und der erzeugte G-Code.
+      Sie bleiben gespeichert, bis du den Auftrag oder dein Konto löschst.</li>
+    <li><strong>Spulen (optional):</strong> wenn du Spulen in der Cloud verwaltest: Hersteller, Bezeichnung, Material, Farbe,
+      Gewichte, Lagerort, Notiz und der gebuchte Verbrauch.</li>
+  </ul>
+  <p><strong>Empfänger / Auftragsverarbeiter:</strong> Hetzner Online GmbH, Gunzenhausen, Deutschland (Server in Nürnberg)
+    und Sendinblue SAS (Brevo), Paris, Frankreich – nur für den Versand der Anmelde-Codes per E-Mail. Die Daten bleiben in der EU.
+    Technische Server-Protokolle werden automatisch rotiert und überschrieben.</p>
+  <p><strong>Löschen:</strong> In der App unter Einstellungen → „Konto löschen“ werden dein Konto und alle dazugehörigen Daten
+    (Drucker, Profile, Uploads, G-Code, Spulen) sofort gelöscht. Aus den Server-Sicherungen verschwinden sie nach spätestens
+    7 Tagen.</p>
 
   <h2>7. Deine Rechte</h2>
   <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch
     (Art. 15–21 DSGVO) sowie das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren (Art. 77 DSGVO), zuständig ist
-    die französische CNIL (<a href="https://www.cnil.fr">cnil.fr</a>). Da wir über die
-    App keine Daten von dir erhalten, betrifft das vor allem Anfragen per E-Mail an uns.</p>
+    die französische CNIL (<a href="https://www.cnil.fr">cnil.fr</a>). Mit eigenem Server erhalten wir keine Daten von dir;
+    für die Cloud schreib uns einfach eine E-Mail.</p>
 
   <hr style="margin:40px 0;border:0;border-top:1px solid var(--line)">
 
   <!-- English translation -->
   <h1 id="en">Privacy policy</h1>
   <p class="lang-note">English translation – the German version above is binding.</p>
-  <p class="muted">Last updated: 30 September 2026</p>
+  <p class="muted">Last updated: 2 October 2026</p>
 
   <h2>1. Controller</h2>
   <p>Thomas Herbrig, 62a rue du Rhin, 68680 Kembs, France – <a href="mailto:thomasherbrig@ipomme.fr">thomasherbrig@ipomme.fr</a></p>
 
   <h2>2. Overview</h2>
-  <p>PocketPrint3D is a free open-source project: an app (Android, iOS) and server software that <strong>you run yourself</strong>
-    at home (e.g. on Unraid, in Home Assistant or with Docker). The app only talks to your own server. <strong>We, the provider,
-    receive no data from you</strong>: no account, no tracking, no ads, no analytics or crash reporting.</p>
+  <p>PocketPrint3D is a free open-source project: an app (Android, iOS) and server software. Two ways to use it:</p>
+  <ul>
+    <li><strong>Own server:</strong> you run the server software yourself at home (e.g. on Unraid, in Home Assistant or with
+      Docker) and the app only talks to it. <strong>We, the provider, receive no data from you</strong> (section 4).</li>
+    <li><strong>PocketPrint3D Cloud:</strong> you log in with your e-mail address and slicing runs on our server. Section 6
+      describes the data we process for it.</li>
+  </ul>
+  <p>Either way: no tracking, no ads, no analytics or crash reporting.</p>
 
   <h2>3. The app</h2>
   <ul>
     <li><strong>Stored on your device:</strong> your server's address(es) and access token (in the device's secure storage,
-      iOS Keychain / Android Keystore) and settings such as language and recently used printers/materials. This data only
-      goes to your own server.</li>
+      iOS Keychain / Android Keystore) and settings such as language and recently used printers/materials. With the cloud
+      also: your printers' addresses and access data (PrusaLink password, OctoPrint API key) and the address of your own
+      Spoolman – these stay <strong>only on your device</strong>; the app uses them to talk to the printer on your home network.</li>
     <li><strong>Connections:</strong> the app connects to your own server. Model preview images are loaded directly from the
       servers of Printables (Prusa Research a.s., Czech Republic) and Thingiverse (UltiMaker, USA/Netherlands), which receive
       your IP address as with any visit to their websites. Their privacy policies apply.</li>
     <li><strong>Camera:</strong> only to scan your server's pairing QR code. No images are stored or sent.</li>
-    <li><strong>Local network:</strong> to reach your server or printer at home.</li>
-    <li><strong>Files:</strong> model or profile files you choose or share with the app are sent to your own server.</li>
+    <li><strong>Local network:</strong> to reach your server, your printers and – if set up – your Spoolman at home.</li>
+    <li><strong>Files:</strong> model or profile files you choose or share with the app are sent to your own server or – with
+      the cloud – to our server.</li>
     <li><strong>App stores:</strong> when you download the app, Google (Google Play) or Apple (App Store) process data under their own policies.</li>
   </ul>
 
@@ -108,14 +143,32 @@
     data, in particular your IP address, in server logs (Art. 6(1)(f) GDPR – legitimate interest in a secure, working website).
     GitHub is certified under the EU-US Data Privacy Framework. No cookies, no tracking.</p>
 
-  <h2>6. Planned online service</h2>
-  <p>A hosted PocketPrint3D service (account, slicing in the cloud) is planned but not running yet. This policy will be
-    extended before it starts.</p>
+  <h2>6. PocketPrint3D Cloud</h2>
+  <p>When you log in to the PocketPrint3D Cloud in the app, we process the following data to provide the service
+    (Art. 6(1)(b) GDPR):</p>
+  <ul>
+    <li><strong>Account:</strong> your e-mail address and login times. Login codes and session keys are only stored as a
+      hash; the device name the app sends when you log in.</li>
+    <li><strong>Abuse protection:</strong> the IP address when a login code is requested (rate limiting, Art. 6(1)(f) GDPR);
+      it is deleted with the code after about an hour. The number of slicing jobs per day (for the daily limit).</li>
+    <li><strong>Printers:</strong> name, type and chosen printer model – <strong>no</strong> addresses or access data.</li>
+    <li><strong>Models and print files:</strong> files you upload, models the server downloads from Printables or Thingiverse
+      on your behalf (cached for 24 hours), your own slicer profiles and the G-code produced. They are kept until you delete
+      the job or your account.</li>
+    <li><strong>Spools (optional):</strong> if you manage spools in the cloud: brand, name, material, colour, weights,
+      location, note and the booked usage.</li>
+  </ul>
+  <p><strong>Recipients / processors:</strong> Hetzner Online GmbH, Gunzenhausen, Germany (server in Nuremberg) and
+    Sendinblue SAS (Brevo), Paris, France – only to send the login codes by e-mail. The data stays in the EU. Technical server
+    logs are rotated and overwritten automatically.</p>
+  <p><strong>Deletion:</strong> Settings → "Delete account" in the app deletes your account and all its data (printers,
+    profiles, uploads, G-code, spools) immediately. They disappear from the server backups within 7 days.</p>
 
   <h2>7. Your rights</h2>
   <p>You have the right of access, rectification, erasure, restriction, data portability and objection (Art. 15–21 GDPR)
     and the right to lodge a complaint with a data protection authority (Art. 77 GDPR); the competent authority is the
-    French CNIL (<a href="https://www.cnil.fr">cnil.fr</a>).</p>
+    French CNIL (<a href="https://www.cnil.fr">cnil.fr</a>). With your own server we receive no data from you; for the cloud,
+    just send us an e-mail.</p>
 
   <footer>
     <a href="/">Home</a><a href="/impressum/">Impressum · Mentions légales</a><a href="https://github.com/halvar20000/printshare">GitHub</a>

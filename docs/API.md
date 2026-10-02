@@ -419,6 +419,35 @@ What the Android app does (`mobile/src/lib/spoolman.ts`):
    seen printing → book if it had reached 99 %, else ask; never seen within 20 min → ask. A booked spool is removed
    from the booking right away, so a retry never books twice. "Upload only" books nothing.
 
+### Spools in the cloud (0.17.0)
+For cloud accounts without a Spoolman at home the server keeps the spools itself, under **`/spoolman/api/v1/…`** with
+the session token (`Authorization: Bearer pp3d_…`). Reading and booking answer exactly like Spoolman, so an app points
+its Spoolman code at `https://api.pocketprint3d.com/spoolman` and changes nothing else:
+
+| | |
+|---|---|
+| `GET /spoolman/api/v1/info` | `{"version": "0.17.0", "name": "PocketPrint3D", …}` |
+| `GET /spoolman/api/v1/spool[?allow_archived=true]` | Spoolman's spool objects, recently used first (other filters are ignored) |
+| `GET /spoolman/api/v1/spool/{id}` | one spool; ids are numbered per account (#1, #2 …) |
+| `PUT /spoolman/api/v1/spool/{id}/use` | `{"use_weight": g}` or `{"use_length": mm}` (from density + diameter) |
+| `POST /spoolman/api/v1/spool` | **PocketPrint3D's own shape** (no filament ids): see below |
+| `PATCH /spoolman/api/v1/spool/{id}` | same fields, all optional; `remaining_weight` = weighed again; `archived` |
+| `DELETE /spoolman/api/v1/spool/{id}` | `{"deleted": 3}` |
+
+```json
+POST /spoolman/api/v1/spool
+{"filament": {"vendor": "Elegoo", "name": "Rapid PLA+ Black", "material": "PLA", "color_hex": "#000000",
+              "weight": 1000, "density": 1.24, "diameter": 1.75},
+ "remaining_weight": 640, "location": "Shelf", "comment": "opened"}
+→ {"id": 1, "filament": {"name": "Rapid PLA+ Black", "vendor": {"name": "Elegoo", …}, "material": "PLA",
+   "color_hex": "000000", "weight": 1000, …}, "initial_weight": null, "used_weight": 360, "remaining_weight": 640, …}
+```
+- `filament.weight` = filament on a full spool; `remaining_weight` given → `used_weight = weight − remaining` (without a
+  weight the remaining becomes the initial weight). Everything optional, `color_hex` with or without `#`.
+- 500 spools per account (`400`), `404` on a home server ("use your own Spoolman"), deleted with the account.
+- Android: Settings → Spoolman → "In der Cloud" stores `cloud` instead of an address (`CLOUD_SPOOLS` in
+  `mobile/src/lib/spoolman.ts`); spool list `app/spools.tsx`, form `app/spool/[id].tsx` (copy for a stack of equal spools).
+
 ## Profiles (own OrcaSlicer presets)
 | | |
 |---|---|

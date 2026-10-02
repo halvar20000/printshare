@@ -7,7 +7,7 @@ import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@
 import type { Me, Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
-import { loadSpoolmanUrl } from "@/lib/spoolman";
+import { CLOUD_SPOOLS, loadSpoolmanUrl } from "@/lib/spoolman";
 import { useColors } from "@/lib/theme";
 
 export default function Settings() {
@@ -85,7 +85,7 @@ export default function Settings() {
         </Section>
 
         <Section title={t("spoolman")}>
-          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman ?? t("spoolmanSub")}
+          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
             value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
         </Section>
 
@@ -140,7 +140,7 @@ export default function Settings() {
 
       {server ? (
         <Section title={t("spoolman")}>
-          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman ?? t("spoolmanSub")}
+          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
             value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
         </Section>
       ) : null}

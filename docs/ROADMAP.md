@@ -28,7 +28,7 @@ Legend: ✅ done in P0 · 🟡 partial · ⬜ open
 | MA-01 | Filament profile | ✅ per job from compatible Orca presets (app) |
 | MA-04 | Multicolour mapping | 🟡 3MF colours detected (Orca/Bambu/Prusa projects), material per colour in the app, N filament presets to Orca (by position), grams per colour, colour preview. lane mapping for AFC ✅ 0.8.0 (tool numbers rewritten at send time) |
 | MA-02/03 | Lanes from the printer, pick lane | ✅ 0.8.0 (#6): AFC lanes via Moonraker (map/material/colour/loaded), lane per colour on the review screen, no re-slicing; 0.11.0 (#12): slot per colour already before slicing (material preset follows the slot), "Slot N" in physical order, web page too; CANVAS on stock firmware ⬜ (undocumented) |
-| MA-07 | Spoolman | 🟡 0.16.0: Android app chooses a spool per colour, warns when too little is left / other material, books the used grams after the print (or Moonraker books itself); web page + iOS ⬜, not tried with a real Spoolman yet |
+| MA-07 | Spoolman | 🟡 0.16.0: Android app chooses a spool per colour, warns when too little is left / other material, books the used grams after the print (or Moonraker books itself); checked against a real Spoolman 0.27.0. 0.17.0: spools in the cloud account for users without Spoolman (list, add/copy/edit/archive in the app). Web page + iOS ⬜, export to Spoolman ⬜, SpoolmanDB presets ⬜ |
 | QU-01 | Quality as process profile | ✅ per job from compatible presets (app) |
 | QU-03/04, SU-01/02/05 | walls, infill, supports, brim | ✅ per job (`JobOptions`); supports off/normal/tree, brim auto/off/outer |
 | PL-02 | Auto-orient | 🟡 `auto_orient` config flag; Orca `--orient` |
