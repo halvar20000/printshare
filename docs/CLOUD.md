@@ -73,6 +73,8 @@ and OctoPrint later (Android app: all four since 0.15.3 – PrusaLink with diges
 key; access data stays on the phone). iOS needs the "local network" permission (`NSLocalNetworkUsageDescription`, Bonjour services).
 
 ## Step 2 – bridge for access from everywhere
+Detailed concept (decision, pairing, socket protocol, commands, security, Bambu, packaging): **`docs/BRIDGE.md`**.
+
 A bridge keeps one **outgoing** WebSocket to the cloud (no port forwarding, no VPN) and runs the printer adapters.
 The cloud sends it jobs ("download this G-code and start it", "status?", "pause"); it answers.
 

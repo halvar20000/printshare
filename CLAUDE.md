@@ -715,6 +715,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   FirmwareVersion`), whole /24 scanned in 12.9 s, no false positives. Node test against the fakes (all four types). **Not yet
   on a real phone** (needs the next build).
 
+## Bridge concept (2026-10-02)
+- Decision (Thomas asked: OctoPrint or own?): **own bridge = the existing server package in bridge mode** (OctoPrint & co.
+  are one-printer/one-brand; no open platform drives SDCP + Bambu LAN + Klipper + PrusaLink + OctoPrint). Full concept:
+  **`docs/BRIDGE.md`** (pairing code, outgoing WSS with a fixed method list, cloud forwards the existing printer endpoints,
+  secrets end-to-end with the bridge's X25519 key, slim image without Orca, Bambu adapter on the bridge). Nothing built yet.
+- Thomas' Bambu P1S found on the LAN 2026-10-02: 192.168.86.20 and .53 (ports 8883 + 990, TLS certs "BBL CA", CN = serial
+  `01P0…`); no SSDP answer to unicast M-SEARCH from this container.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
