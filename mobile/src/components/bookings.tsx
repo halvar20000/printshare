@@ -12,7 +12,7 @@ const sum = (b: Booking) => b.uses.reduce((a, u) => a + u.grams, 0);
 const g = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
 
 export function BookingCard({ server, booking: b, onDone }: { server: Server; booking: Booking; onDone: () => void }) {
-  const { t } = useApp();
+  const { t, api } = useApp();
   const c = useColors();
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState("");
@@ -21,7 +21,7 @@ export function BookingCard({ server, booking: b, onDone }: { server: Server; bo
     setBusy(p);
     setError("");
     try {
-      await resolveBooking(server, b.id, p);
+      await resolveBooking(server, b.id, p, api, b.account);
       onDone();
     } catch (e) {
       setError((e as Error).message);

@@ -782,7 +782,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   changes need `X-Requested-With: pocketprint3d` (`authHeaders()` in the app). CSP etc. in `WEBAPP_HEADERS`.
 - Web specifics: drag & drop on the home screen, "Nur Handy" printers (no LAN from the browser: `WebLanError`) with G-code
   download + bridge hint, no own-server mode, wider column ≥ 1100 px (`useContentWidth`).
-- Harness note: test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
+- **Step 2 (spool bookings in the account) done, 0.29.0:** `cloud/bookings.py` (table `bookings`, `judge()` = Python port of the
+  app's rules, `observe()` books finished prints on the cloud spools, used ones removed one by one), API `/api/bookings`
+  (+ `/observe`, `/{id}/resolve`, DELETE), cloud loop every 60 s asks bridges for printers with waiting bookings. App
+  (`lib/spoolman.ts`): `inAccount()` = cloud account + cloud spools → `addBooking/loadBookings/settleBookings/resolveBooking`
+  use the API, else the phone's local bookings (own Spoolman) as before; web app doesn't report "Nur Handy" printers.
+  Bridge sends: `job.printer_file` = the file's name on the printer (bug found in the web test: bookings used the server's
+  job file name and never matched). Web texts for desktop (`*Web` keys: welcome, login intro, first printer → bridge, about).
+- Web 404 handling: the web app is served from the 404 handler (`_http_errors`, only for "Not Found" outside api/ static/
+  spoolman/), not a catch-all route - routes added later (tests, harnesses) win.
+- Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
   /tmp/cloudtest/run_web.py, /tmp/bridgetest/home.py).
 
 ## Local Android builds on Tower (2026-10-01)

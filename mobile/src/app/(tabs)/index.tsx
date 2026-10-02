@@ -7,7 +7,7 @@ import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Badge, Banner, Button, Card, Divider, Empty, Row, tap, useContentWidth } from "@/components/ui";
-import type { JobSummary } from "@/lib/api";
+import { WEB_APP, type JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago, extractLink, jobName, makerWorldId, printTime } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
@@ -83,7 +83,7 @@ export default function Home() {
   if (!server) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
-        <Empty icon="cube-outline" title={t("notConnectedTitle")} sub={t("notConnectedSub")}>
+        <Empty icon="cube-outline" title={t("notConnectedTitle")} sub={t(WEB_APP ? "notConnectedSubWeb" : "notConnectedSub")}>
           <Button title={t("connectNow")} icon="mail-outline" onPress={() => router.push("/connect")} />
           <Pressable onPress={() => router.push({ pathname: "/connect", params: { mode: "own" } })} accessibilityRole="link"
             style={{ marginTop: 18, padding: 8 }}>
@@ -107,9 +107,14 @@ export default function Home() {
               <Ionicons name="print-outline" size={24} color={c.accent} />
               <Text style={{ color: c.text, fontSize: 17, fontWeight: "700", flex: 1 }}>{t("firstPrinterTitle")}</Text>
             </View>
-            <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, marginTop: 6, marginBottom: 12 }}>{t("firstPrinterSub")}</Text>
-            <Button title={t("addPrinterNow")} icon="add-circle-outline"
-              onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
+            <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, marginTop: 6, marginBottom: 12 }}>{t(WEB_APP ? "firstPrinterSubWeb" : "firstPrinterSub")}</Text>
+            {WEB_APP ? (
+              // in the browser a printer is reached through a bridge
+              <Button title={t("bridgeConnect")} icon="git-network-outline" onPress={() => router.push("/bridges")} />
+            ) : (
+              <Button title={t("addPrinterNow")} icon="add-circle-outline"
+                onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
+            )}
           </Card>
         ) : null}
         {error ? <Banner kind="warn" text={error} /> : null}

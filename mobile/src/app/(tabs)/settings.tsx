@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Alert, Linking, Platform, Text, View } from "react-native";
 
 import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@/components/ui";
-import type { Me, Printer } from "@/lib/api";
+import { WEB_APP, type Me, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
 import { CLOUD_SPOOLS, loadSpoolmanUrl } from "@/lib/spoolman";
@@ -103,7 +103,7 @@ export default function Settings() {
           {spoolsRow}
         </Section>
 
-        <Section title={t("about")} footer={t("aboutTextCloud")}>
+        <Section title={t("about")} footer={t(WEB_APP ? "aboutTextCloudWeb" : "aboutTextCloud")}>
           <Row icon="information-circle-outline" label={t("version")} value={Constants.expoConfig?.version ?? "–"} />
           <Divider />
           <Row icon="shield-checkmark-outline" label="pocketprint3d.com/privacy" onPress={() => Linking.openURL("https://pocketprint3d.com/privacy/")} />

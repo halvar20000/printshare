@@ -98,7 +98,7 @@ export default function Connect() {
 
       {mode === "cloud" ? (
         <>
-          <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t("cloudIntro")}</Text>
+          <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t(WEB_APP ? "cloudIntroWeb" : "cloudIntro")}</Text>
           {!sentTo ? (
             <>
               <Section title={t("email")}>

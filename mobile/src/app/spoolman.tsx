@@ -14,7 +14,7 @@ import { space, useColors } from "@/lib/theme";
 type Mode = "cloud" | "own";
 
 export default function SpoolmanScreen() {
-  const { server, t } = useApp();
+  const { server, api, t } = useApp();
   const c = useColors();
   const router = useRouter();
   const cloud = !!server?.cloud;
@@ -34,8 +34,8 @@ export default function SpoolmanScreen() {
       if (u && u !== CLOUD_SPOOLS) setUrl(v => v || u);
       if (u === CLOUD_SPOOLS) openSpoolman(server, u).spools().then(l => setCount(l.length)).catch(() => setCount(null));
     });
-    loadBookings(server).then(setBookings);
-  }, [server, cloud]);
+    loadBookings(server, api).then(setBookings).catch(() => setBookings([]));
+  }, [server, cloud, api]);
   useFocusEffect(reload);
 
   const check = async (address: string) => {

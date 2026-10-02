@@ -9,7 +9,7 @@ import { CameraImage } from "@/components/camera";
 import { WatchInfo } from "@/components/watch";
 
 import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/components/ui";
-import { errorText, type Printer, type PrinterStatus } from "@/lib/api";
+import { errorText, WEB_APP, type Printer, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
 import { NoAddressError, WebLanError, printerControl, printerStatus } from "@/lib/printerAccess";
@@ -58,7 +58,8 @@ export default function Printers() {
       setEntries(list);
       setNow(Date.now());
       setError("");
-      const res = await settleBookings(server!, Object.fromEntries(list.map(e => [e.printer.id, e.status])));
+      // web app: printers only the phone reaches aren't reported (their status is unknown here, not "off")
+      const res = await settleBookings(server!, Object.fromEntries(list.filter(e => !e.webLan).map(e => [e.printer.id, e.status])), api);
       setOpenBookings(res.open);
       if (res.booked.length) setBooked(b => [...b, ...res.booked.map(x => ({ text: bookedText(t, x), at: Date.now() }))]);
     } catch (e) {
@@ -113,8 +114,10 @@ export default function Printers() {
       {booked.filter(b => now - b.at < 60000).map(b => <Banner key={b.at + b.text} kind="ok" icon="disc-outline" text={b.text} />)}
       {server ? openBookings.map(b => <BookingCard key={b.id} server={server} booking={b} onDone={load} />) : null}
       {entries && !entries.length ? (
-        <Empty icon="print-outline" title={t("noPrinters")} sub={cloud ? t("noPrintersCloud") : undefined}>
-          {cloud ? <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} /> : null}
+        <Empty icon="print-outline" title={t("noPrinters")} sub={cloud ? t(WEB_APP ? "noPrintersCloudWeb" : "noPrintersCloud") : undefined}>
+          {cloud ? (WEB_APP
+            ? <Button title={t("bridgeConnect")} icon="git-network-outline" onPress={() => router.push("/bridges")} />
+            : <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />) : null}
         </Empty>
       ) : null}
       {(entries ?? []).map(({ printer: p, status: s, noAddress, error, webLan }) => {

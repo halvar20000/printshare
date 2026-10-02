@@ -4,7 +4,7 @@
 // API: https://donkie.github.io/Spoolman/ (GET /api/v1/spool, PUT /api/v1/spool/{id}/use {use_weight}).
 // Cloud accounts without a server at home can keep their spools in the PocketPrint3D cloud instead (server 0.17.0,
 // same API under <cloud>/spoolman with the session token; creating/editing spools is PocketPrint3D's own shape).
-import { authHeaders, type PrinterStatus, type Server } from "./api";
+import { authHeaders, type Api, type PrinterStatus, type Server, type ServerBooking } from "./api";
 import { getJSON, setJSON } from "./storage";
 
 export type Spool = {
@@ -148,15 +148,39 @@ export type Booking = {
   progress?: number;           // last progress seen (%)
   ready?: boolean;             // finished: book as soon as Spoolman answers
   ask?: { part: number };      // outcome unclear (cancelled, missed): the user decides; part = suggested share 0..1
+  account?: boolean;           // kept in the cloud account (cloud spools) - settled by the server, not this phone
 };
+
+/** Cloud spools: bookings live in the account (server 0.29.0), so the cloud books them even when no app is open and
+ *  prints started in the browser are booked too. An own Spoolman at home: this phone keeps them, as before. */
+async function inAccount(server: Server, api?: Api | null): Promise<boolean> {
+  return !!api && !!server.cloud && (await loadSpoolmanUrl(server)) === CLOUD_SPOOLS;
+}
+
+const fromServer = (x: ServerBooking): Booking => ({
+  id: x.id, printer: x.printer, printerName: x.printer_name ?? x.printer, file: x.file,
+  uses: x.state === "booked" ? x.booked_uses : x.uses, created: x.created * 1000, seen: x.seen,
+  progress: x.progress ?? undefined, ask: x.state === "ask" ? { part: x.ask_part ?? 1 } : undefined, account: true,
+});
 
 const MAX_BOOKINGS = 20;
 const bk = (server: Server) => `ps_bookings_${sk(server)}`;
-export const loadBookings = async (server: Server) => (await getJSON<Booking[]>(bk(server))) ?? [];
+export async function loadBookings(server: Server, api?: Api | null): Promise<Booking[]> {
+  if (await inAccount(server, api)) {
+    const r = await api!.bookings();
+    return [...r.waiting, ...r.open].map(fromServer);
+  }
+  return (await getJSON<Booking[]>(bk(server))) ?? [];
+}
 const saveBookings = (server: Server, list: Booking[]) => setJSON(bk(server), list.slice(-MAX_BOOKINGS));
 
-export async function addBooking(server: Server, b: Omit<Booking, "id" | "created">): Promise<void> {
+export async function addBooking(server: Server, b: Omit<Booking, "id" | "created">, api?: Api | null,
+                                 job?: string): Promise<void> {
   if (!b.uses.length) return;
+  if (await inAccount(server, api)) {
+    await api!.createBooking({ printer: b.printer, printer_name: b.printerName, file: b.file, uses: b.uses, job });
+    return;
+  }
   const list = (await loadBookings(server)).filter(x => !(x.printer === b.printer && !x.seen && !x.ask));
   list.push({ ...b, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, created: Date.now() });
   await saveBookings(server, list);
@@ -201,8 +225,12 @@ let settling: Promise<unknown> | null = null;
 
 /** Called with fresh printer statuses (printers tab): finished prints are booked, unclear ones are kept for the user.
  *  Returns what was booked now and what waits for a decision. */
-export async function settleBookings(server: Server, statuses: Record<string, PrinterStatus | null>):
+export async function settleBookings(server: Server, statuses: Record<string, PrinterStatus | null>, api?: Api | null):
   Promise<{ booked: Booking[]; open: Booking[]; error?: string }> {
+  if (await inAccount(server, api)) {
+    const r = await api!.observeBookings(statuses);
+    return { booked: r.booked_now.map(fromServer), open: r.open.map(fromServer) };
+  }
   while (settling) await settling.catch(() => {});
   const run = (async () => {
     const before = await loadBookings(server);
@@ -244,7 +272,12 @@ async function bookUses(server: Server, url: string, b: Booking, part: number, l
 }
 
 /** The user's decision on an open booking: book `part` of the filament (0 = discard). */
-export async function resolveBooking(server: Server, id: string, part: number): Promise<void> {
+export async function resolveBooking(server: Server, id: string, part: number, api?: Api | null,
+                                     account = false): Promise<void> {
+  if (account && api) {
+    await api.resolveBooking(id, part);
+    return;
+  }
   while (settling) await settling.catch(() => {});
   const list = await loadBookings(server);
   const b = list.find(x => x.id === id);

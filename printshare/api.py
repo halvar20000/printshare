@@ -74,6 +74,7 @@ from pydantic import BaseModel, Field
 from .cloud import accounts
 from .cloud.spools import Spools
 from .cloud.bridges import Bridges
+from .cloud.bookings import Bookings
 from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient
 from .bridge.dispatch import dispatch as bridge_dispatch
@@ -106,11 +107,13 @@ async def _lifespan(_app):
     if not settings.cloud:
         WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
+    else:
+        _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     yield
     await BRIDGE_CLIENT.stop()
 
 
-app = FastAPI(title="PocketPrint3D", version="0.28.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.29.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -140,17 +143,19 @@ ACCOUNTS: accounts.Accounts | None = None
 MAILER: Mailer | None = None
 SPOOLS: Spools | None = None
 BRIDGES: Bridges | None = None
+BOOKINGS: Bookings | None = None
 HUB = BridgeHub()
 
 
 def _cloud_setup() -> None:
-    global ACCOUNTS, MAILER, SPOOLS, BRIDGES
+    global ACCOUNTS, MAILER, SPOOLS, BRIDGES, BOOKINGS
     if not settings.cloud:
-        ACCOUNTS = MAILER = SPOOLS = BRIDGES = None
+        ACCOUNTS = MAILER = SPOOLS = BRIDGES = BOOKINGS = None
         return
     ACCOUNTS = accounts.Accounts(settings.cloud_db)
     SPOOLS = Spools(ACCOUNTS)
     BRIDGES = Bridges(ACCOUNTS)
+    BOOKINGS = Bookings(ACCOUNTS, SPOOLS)
     HUB.on_seen = BRIDGES.seen
     HUB.on_printers = lambda *a: _sync_bridge_printers(*a)       # defined further down
     HUB.listeners[:] = [lambda *a: _bridge_event(*a)]
@@ -408,6 +413,126 @@ def bridge_reset(acct: Account = Depends(auth)) -> dict[str, Any]:
     _bridge_home(acct)
     BRIDGE_CLIENT.forget()
     return BRIDGE_CLIENT.public()
+
+
+# ---------- cloud: spool bookings in the account (docs/WEB.md step 2, 0.29.0) ----------
+BOOKINGS_CHECK_S = 60
+
+
+def _bookings() -> Bookings:
+    if not settings.cloud or BOOKINGS is None:
+        raise HTTPException(404, "bookings exist only in PocketPrint3D Cloud")
+    return BOOKINGS
+
+
+def _bookings_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+
+
+class BookingUse(BaseModel):
+    spool: int
+    grams: float
+    label: str | None = None
+
+
+class BookingCreate(BaseModel):
+    printer: str
+    file: str                          # the file name on the printer (compared with what the printer reports)
+    uses: list[BookingUse]
+    printer_name: str | None = None
+    job: str | None = None
+
+
+class BookingObserve(BaseModel):
+    statuses: dict[str, dict[str, Any] | None]    # printer id → its status (as from /status), null = not reachable
+
+
+class BookingResolve(BaseModel):
+    part: float = Field(ge=0, le=1)
+
+
+@app.get("/api/bookings")
+def bookings_list(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Spool bookings of the account: waiting (print not finished), open (the user decides), booked (recently)."""
+    if not acct.cloud:
+        raise HTTPException(404, "bookings exist only in PocketPrint3D Cloud")
+    return _bookings().list(acct.id)
+
+
+@app.post("/api/bookings")
+def bookings_create(req: BookingCreate, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """A print started with spools of the account: book them when it is finished."""
+    if not acct.cloud:
+        raise HTTPException(404, "bookings exist only in PocketPrint3D Cloud")
+    _printer(acct, req.printer)
+    b = _bookings_call(_bookings().create, acct.id, req.printer, req.file, [u.model_dump() for u in req.uses],
+                       req.printer_name, req.job)
+    return {"booking": b}
+
+
+@app.post("/api/bookings/observe")
+def bookings_observe(req: BookingObserve, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The app reports printer statuses it saw (printers on its Wi-Fi); finished prints are booked. Answers the list."""
+    if not acct.cloud:
+        raise HTTPException(404, "bookings exist only in PocketPrint3D Cloud")
+    db = _bookings()
+    known = {p.id for p in acct.settings.printers}
+    booked = []
+    for pid, st in list(req.statuses.items())[:50]:
+        if pid in known:
+            booked += _bookings_call(db.observe, acct.id, pid, st if isinstance(st, dict) else None)
+    return {**db.list(acct.id), "booked_now": booked}
+
+
+@app.post("/api/bookings/{booking_id}/resolve")
+def bookings_resolve(booking_id: str, req: BookingResolve, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(404, "bookings exist only in PocketPrint3D Cloud")
+    return {"booking": _bookings_call(_bookings().resolve, acct.id, booking_id, req.part)}
+
+
+@app.delete("/api/bookings/{booking_id}")
+def bookings_delete(booking_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud or not _bookings().delete(acct.id, booking_id):
+        raise HTTPException(404, "unknown booking")
+    return {"deleted": booking_id}
+
+
+async def _check_bridge_bookings() -> None:
+    """Waiting bookings of printers behind a bridge: ask the bridge for the status (nobody has to have the app open)."""
+    if BOOKINGS is None:
+        return
+    for user_id, printer_id in BOOKINGS.waiting_printers():
+        row = next((p for p in ACCOUNTS.printers(user_id) if p.get("id") == printer_id), None)
+        if not row or not row.get("bridge"):
+            continue                       # reached by the phone: it reports the status itself
+        if not HUB.online(row["bridge"]):
+            status = None                   # judged as "not reachable" (only matters after 3 days)
+        else:
+            try:
+                st = await HUB.call(row["bridge"], user_id, "printer.status", {"printer": row.get("remote") or printer_id})
+                status = st if isinstance(st, dict) else None
+            except BridgeError as e:
+                if e.code not in ("offline", "bridge_offline", "unknown_printer"):
+                    continue                # busy / timeout: try again next round
+                status = None
+        try:
+            await asyncio.to_thread(BOOKINGS.observe, user_id, printer_id, status)
+        except accounts.AccountError:
+            continue
+
+
+async def _bookings_loop() -> None:
+    while True:
+        await asyncio.sleep(BOOKINGS_CHECK_S)
+        try:
+            await _check_bridge_bookings()
+        except Exception:  # noqa: BLE001 - never stop checking
+            import logging
+            logging.getLogger(__name__).exception("bookings check")
 
 
 # ---------- cloud mode: bridges at home (docs/BRIDGE.md) ----------
@@ -1776,6 +1901,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
             try:
                 r = await HUB.call(via[0], acct.id, "job.send", params)
                 job["leveling"] = req.leveling
+                # the name the file has on the printer (the bridge names it after the model) - spool bookings match on it
+                job["printer_file"] = (r or {}).get("file")
                 job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"))
             except BridgeError as e:
                 job.update(state="sliced", error=f"Sending failed: {e}")

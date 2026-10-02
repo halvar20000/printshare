@@ -8,7 +8,7 @@ import { ActivityIndicator, FlatList, Linking, Pressable, Text, TextInput, View,
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Banner, Button, Card, Empty, Segmented, tap } from "@/components/ui";
-import type { ModelHit, SortKey, Source } from "@/lib/api";
+import { WEB_APP, type ModelHit, type SortKey, type Source } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { compact, extractLink, makerWorldId } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
@@ -99,7 +99,7 @@ export default function Discover() {
   if (!server) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
-        <Empty icon="search" title={t("notConnectedTitle")} sub={t("notConnectedSub")} />
+        <Empty icon="search" title={t("notConnectedTitle")} sub={t(WEB_APP ? "notConnectedSubWeb" : "notConnectedSub")} />
       </SafeAreaView>
     );
   }

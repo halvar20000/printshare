@@ -257,7 +257,8 @@ export default function JobScreen() {
       const sp = spoolById(spoolFor[col.index]);
       return sp && col.grams ? [{ spool: sp.id, grams: col.grams, label: spoolLabel(sp) }] : [];
     });
-    await addBooking(server, { printer: printerId, printerName: printerNames[printerId] ?? printerId, file: fileName, uses });
+    await addBooking(server, { printer: printerId, printerName: printerNames[printerId] ?? printerId, file: fileName, uses },
+      api, job?.id);
   };
 
   const send = async (start: boolean) => {
@@ -301,7 +302,8 @@ export default function JobScreen() {
       if (j) setJob(j);
       if (j?.error) setActionError(friendlyError(t, 0, j.error));
       else if (start && j?.state === "started") {
-        await afterStart((j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id)).catch(() => {});
+        await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
+          .catch(() => {});
       }
       if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e) {

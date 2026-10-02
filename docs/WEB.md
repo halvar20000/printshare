@@ -33,7 +33,14 @@ The same app as on the phone, for desktop browsers, with the same cloud account:
 | Dragging a model file onto the page | ✅ (home screen; STL, 3MF, OBJ, STEP) |
 | Wi-Fi printer search, NFC spools, Printables login inside the app, own server | hidden / phone only |
 
+## Spool bookings in the account (step 2, 0.29.0)
+With cloud spools the bookings live in the account (`printshare/cloud/bookings.py`, docs/API.md): the app (phone or
+browser) registers the spools of a print; the cloud books the grams when the print finishes. Printers behind a bridge are
+checked by the cloud every minute (`_bookings_loop` → `printer.status` through the bridge), so prints are booked even when
+no app is open; printers on the phone's Wi-Fi are reported by the app (`/api/bookings/observe`). Checked in the web app:
+print through a bridge with a cloud spool, page closed, printer finished → 3.67 g booked by the cloud alone.
+Open: an own Spoolman at home through the bridge (today the phone books those).
+
 ## Next (docs/BRIDGE.md, product plan)
-1. Spool bookings in the account instead of on the phone (bridge books when a print finishes).
 2. "Send from OrcaSlicer": an OctoPrint-compatible upload per printer, so desktop-sliced prints go through PocketPrint3D too.
 3. The same web app on home servers instead of the classic page.

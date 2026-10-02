@@ -445,6 +445,23 @@ All `409` in the cloud. `server_url` = this server as the ML API container reach
   clear the cookie. Apps keep using the token as before.
 - The cloud server serves the web app at `/` (app routes → `index.html`, `/api/*` never).
 
+## Spool bookings in the account (0.29.0, cloud – docs/WEB.md step 2)
+For spools kept in the cloud (`/spoolman/…`): the app registers what a print uses, the server books it when the print is
+finished. An own Spoolman at home keeps the app's own bookings (phone).
+- `POST /api/bookings {"printer", "file", "uses": [{"spool", "grams", "label"?}], "printer_name"?, "job"?}` → `{"booking"}`
+  (`null` without uses). `file` = the name on the printer (for bridge sends: the job's `printer_file`). A new booking
+  replaces one on the same printer that never started; spools must be the account's (404); 50 open at most (409).
+- `GET /api/bookings` → `{"waiting", "open", "booked"}` – waiting for the print, the user decides (`ask_part` = suggested
+  share), booked in the last 15 min (`booked_uses`). Booking: `{id, printer, printer_name, file, job, uses, booked_uses,
+  created, seen, progress, state: wait|ready|ask|booked|dropped, ask_part}`.
+- `POST /api/bookings/observe {"statuses": {"<printer>": <status as from /status> | null}}` → the list + `booked_now`:
+  the app reports printers it reaches on the Wi-Fi (not printers it can't see - `null` means "not reachable", which asks
+  after 3 days). Printers behind a bridge are checked by the cloud itself every minute.
+- `POST /api/bookings/{id}/resolve {"part": 0..1}` (0 = nothing), `DELETE /api/bookings/{id}`.
+- Rules (same as the app's before): finished → book all; cancelled/error → ask with the printed share; never seen
+  printing for 20 min or another file → ask; unreachable 3 days → ask. Each spool is removed once booked (no double booking).
+- `GET /api/jobs/{id}` has `printer_file` after a send through a bridge (the file's name on the printer).
+
 ## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
 A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is
 built; forwarding the printer endpoints to a bridge comes with step 4.

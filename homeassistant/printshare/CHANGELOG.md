@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.29.0
+- PocketPrint3D Cloud: spool bookings live in the account. With spools kept in the cloud, the used filament is booked when
+  the print finishes - also for prints started in the browser, and for printers behind a bridge even when no app is
+  open. Web app texts for the desktop.
+
 ## 0.28.0
 - PocketPrint3D Cloud in the browser: app.pocketprint3d.com is the same app as on the phone, with the same account -
   search, prepare, slice, preview, spools, and printing through a bridge. Drop a model file onto the page to start.

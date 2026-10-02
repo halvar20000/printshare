@@ -44,6 +44,14 @@ export type Printer = { id: string; name: string; type: string; machine: string;
 export type Bridge = { id: string; name: string; version: string | null; public_key: string | null; created: number;
   last_seen: number | null; online: boolean; connected: number | null;
   printers: { id: string; name: string; type?: string; machine?: string }[] };
+/** A spool booking kept in the cloud account (server 0.29.0, docs/WEB.md step 2). */
+export type ServerBooking = {
+  id: string; printer: string; printer_name: string | null; file: string; job: string | null;
+  uses: { spool: number; grams: number; label: string }[]; booked_uses: { spool: number; grams: number; label: string }[];
+  created: number; seen: boolean; progress: number | null; state: "wait" | "ready" | "ask" | "booked" | "dropped";
+  ask_part: number | null;
+};
+export type ServerBookings = { waiting: ServerBooking[]; open: ServerBooking[]; booked: ServerBooking[] };
 /** A printer a bridge found on its home network. */
 export type BridgeFound = { type: string; address: string; name: string; cosmos?: boolean; detail?: string; added: boolean };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
@@ -126,6 +134,8 @@ export type Job = {
   id: string; kind: string; state: JobState; log: string[]; result: JobResult | null; error: string | null;
   created: number; printer?: string;
   request: { link: string; printer?: string | null; file?: string | null; options?: JobOptions; name?: string };
+  /** sent through a bridge: the file's name on the printer (server 0.29.0) */
+  printer_file?: string | null;
 };
 export type JobSummary = {
   id: string; kind: string; state: JobState; error: string | null; created: number; printer?: string;
@@ -406,6 +416,15 @@ export class Api {
     this.request<Printer>(`/api/printers/${encodeURIComponent(id)}`, { method: "PATCH", body: p });
   deletePrinter = (id: string) =>
     this.request<{ deleted: string }>(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // spool bookings in the account (cloud spools, server 0.29.0)
+  bookings = () => this.request<ServerBookings>("/api/bookings");
+  createBooking = (b: { printer: string; file: string; uses: { spool: number; grams: number; label?: string }[];
+                        printer_name?: string; job?: string }) =>
+    this.request<{ booking: ServerBooking | null }>("/api/bookings", { method: "POST", body: b });
+  observeBookings = (statuses: Record<string, PrinterStatus | null>) =>
+    this.request<ServerBookings & { booked_now: ServerBooking[] }>("/api/bookings/observe", { method: "POST", body: { statuses } });
+  resolveBooking = (id: string, part: number) =>
+    this.request<{ booking: ServerBooking }>(`/api/bookings/${encodeURIComponent(id)}/resolve`, { method: "POST", body: { part } });
   // bridges (cloud, docs/BRIDGE.md)
   bridges = () => this.request<Bridge[]>("/api/bridges");
   pairBridge = (code: string, name?: string) =>

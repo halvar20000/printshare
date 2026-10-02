@@ -253,6 +253,7 @@ def test_bridge_end_to_end(cloud_live, tmp_path):
                 job = await _until(lambda: _with(c.get(f"{api_}/jobs/j2", headers=anna),
                                                  lambda r: r.json()["state"] != "sending" and r.json()))
                 assert job["state"] == "started" and not job["error"], job
+                assert job["printer_file"] == "cube.gcode", "the name on the printer, for spool bookings"
                 assert job["log"], "upload steps from the bridge"
                 assert len(voron.uploads) == 2
                 # rename in the app: stays when the bridge reports its printers again
