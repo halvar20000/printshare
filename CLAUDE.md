@@ -551,7 +551,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (decision card on the printers tab and `app/spoolman.tsx`); Settings → Spoolman.
 - Tested: node against `tests/fakes.py` `FakeSpoolman` + FakeMoonraker (incl. active spool on send), web build flow
   (choose spool → material warning → print → simulated CC finishes → 3.7 g booked once; decision card books 30 %).
-  **No real Spoolman tried yet**; the CC1's file name after COMPLETED is assumed to stay (else the app asks).
+  Real Spoolman 0.27.0 on Tower (http://192.168.86.230:7912, Thomas, 44 spools) read fine 2026-10-02 (nothing booked yet);
+  empty spools (0 g, not archived) are listed last, the picker groups by material. The CC1's file name after COMPLETED is assumed to stay (else the app asks).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

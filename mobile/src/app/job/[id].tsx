@@ -488,7 +488,7 @@ export default function JobScreen() {
       {spoolSheet != null && spools ? (
         <PickerSheet visible title={colours.length > 1 ? t("colorN", { n: spoolSheet }) : t("spool")}
           choices={[{ value: "none", label: t("noSpool"), sub: t("noSpoolSub") }, ...spools.map(s => ({
-            value: String(s.id), label: spoolLabel(s),
+            value: String(s.id), label: spoolLabel(s), group: s.material ?? undefined,
             sub: [s.material, s.remaining_g != null ? t("spoolLeft", { g: Math.round(s.remaining_g) }) : null, s.location]
               .filter(Boolean).join(" · ") }))]}
           value={spoolFor[spoolSheet] != null ? String(spoolFor[spoolSheet]) : "none"}

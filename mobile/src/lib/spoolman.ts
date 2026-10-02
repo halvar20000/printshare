@@ -61,11 +61,13 @@ export class Spoolman {
     return { version: String((await r.json()).version ?? ""), base: this.base! };
   }
 
-  /** Spools that are not archived, recently used first. */
+  /** Spools that are not archived, recently used first; empty ones (0 g left, not archived yet) at the end. */
   async spools(): Promise<Spool[]> {
     const r = await this.call("GET", "/spool?allow_archived=false&sort=last_used:desc,id:asc");
     if (!r.ok) throw new SpoolmanError(`Spoolman answered HTTP ${r.status}`);
-    return ((await r.json()) as Raw[]).filter(s => !s.archived).map(toSpool);
+    const list = ((await r.json()) as Raw[]).filter(s => !s.archived).map(toSpool);
+    const empty = (s: Spool) => s.remaining_g != null && s.remaining_g < 1;
+    return [...list.filter(s => !empty(s)), ...list.filter(empty)];
   }
 
   /** Book used filament (grams) on a spool. */
