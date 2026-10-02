@@ -147,6 +147,7 @@ jobs:
     # the slim bridge image: built natively per architecture, checked, then tagged together
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
@@ -167,25 +168,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build (local check)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile.bridge
-          platforms: ${{ matrix.platform }}
-          build-args: VERSION=${{ steps.v.outputs.version }}
-          load: true
-          tags: bridge-check
-          cache-from: type=gha,scope=bridge-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=bridge-${{ matrix.arch }}
-      - name: Smoke test - starts, answers, shows its bridge state
-        run: |
-          docker run -d --name b -p 8484:8484 -e PRINTSHARE_API_TOKEN=t -e PRINTSHARE_BRIDGE_URL=http://127.0.0.1:9 bridge-check
-          for i in $(seq 30); do curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge && break; sleep 1; done
-          curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge | grep -q '"enabled":true'
-          docker logs b | tail -20
-          docker rm -f b
-      - name: Push by digest
+      - name: Push by digest (untagged until the smoke test passed)
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -195,6 +178,19 @@ jobs:
           build-args: VERSION=${{ steps.v.outputs.version }}
           outputs: type=image,name=${{ env.BRIDGE_IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=bridge-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=bridge-${{ matrix.arch }}
+      - name: Smoke test - starts, answers, shows its bridge state
+        run: |
+          img="$BRIDGE_IMAGE@${{ steps.build.outputs.digest }}"
+          fail() { echo "::error title=bridge smoke test::$1 $(docker logs b 2>&1 | tail -15 | tr '\n' '|')"; exit 1; }
+          docker run -d --name b -p 8484:8484 -e PRINTSHARE_API_TOKEN=t -e PRINTSHARE_BRIDGE_URL=http://127.0.0.1:9 "$img" \
+            || fail "docker run failed"
+          for i in $(seq 40); do curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge >/dev/null && break; sleep 1; done
+          out=$(curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge) || fail "no answer from /api/bridge"
+          echo "$out"
+          echo "$out" | grep -q '"enabled":true' || fail "bridge mode not on: $out"
+          docker logs b | tail -20
+          docker rm -f b
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
