@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1
+- MakerWorld links: the app shows the model page (pictures, creator, licence, variants) with a button to MakerWorld.
+  MakerWorld only allows downloads with your own account - download the 3MF there and share it with PocketPrint3D.
+
 ## 0.17.0
 - Cloud mode only: spools per account in Spoolman's API shapes (`/spoolman/api/v1/…`), for app users without a Spoolman
   at home. The self-hosted add-on is unchanged (use your own Spoolman there).

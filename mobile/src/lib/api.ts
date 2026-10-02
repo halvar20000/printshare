@@ -111,6 +111,10 @@ export type ModelDetail = ModelHit & {
   images: string[]; summary: string; description: string; category: string | null;
   recommended: Partial<{ nozzle: string; layer_height: string; material: string; weight_g: number; print_hours: number }>;
   files: { name: string; size: number | null; sliceable: boolean }[];
+  /** server 0.17.1: "external" = only downloadable on the source's site (MakerWorld) */
+  download?: "server" | "external";
+  variants?: { id: number; title: string; default: boolean; weight_g: number | null; print_hours: number | null;
+               materials: string[]; colors: string[]; needs_ams: boolean }[];
 };
 /** An OrcaSlicer preset uploaded to the server (issue #2). */
 export type UserProfile = {

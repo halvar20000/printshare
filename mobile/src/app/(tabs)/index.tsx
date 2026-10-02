@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge, Banner, Button, Card, Divider, Empty, Row, tap } from "@/components/ui";
 import type { JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
-import { ago, extractLink, jobName, printTime } from "@/lib/format";
+import { ago, extractLink, jobName, makerWorldId, printTime } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
 
 export default function Home() {
@@ -29,7 +29,9 @@ export default function Home() {
     if (!found) return setError(t("needLink"));
     setError("");
     setLink("");
-    router.push({ pathname: "/prepare", params: { link: found } });
+    const mw = makerWorldId(found);
+    if (mw) router.push({ pathname: "/model/[source]/[id]", params: { source: "makerworld", id: mw } });
+    else router.push({ pathname: "/prepare", params: { link: found } });
   };
   const paste = async () => {
     const found = extractLink(await Clipboard.getStringAsync().catch(() => ""));

@@ -17,6 +17,8 @@ const de = {
   authorSettings: "Empfehlung des Autors", layerHeight: "Schichthöhe", weight: "Gewicht", printTimeAuthor: "Druckzeit",
   license: "Lizenz", category: "Kategorie", likes: "Likes", downloads: "Downloads", makes: "Drucke",
   description: "Beschreibung", showMore: "Mehr anzeigen", showLess: "Weniger anzeigen",
+  externalDownload: "{source} lässt Downloads nur mit deinem eigenen Konto zu: Öffne das Modell in {source}, lade das 3MF dort herunter und teile die Datei mit PocketPrint3D – dann geht es hier weiter.",
+  variants: "Varianten", needsAms: "mehrfarbig (AMS)",
   printableFiles: "{n} druckbare Dateien", printableFile: "1 druckbare Datei", noPrintableFiles: "Keine druckbaren Dateien (STL, 3MF, OBJ, STEP)",
   // home
   homeTitle: "Was möchtest du drucken?",
@@ -265,6 +267,8 @@ const en: Strings = {
   authorSettings: "Author’s recommendation", layerHeight: "Layer height", weight: "Weight", printTimeAuthor: "Print time",
   license: "License", category: "Category", likes: "Likes", downloads: "Downloads", makes: "Makes",
   description: "Description", showMore: "Show more", showLess: "Show less",
+  externalDownload: "{source} only allows downloads with your own account: open the model in {source}, download the 3MF there and share the file with PocketPrint3D – it continues here.",
+  variants: "Variants", needsAms: "multicolour (AMS)",
   printableFiles: "{n} printable files", printableFile: "1 printable file", noPrintableFiles: "No printable files (STL, 3MF, OBJ, STEP)",
   homeTitle: "What do you want to print?",
   homeSub: "Share a Printables link straight from Safari or Chrome with PocketPrint3D – or paste it here.",

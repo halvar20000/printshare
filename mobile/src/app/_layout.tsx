@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { Platform, useColorScheme } from "react-native";
 
 import { AppProvider, useApp } from "@/lib/app";
-import { extractLink } from "@/lib/format";
+import { extractLink, makerWorldId } from "@/lib/format";
 import { useColors } from "@/lib/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -27,6 +27,8 @@ function ShareHandler() {
     const link = shareIntent.webUrl || extractLink(shareIntent.text);
     if (file) {
       router.push({ pathname: "/prepare", params: { fileUri: file.path, fileName: file.fileName ?? "model.stl" } });
+    } else if (link && makerWorldId(link)) {
+      router.push({ pathname: "/model/[source]/[id]", params: { source: "makerworld", id: makerWorldId(link)! } });
     } else if (link) {
       router.push({ pathname: "/prepare", params: { link } });
     }

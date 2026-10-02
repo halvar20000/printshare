@@ -1,17 +1,18 @@
-// Model details from Printables / Thingiverse -> prepare print (spec MQ-06, MQ-10).
+// Model details from Printables / Thingiverse -> prepare print (spec MQ-06, MQ-10). MakerWorld (server 0.17.1): only
+// downloadable with the user's own account -> button to MakerWorld, the 3MF comes back through the share menu.
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Linking, Pressable, Text, View, useWindowDimensions } from "react-native";
 
-import { Badge, Button, Divider, Empty, Row, Screen, Section, tap } from "@/components/ui";
+import { Badge, Banner, Button, Divider, Empty, Row, Screen, Section, tap } from "@/components/ui";
 import type { ModelDetail } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { compact } from "@/lib/format";
 import { space, useColors } from "@/lib/theme";
 
-const SOURCE_NAMES: Record<string, string> = { printables: "Printables", thingiverse: "Thingiverse" };
+const SOURCE_NAMES: Record<string, string> = { printables: "Printables", thingiverse: "Thingiverse", makerworld: "MakerWorld" };
 
 export default function Model() {
   const { source, id } = useLocalSearchParams<{ source: string; id: string }>();
@@ -51,9 +52,13 @@ export default function Model() {
   const text = [model.summary, model.description].filter(Boolean).join("\n\n");
   const long = text.length > 400;
   const srcName = SOURCE_NAMES[model.source] ?? model.source;
+  const external = model.download === "external";
+  const hours = (h: number) => `${Math.floor(h)} h ${Math.round((h % 1) * 60)} min`;
 
   return (
-    <Screen footer={<>
+    <Screen footer={external ? (
+      <Button title={t("openOn", { source: srcName })} icon="open-outline" onPress={() => Linking.openURL(model.url)} />
+    ) : <>
       <Button title={t("printThis")} icon="print-outline" disabled={sliceable === 0}
         onPress={() => router.push({ pathname: "/prepare", params: { link: model.url } })} />
       <Button kind="plain" title={t("openOn", { source: srcName })} icon="open-outline" onPress={() => Linking.openURL(model.url)} />
@@ -103,10 +108,12 @@ export default function Model() {
           ))}
       </View>
 
+      {external ? <Banner kind="info" icon="information-circle-outline" text={t("externalDownload", { source: srcName })} /> : null}
+
       <Section>
-        <Row icon="document-outline" label={sliceable === 1 ? t("printableFile")
-          : sliceable ? t("printableFiles", { n: sliceable }) : t("noPrintableFiles")} />
-        {model.license ? <><Divider /><Row icon="ribbon-outline" label={t("license")} sub={model.license} /></> : null}
+        {external ? null : <Row icon="document-outline" label={sliceable === 1 ? t("printableFile")
+          : sliceable ? t("printableFiles", { n: sliceable }) : t("noPrintableFiles")} />}
+        {model.license ? <>{external ? null : <Divider />}<Row icon="ribbon-outline" label={t("license")} sub={model.license} /></> : null}
         {model.category ? <><Divider /><Row icon="pricetag-outline" label={t("category")} value={model.category} /></> : null}
       </Section>
 
@@ -116,9 +123,26 @@ export default function Model() {
             r.nozzle ? [t("nozzle"), r.nozzle] : null,
             r.layer_height ? [t("layerHeight"), r.layer_height] : null,
             r.weight_g ? [t("weight"), `${Math.round(r.weight_g)} g`] : null,
-            r.print_hours ? [t("printTimeAuthor"), `${Math.floor(r.print_hours)} h ${Math.round((r.print_hours % 1) * 60)} min`] : null,
+            r.print_hours ? [t("printTimeAuthor"), hours(r.print_hours)] : null,
           ].filter((x): x is string[] => !!x).map(([k, v], i) => (
             <View key={k}>{i ? <Divider /> : null}<Row label={k} value={v} /></View>
+          ))}
+        </Section>
+      ) : null}
+
+      {model.variants?.length ? (
+        <Section title={t("variants")}>
+          {model.variants.map((v, i) => (
+            <View key={v.id}>
+              {i ? <Divider /> : null}
+              <Row label={v.title || `#${v.id}`}
+                sub={[v.materials.join(", "), v.weight_g ? `${v.weight_g} g` : null, v.print_hours ? hours(v.print_hours) : null,
+                  v.needs_ams ? t("needsAms") : null].filter(Boolean).join(" · ")}
+                right={<View style={{ flexDirection: "row", gap: 3, marginLeft: 8 }}>
+                  {v.colors.slice(0, 6).map((col, k) => <View key={k} style={{ width: 12, height: 12, borderRadius: 6,
+                    backgroundColor: col, borderWidth: 1, borderColor: c.line }} />)}
+                </View>} />
+            </View>
           ))}
         </Section>
       ) : null}

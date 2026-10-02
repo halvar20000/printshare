@@ -3,6 +3,8 @@
 Printables: the website's GraphQL endpoint (no official API) - kept in this module so a change there
 only breaks search, not printing by link. Thingiverse: official REST API, needs the app token.
 Results link to the model page; the print flow then uses the normal link handling in fetch.py.
+MakerWorld: details only (its JSON for the model page) - no public API, search sits behind a bot check and downloads
+need the user's own login, so the app sends the user to MakerWorld and the downloaded 3MF comes back by sharing.
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
-from .fetch import PRINTABLES_GQL, SLICEABLE, THINGIVERSE_API, UA, FetchError
+from .fetch import MAKERWORLD_NO_DOWNLOAD, PRINTABLES_GQL, SLICEABLE, THINGIVERSE_API, UA, FetchError
 
 PRINTABLES_MEDIA = "https://media.printables.com/"
 SORTS = ("relevant", "popular", "makes")
@@ -48,6 +50,10 @@ class ModelDetail(ModelHit):
     # the author's recommended print settings (Printables only)
     recommended: dict[str, Any] = field(default_factory=dict)
     files: list[dict[str, Any]] = field(default_factory=list)
+    # "server": the server downloads the files (print from the app); "external": only on the source's site (MakerWorld)
+    download: str = "server"
+    # variants of the model with their own plates/settings (MakerWorld "profiles")
+    variants: list[dict[str, Any]] = field(default_factory=list)
 
 
 def text_from_html(value: str | None, limit: int = 4000) -> str:
@@ -219,14 +225,76 @@ class ThingiverseSource:
                    if isinstance(f, dict) and f.get("name")])
 
 
+# ---------------------------------------------------------------- MakerWorld
+class MakerWorldSource:
+    id = "makerworld"
+    name = "MakerWorld"
+    available = True
+    searchable = False          # behind a bot check: no search from the server
+    API = "https://makerworld.com/api/v1/design-service/design/"
+
+    def __init__(self, http: httpx.Client):
+        self.http = http
+
+    def search(self, q: str, page: int, sort: str) -> tuple[list[ModelHit], int | None]:
+        raise FetchError("MakerWorld can't be searched from here - open makerworld.com and share a model link")
+
+    def detail(self, design_id: str) -> ModelDetail:
+        try:
+            r = self.http.get(self.API + design_id, headers={"Accept": "application/json"})
+        except httpx.HTTPError as e:
+            raise FetchError(f"MakerWorld API error: {e.__class__.__name__}") from e
+        if r.status_code == 404:
+            raise FetchError(f"MakerWorld model {design_id} not found")
+        try:
+            d = r.json() if r.status_code == 200 else None
+        except ValueError:
+            d = None
+        if not isinstance(d, dict) or "id" not in d:
+            raise FetchError(f"MakerWorld API error: HTTP {r.status_code}")
+        if d.get("nsfw"):
+            raise FetchError(f"MakerWorld model {design_id} not found")
+        ext = d.get("designExtension") or {}
+        images = [p["url"] for p in ext.get("design_pictures") or [] if isinstance(p, dict) and p.get("url")]
+        if d.get("coverUrl"):          # the cover first (the picture people know from the link preview)
+            images = [d["coverUrl"]] + [u for u in images if u != d["coverUrl"]]
+        variants = []
+        for i in d.get("instances") or []:
+            fil = [f for f in i.get("instanceFilaments") or [] if isinstance(f, dict)]
+            variants.append({
+                "id": i.get("id"), "title": i.get("title") or "", "default": i.get("id") == d.get("defaultInstanceId"),
+                "weight_g": _int(i.get("weight")),
+                "print_hours": round(i["prediction"] / 3600, 2) if isinstance(i.get("prediction"), (int, float)) else None,
+                "materials": sorted({str(f.get("type")) for f in fil if f.get("type")}),
+                "colors": [str(f.get("color")) for f in fil if f.get("color")],
+                "needs_ams": bool(i.get("needAms")),
+            })
+        default = next((v for v in variants if v["default"]), variants[0] if variants else {})
+        rec = {"material": ", ".join(default.get("materials") or []) or None, "weight_g": default.get("weight_g"),
+               "print_hours": default.get("print_hours")}
+        slug = d.get("slug") or ""
+        creator = d.get("designCreator") or {}
+        return ModelDetail(
+            source=self.id, id=str(d["id"]), name=d.get("title") or f"MakerWorld {design_id}",
+            url=f"https://makerworld.com/en/models/{d['id']}" + (f"-{slug}" if slug else ""),
+            author=creator.get("name"), thumbnail=d.get("coverUrl"), likes=_int(d.get("likeCount")),
+            downloads=_int(d.get("downloadCount")), makes=_int(d.get("printCount")), license=d.get("license"),
+            images=images[:20], summary="", description=text_from_html(d.get("summary")),
+            category=next((c.get("name") for c in d.get("categories") or [] if c.get("name")), None),
+            recommended={k: v for k, v in rec.items() if v}, files=[], download="external", variants=variants)
+
+
 # ---------------------------------------------------------------- facade
 class Search:
     def __init__(self, thingiverse_token: str = "", timeout: float = 20.0, http: httpx.Client | None = None):
         self.http = http or httpx.Client(timeout=timeout, follow_redirects=True, headers={"User-Agent": UA})
-        self.sources = {s.id: s for s in (PrintablesSource(self.http), ThingiverseSource(self.http, thingiverse_token))}
+        self.sources = {s.id: s for s in (PrintablesSource(self.http), ThingiverseSource(self.http, thingiverse_token),
+                                          MakerWorldSource(self.http))}
 
     def list_sources(self) -> list[dict[str, Any]]:
-        return [{"id": s.id, "name": s.name, "available": s.available} for s in self.sources.values()]
+        """Sources for the search tabs (MakerWorld only has model pages: left out, older apps would offer a search)."""
+        return [{"id": s.id, "name": s.name, "available": s.available} for s in self.sources.values()
+                if getattr(s, "searchable", True)]
 
     def _source(self, source: str):
         s = self.sources.get(source)

@@ -289,6 +289,14 @@ only, missing keys left out: `{"nozzle": "0.4 mm", "layer_height": "0.2 mm", "ma
 "print_hours": 1.5}`) and `files` (`[{"name": "3DBenchy.stl", "size": 11285384, "sliceable": true}, …]`).
 The **link** for the next steps is the hit's `url`.
 
+**MakerWorld (0.17.1, model pages only):** `GET /api/models/makerworld/{id}` (id from `makerworld.com/…/models/<id>`) gives
+the same fields plus `download: "external"` (Printables/Thingiverse: `"server"`), `files: []` and `variants`
+(`[{"id", "title", "default", "weight_g", "print_hours", "materials", "colors", "needs_ams"}]`, MakerWorld's "profiles").
+MakerWorld has no public API: search is behind a bot check and downloads need the user's own MakerWorld login, so it is
+not in `/api/sources` and `/api/files` / `/api/jobs` answer `400 "MakerWorld only allows downloads with your own MakerWorld
+account …"`. Apps show the model page with a button to MakerWorld; the user downloads the 3MF there and shares the file with
+the app (normal upload flow; Orca reads Bambu Studio projects incl. colours).
+
 ### Link or uploaded file
 A model is always identified by a **link**: an `http(s)` URL (Printables, Thingiverse, direct file) or an uploaded file.
 

@@ -565,6 +565,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Privacy policy (`site/privacy/`) got the cloud section 6 (DE binding + EN) on 2026-10-02 - Thomas to review.
 - Open: export/import in Spoolman's format, SpoolmanDB presets when adding, automatic G-code/upload cleanup (BE-05).
 
+## MakerWorld, light version (2026-10-02, server 0.17.1)
+- Probed 2026-10-02: `GET https://makerworld.com/api/v1/design-service/design/<id>` answers JSON without login (also with our
+  own UA `PocketPrint3D/0.1`; 404 for missing models). Search (`/api/v1/search-service/select/design2`, web search page) and
+  the file endpoint (`/design-service/instance/<id>/f3mf`) sit behind Cloudflare's bot check (HTTP 403 "Just a moment…");
+  `/design/<id>/model?type=download` → `{"error":"Please log in to download models."}`. No public API. Decision (Thomas):
+  no search, no server download, no user credentials - model page + "open in MakerWorld", the 3MF comes back by sharing.
+- Server: `fetch.MAKERWORLD_LINK` → source `makerworld`, `list_files` raises `MAKERWORLD_NO_DOWNLOAD` (400);
+  `search.MakerWorldSource` (`searchable = False`, not in `/api/sources`): images = cover + `designExtension.design_pictures`,
+  `variants` from `instances` (title, weight, `prediction` s → hours, filament types/colours, `needAms`), `download: "external"`.
+- App: `format.makerWorldId()`; home + share menu open `model/makerworld/<id>`; model page: info banner, variants, only the
+  "Auf MakerWorld öffnen" button. Web build checked with the live MakerWorld data. A real MakerWorld 3MF (Bambu Studio project)
+  has not been sliced through PocketPrint3D yet.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

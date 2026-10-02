@@ -36,6 +36,11 @@ class RemoteFile:
         return self.name.lower().endswith(SLICEABLE)
 
 
+MAKERWORLD_LINK = re.compile(r"makerworld\.com(?:\.cn)?/(?:[a-z]{2}(?:-[a-z]{2})?/)?models/(\d+)", re.I)
+MAKERWORLD_NO_DOWNLOAD = ("MakerWorld only allows downloads with your own MakerWorld account - open the model in "
+                          "MakerWorld, download the 3MF there and share the file with PocketPrint3D")
+
+
 def parse_source(link: str) -> tuple[str, str]:
     """Return (source, id_or_url) for a model link."""
     link = link.strip()
@@ -43,6 +48,8 @@ def parse_source(link: str) -> tuple[str, str]:
         return "printables", m.group(1)
     if m := re.search(r"thingiverse\.com/thing:(\d+)", link):
         return "thingiverse", m.group(1)
+    if m := MAKERWORLD_LINK.search(link):
+        return "makerworld", m.group(1)
     if link.startswith(("http://", "https://")):
         return "url", link
     if Path(link).exists():
@@ -58,6 +65,8 @@ class Fetcher:
     # ---------- listing ----------
     def list_files(self, link: str) -> list[RemoteFile]:
         source, ident = parse_source(link)
+        if source == "makerworld":
+            raise FetchError(MAKERWORLD_NO_DOWNLOAD)
         if source == "printables":
             return self._printables_files(ident)
         if source == "thingiverse":

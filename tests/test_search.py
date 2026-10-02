@@ -52,7 +52,28 @@ def thingiverse(request: httpx.Request) -> httpx.Response:
     return httpx.Response(404, json={"error": "Not Found"})
 
 
+MW_DESIGN = {"id": 1400373, "title": "Seed Starter", "slug": "seed-starter", "coverUrl": "https://mw/cover.png",
+             "summary": "<h2>Grow</h2><p>Plants &amp; more</p>", "license": "Standard Digital File License",
+             "likeCount": 12, "downloadCount": 16620, "printCount": 300, "nsfw": False, "defaultInstanceId": 2,
+             "designCreator": {"name": "Meyui"}, "categories": [{"name": "Garden"}],
+             "designExtension": {"design_pictures": [{"url": "https://mw/p1.png"}, {"url": "https://mw/cover.png"}]},
+             "instances": [{"id": 1, "title": "6 Cells", "weight": 226, "prediction": 29160, "needAms": False,
+                            "instanceFilaments": [{"type": "PLA", "color": "#A57E60"}]},
+                           {"id": 2, "title": "9 Cells", "weight": 322, "prediction": 39600, "needAms": True,
+                            "instanceFilaments": [{"type": "PLA", "color": "#646941"}, {"type": "PETG", "color": "#FFFFFF"}]}]}
+
+
+def makerworld(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/api/v1/design-service/design/1400373":
+        return httpx.Response(200, json=MW_DESIGN)
+    if request.url.path == "/api/v1/design-service/design/7":
+        return httpx.Response(200, json={**MW_DESIGN, "id": 7, "nsfw": True})
+    return httpx.Response(404, json={"code": 404, "error": "not found"})
+
+
 def router(request: httpx.Request) -> httpx.Response:
+    if "makerworld" in request.url.host:
+        return makerworld(request)
     return printables(request) if "printables" in request.url.host else thingiverse(request)
 
 
@@ -106,3 +127,31 @@ def test_validation():
 def test_text_from_html_limits():
     assert text_from_html("<b>a</b><br>b") == "a\nb"
     assert text_from_html("word " * 2000, limit=20).endswith(" …")
+
+
+def test_makerworld_details_only(search):
+    """MakerWorld: model page data, no search, no server download (the app sends the user to MakerWorld)."""
+    d = search.detail("makerworld", "1400373")
+    assert d["name"] == "Seed Starter" and d["author"] == "Meyui" and d["download"] == "external" and d["files"] == []
+    assert d["url"] == "https://makerworld.com/en/models/1400373-seed-starter"
+    assert d["images"] == ["https://mw/cover.png", "https://mw/p1.png"]
+    assert d["description"].startswith("Grow\nPlants & more") and d["category"] == "Garden"
+    assert d["recommended"] == {"material": "PETG, PLA", "weight_g": 322, "print_hours": 11.0}
+    assert [(v["title"], v["default"], v["needs_ams"]) for v in d["variants"]] == [("6 Cells", False, False), ("9 Cells", True, True)]
+    for bad in ("7", "8"):                       # nsfw / missing
+        with pytest.raises(FetchError, match="not found"):
+            search.detail("makerworld", bad)
+    with pytest.raises(FetchError, match="can't be searched"):
+        search.search("makerworld", "benchy")
+    assert "makerworld" not in [x["id"] for x in search.list_sources()]
+    assert search.detail("printables", "3161")["download"] == "server"
+
+
+def test_makerworld_links():
+    from printshare.fetch import Fetcher, parse_source
+    for link in ("https://makerworld.com/en/models/1400373-seed-starter#profileId-1452154",
+                 "Look at this https://makerworld.com/models/1400373?from=search",
+                 "https://makerworld.com/de/models/1400373"):
+        assert parse_source(link) == ("makerworld", "1400373")
+    with pytest.raises(FetchError, match="own MakerWorld account"):
+        Fetcher().list_files("https://makerworld.com/en/models/1400373")

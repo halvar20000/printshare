@@ -10,6 +10,13 @@ export const brandOf = (name: string) => shortName(name).split(" ")[0] || name;
 
 export const plateName = (t: T, plate?: string | null) => (plate ? t.table.plates[plate] || plate : "–");
 
+/** MakerWorld model id of a link: MakerWorld only lets the user download (own account), so the app shows the model
+ *  page with a button to MakerWorld instead of slicing the link (server 0.17.1). */
+export function makerWorldId(link?: string | null): string | null {
+  const m = (link || "").match(/makerworld\.com(?:\.cn)?\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?models\/(\d+)/i);
+  return m ? m[1] : null;
+}
+
 export function extractLink(text?: string | null): string {
   const m = (text || "").match(/https?:\/\/[^\s"'<>]+/);
   return m ? m[0] : "";
