@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.22.0
+- Exact print times for Klipper printers (e.g. COSMOS): after slicing, klipper_estimator recalculates the time with the
+  printer's own speed and acceleration limits (often 10–20 % closer than OrcaSlicer) and corrects the progress lines,
+  so Mainsail/Fluidd show the right remaining time too. Works while the printer is off once it was reached once.
+
 ## 0.21.0
 - Your own Manyfold model library as a search source in the app ("Entdecken" → Manyfold): search, model pages with
   pictures, print like a Printables model. Set it up in the app (Settings → Manyfold) or with MANYFOLD_URL / MANYFOLD_TOKEN.

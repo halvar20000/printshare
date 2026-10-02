@@ -664,6 +664,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   images, prepare uses `link`. Tested against a simulated Manyfold (tests/test_manyfold.py, also over HTTP in the web
   build). **Not yet against a real Manyfold.**
 
+## klipper_estimator (2026-10-02, server 0.22.0)
+- Annex-Engineering/klipper_estimator v3.7.3 (MIT), static binaries: `klipper_estimator_linux` (amd64, sha256 6e7e3a4f…dafb),
+  `klipper_estimator_rpi` (**32-bit armv7**, da6c2bed…f79d) - the Dockerfile keeps it on arm64 only if it runs there.
+  Installed to `/opt/klipper_estimator/klipper_estimator` (env `KLIPPER_ESTIMATOR` overrides).
+- It reads `GET /printer/objects/query?configfile=settings` (needs the full Klipper settings incl.
+  `extruder.instantaneous_corner_velocity`); `--config_moonraker_cache_file` keeps the limits (215 B JSON) and
+  `--config_moonraker_ignore_error` uses them while the printer is off; **without a cache and printer off it exits 1 and
+  leaves the file untouched** (no fallback to its 100 mm/s defaults). `post-process` rewrites `M73 P… R…`, the
+  `; estimated printing time` comment (which `_parse_estimates` reads) and adds "; Processed by klipper_estimator", which
+  Moonraker's own `[analysis]` component recognises (users may enable that printer-side too).
+- `printshare/klipper_time.py`, called in `Slicer.slice` after the thumbnails: Moonraker printers with an address only
+  (cloud printers have none), the adapter's URL candidates (configured, then :7125), cache in
+  `<config dir>/klipper_estimator/<printer>.json`. Example: cone 9m16s (Orca) → 8m33s with 500 mm/s / 20000 mm/s².
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

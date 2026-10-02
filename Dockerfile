@@ -27,6 +27,21 @@ RUN case "${TARGETARCH:-amd64}" in \
     && chmod +x /tmp/orca.AppImage && cd /opt && /tmp/orca.AppImage --appimage-extract >/dev/null \
     && mv /opt/squashfs-root /opt/orca && rm /tmp/orca.AppImage
 
+# klipper_estimator (MIT, Annex-Engineering): exact print times for Klipper printers (printshare/klipper_time.py).
+# Pinned + checksummed. Its arm build is 32-bit armv7: kept only if this machine can run it, else the feature is off.
+ARG KLIPPER_ESTIMATOR_VERSION=3.7.3
+RUN case "${TARGETARCH:-amd64}" in \
+      amd64) f=klipper_estimator_linux; sum=6e7e3a4ff10c4f63648d4e61fa0cb868c900f7ae63a1c9c3a04920411d15dafb ;; \
+      arm64) f=klipper_estimator_rpi;   sum=da6c2bed61a47960e706323b78b950a4df7500caecfea1bd450b42a6408bf79d ;; \
+    esac \
+    && mkdir -p /opt/klipper_estimator \
+    && curl -fsSL -o /opt/klipper_estimator/klipper_estimator \
+       "https://github.com/Annex-Engineering/klipper_estimator/releases/download/v${KLIPPER_ESTIMATOR_VERSION}/$f" \
+    && echo "$sum  /opt/klipper_estimator/klipper_estimator" | sha256sum -c - \
+    && chmod +x /opt/klipper_estimator/klipper_estimator \
+    && (/opt/klipper_estimator/klipper_estimator --version \
+        || { echo "klipper_estimator can't run on ${TARGETARCH} - Klipper times stay OrcaSlicer's"; rm -rf /opt/klipper_estimator; })
+
 # Further libraries orca-slicer links against (separate layer to keep the one above cached).
 # The ldd check fails the build with the complete list if anything is still missing.
 RUN apt-get update && apt-get install -y --no-install-recommends \

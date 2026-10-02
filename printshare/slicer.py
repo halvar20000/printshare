@@ -10,7 +10,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import model_info, thumbnails, transform
+from . import klipper_time, model_info, thumbnails, transform
 from .config import PrinterConfig, Settings, SlicingConfig
 from .profiles import ProfileLibrary, load_user_preset, write_preset
 from .user_profiles import resolve_preset
@@ -179,6 +179,8 @@ class Slicer:
             except (OSError, ValueError):
                 machine_preset = {}
             thumbnails.add_to_gcode(target, machine_preset)
+            # Klipper: exact time with the printer's own motion limits (before the estimates are read)
+            klipper_time.post_process(target, printer, self.settings.config_dir or self.settings.work_dir)
             t, g, mtr, layers = _parse_estimates(target)
             placed = None
             if copies > 1:
