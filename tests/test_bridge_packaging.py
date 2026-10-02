@@ -48,6 +48,9 @@ def test_printers_load_without_orcaslicer(tmp_path, monkeypatch):
 def test_cli_bridge_switches_bridge_mode_on(monkeypatch, tmp_path):
     import printshare.cli as cli
     calls = {}
+    # an existing config with its own folders (else the defaults /data/work … - not writable for normal users, e.g. CI)
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump({"api_token": "t", "work_dir": str(tmp_path / "w"),
+                                                          "gcode_dir": str(tmp_path / "g"), "printers": []}))
     monkeypatch.setenv("PRINTSHARE_CONFIG", str(tmp_path / "config.yaml"))
     monkeypatch.setenv("PRINTSHARE_BRIDGE", "0")          # recorded, so the "1" set by the command is undone afterwards
     monkeypatch.setattr("uvicorn.run", lambda *a, **k: calls.setdefault("run", (a, k)))
