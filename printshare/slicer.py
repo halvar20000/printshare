@@ -1,6 +1,7 @@
 """Headless slicing with the OrcaSlicer command line."""
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -9,7 +10,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import model_info, transform
+from . import model_info, thumbnails, transform
 from .config import PrinterConfig, Settings, SlicingConfig
 from .profiles import ProfileLibrary, load_user_preset, write_preset
 from .user_profiles import resolve_preset
@@ -172,6 +173,12 @@ class Slicer:
                 raise SliceError(f"OrcaSlicer produced no G-code (exit {proc.returncode}).\n{tail}")
             target = out_dir / f"{model.stem[:60]}.gcode"
             shutil.copyfile(gcode_src, target)
+            # the CLI writes no preview images without a display: add them for the printer's screen
+            try:
+                machine_preset = json.loads(m.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                machine_preset = {}
+            thumbnails.add_to_gcode(target, machine_preset)
             t, g, mtr, layers = _parse_estimates(target)
             placed = None
             if copies > 1:

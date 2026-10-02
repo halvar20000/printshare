@@ -422,3 +422,22 @@ def test_orca_cloud_bundle_preset_slices(tmp_path):
     res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out", printer.slicing)
     code = "\n".join(line for line in res.gcode_path.read_text().splitlines() if not line.startswith(";"))
     assert "PRINT_START" in code and "SET_PRINT_STATS_INFO TOTAL_LAYER=" in code and "M729" not in code
+
+
+@needs_orca
+def test_thumbnails_for_the_printer_screen(tmp_path):
+    """The Orca CLI writes no thumbnails headless; the slicer adds the sizes/formats the printer preset asks for."""
+    import re
+
+    from printshare.slicer import Slicer
+    s = _settings(tmp_path)
+    cc = PrinterConfig(id="cc", type="elegoo_sdcp", host="127.0.0.1")
+    mk4s = PrinterConfig(id="mk4s", type="prusalink", url="http://127.0.0.1", slicing=SlicingConfig(
+        machine="Prusa MK4S 0.4 nozzle", process="0.20mm SPEED @MK4S 0.4", filament="Prusa Generic PLA @MK4S"))
+    found = {}
+    for p in (cc, mk4s):
+        g = Slicer(s).slice(_cube(tmp_path), p, tmp_path / p.id, p.slicing).gcode_path.read_text()
+        found[p.id] = re.findall(r"^; (thumbnail\w*) begin (\d+x\d+) \d+$", g, re.M)
+        assert g.index("; THUMBNAIL_BLOCK_START") < g.index("; EXECUTABLE_BLOCK_START")
+    assert found["cc"] == [("thumbnail", "144x144")]
+    assert ("thumbnail_QOI", "16x16") in found["mk4s"] and ("thumbnail", "640x480") in found["mk4s"]

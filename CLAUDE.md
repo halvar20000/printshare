@@ -53,7 +53,8 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 3. `--allow-newer-file` takes NO value (with "1" Orca treats "1" as a file).
 4. Orca writes `00000.log` into its CWD → subprocess runs with `cwd=work`.
 5. Output: `--export-3mf result.3mf` + `--outputdir`; plain `plate_1.gcode` also appears.
-   Thumbnails are blank headless (no OpenGL) — P1 item.
+   The CLI writes **no thumbnails** headless (checked 2026-10-02: no blocks at all) → since 0.20.0
+   `printshare/thumbnails.py` adds them after slicing (see "Thumbnails" below).
 6. Orca CLI *does* have `--arrange 1` and `--orient` (spec PL-04 says it doesn't — it does, v2.4.2).
 7. COSMOS ≥ 26.07 e-stops on stock Elegoo start G-code (`M729`, `M8213`). `machine_preset: cosmos`
    replaces start/end with `SET_PRINT_STATS_INFO TOTAL_LAYER=…` + `PRINT_START EXTRUDER=[nozzle_temperature_initial_layer]
@@ -637,6 +638,17 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Tests: tags generated per spec by `mobile/scripts/test-data/make_openprinttag_tags.py` (cbor2), parser + matching in
   node. **Not yet with a real tag** (needs a Prusament spool or a blank OpenPrintTag). Writing (consumed weight after the
   print, workgroup rules) not done.
+
+## Thumbnails for the printer screen (2026-10-02, server 0.20.0)
+- Sizes/formats from the printer preset: CC `thumbnails: ["144x144"]` + `thumbnails_format: PNG`; Prusa MK4S
+  `16x16/QOI, 313x173/QOI, 440x240/QOI, 480x240/QOI, 640x480/PNG`; presets without any (e.g. Voron) get 32x32 + 300x300 PNG.
+- `thumbnails.py`: isometric picture of the toolpaths from `gcode_preview.parse` (outer/overhang walls, top/bottom
+  surfaces, support, brim/skirt; 45° turned, 30° elevation; depth-sorted per layer, light from the +x side, every other
+  layer 7 % darker), drawn with Pillow (no GPU), fitted into each size; PNG/JPG via Pillow, QOI with an own encoder
+  (Pillow 12 reads QOI but can't write it; checked pixel-exact against Pillow's reader). Blocks `; thumbnail[_QOI|_JPG]
+  begin WxH len` (78 chars per line) in `; THUMBNAIL_BLOCK_START/END` after `; HEADER_BLOCK_END`; never twice; any
+  error → G-code unchanged. Called in `Slicer.slice` right after copying the G-code. **Not yet seen on a real printer
+  screen** (CC1, Prusa).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

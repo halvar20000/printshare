@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.20.0
+- Preview images in the G-code: the printer's screen (file list, print screen) shows a picture of the sliced model in
+  the sizes and formats the printer profile asks for (PNG, QOI for Prusa, JPG). OrcaSlicer's command line made none.
+
 ## 0.19.0
 - Filament presets from SpoolmanDB (open filament database, 67 brands) for adding spools in the app: brand → filament
   fills in name, material, colour, weight and spool weight.
