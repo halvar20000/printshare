@@ -268,7 +268,7 @@ export default function JobScreen() {
     if (start && !(await confirmAsync(t("confirmStartPlateQ", { printer: pname, material }), t("start"), t("cancelBtn")))) return;
     setActionError("");
     setSending(start ? "print" : "upload");
-    if (cloud && server && printerObj) {
+    if (cloud && server && printerObj && !printerObj.bridge) {
       // the phone is on the home Wi-Fi: G-code from the cloud (slots already mapped) -> straight to the printer
       try {
         const fileName = printerFileName(job.result?.source_file, job.id);
@@ -414,7 +414,7 @@ export default function JobScreen() {
   const footer = done ? (
     <>
       <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
-      {!cloud ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
+      {!cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
         onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
     </>

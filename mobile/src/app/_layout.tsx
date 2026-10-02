@@ -63,6 +63,7 @@ function Root() {
         <Stack.Screen name="cloud-printer/[id]" options={{ title: "" }} />
         <Stack.Screen name="model3d" options={{ title: "" }} />
         <Stack.Screen name="spoolman" options={{ title: t("spoolman") }} />
+        <Stack.Screen name="bridges" options={{ title: t("bridgesTitle") }} />
         <Stack.Screen name="spools" options={{ title: t("spools") }} />
         <Stack.Screen name="printables" options={{ title: "Printables" }} />
         <Stack.Screen name="manyfold" options={{ title: "Manyfold" }} />

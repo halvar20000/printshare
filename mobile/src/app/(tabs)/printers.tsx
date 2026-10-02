@@ -116,7 +116,7 @@ export default function Printers() {
           {cloud ? <Button title={t("addPrinter")} icon="add" onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} /> : null}
         </Empty>
       ) : null}
-      {(entries ?? []).map(({ printer: p, status: s, noAddress }) => {
+      {(entries ?? []).map(({ printer: p, status: s, noAddress, error }) => {
         const kind = s ? s.kind : "offline";
         const busy = kind === "active" || kind === "paused";
         let label = t.table.printerKinds[kind];
@@ -131,7 +131,10 @@ export default function Printers() {
           <Card key={p.id} style={{ padding: space, marginBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
               <Ionicons name="print" size={24} color={c.accent} style={{ marginRight: 10 }} />
-              <Text style={{ color: c.text, fontSize: 19, fontWeight: "700", flex: 1 }} numberOfLines={1}>{p.name}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontSize: 19, fontWeight: "700" }} numberOfLines={1}>{p.name}</Text>
+                {p.bridge ? <Text style={{ color: c.sub, fontSize: 13, marginTop: 1 }}>{t("viaBridge")}</Text> : null}
+              </View>
               <Badge text={label} kind={badge} />
             </View>
             {busy && s ? (
@@ -161,7 +164,8 @@ export default function Printers() {
                   onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: p.id } })} />
               </>
             ) : (
-              <Text style={{ color: c.sub, fontSize: 15 }}>{t(cloud ? "errPrinterOfflineLan" : "errPrinterOffline")}</Text>
+              <Text style={{ color: c.sub, fontSize: 15 }}>
+                {p.bridge ? (error ?? t("errBridgeOffline")) : t(cloud ? "errPrinterOfflineLan" : "errPrinterOffline")}</Text>
             )}
             {s?.lanes?.length ? (
               // filament lanes of an AFC unit (CANVAS on COSMOS), spec MA-02
@@ -209,7 +213,7 @@ export default function Printers() {
                 </>
               )
             ) : null}
-            {s && !cloud ? (
+            {s && (!cloud || p.bridge) ? (
               <Button kind="secondary" title={t("control")} icon="options-outline" style={{ marginTop: 14 }}
                 onPress={() => router.push({ pathname: "/control/[id]", params: { id: p.id, name: p.name } })} />
             ) : null}

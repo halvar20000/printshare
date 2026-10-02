@@ -97,6 +97,9 @@ export default function Settings() {
         </Section>
 
         <Section title={t("advanced")}>
+          <Row icon="git-network-outline" label={t("bridgesTitle")} sub={t("bridgesSub")}
+            onPress={() => router.push("/bridges")} />
+          <Divider />
           {spoolsRow}
         </Section>
 

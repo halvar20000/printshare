@@ -747,6 +747,15 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   temperatures/camera/camera snapshot/power/watch mute and in `/send` (spawns `job.send`, 15 min, progress → job log);
   `/api/bridges/{id}/discover|printers`, `PUT /api/printers/{id}/bridge-access`. New bridge method `printer.camera`
   (0.25.0 bridges answer unknown_method for it). Camera through a bridge: snapshots only (`stream: false`).
+- **Step 5 (Android app) done:** Settings (cloud) → Erweitert → "Unterwegs drucken" (`app/bridges.tsx`: code entry with
+  auto-dash, list of bridges online/offline with their printers, "Drucker über die Brücke hinzufügen", remove);
+  `lib/printerAccess.viaServer()` = own server or `printer.bridge` → status/control/send through the server API instead of
+  the Wi-Fi; printers tab shows "über Brücke", control + camera buttons for bridge printers; `cloud-printer/[id].tsx`
+  with `?bridge=` (search via `POST /api/bridges/{id}/discover`, secrets sealed with `lib/seal.ts` = @noble/curves x25519 +
+  @noble/hashes hkdf/sha256 + @noble/ciphers chacha20poly1305, random from `expo-crypto` getRandomBytes; JS→Python unseal
+  checked). New deps: expo-crypto (native → new build), @noble/*. Default bridge name: PRINTSHARE_NAME or host name, but
+  "PocketPrint3D Server" for Docker container ids. Web-build flow checked: pair → printer card → pause → add printer via
+  bridge → slice → print (1.5 MB G-code arrived at the simulated Voron with print=true).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

@@ -26,7 +26,15 @@ export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolea
 /** leveling: null = this printer can't switch bed leveling per print; else its default. */
 /** power: a smart plug is set up on the web page (issue #9) -> "switch on" while the printer is off. */
 export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null; power?: boolean;
-  cosmos?: boolean };
+  cosmos?: boolean;
+  /** cloud: reached through this bridge at home (docs/BRIDGE.md) - the server forwards status/control/send */
+  bridge?: string | null };
+/** A bridge of the cloud account: a PocketPrint3D server at home with an outgoing connection (docs/BRIDGE.md). */
+export type Bridge = { id: string; name: string; version: string | null; public_key: string | null; created: number;
+  last_seen: number | null; online: boolean; connected: number | null;
+  printers: { id: string; name: string; type?: string; machine?: string }[] };
+/** A printer a bridge found on its home network. */
+export type BridgeFound = { type: string; address: string; name: string; cosmos?: boolean; detail?: string; added: boolean };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
 export type Preview = {
@@ -180,6 +188,11 @@ export function friendlyError(t: T, status: number, detail: string): string {
     [d.includes("bundle not found or private"), "errOrcaPrivate"],
     [d.includes("not an orca cloud share link"), "errOrcaLink"],
     [d.includes("makerworld only allows downloads"), "errMakerWorld"],
+    [d.includes("bridge is offline") || d.includes("bridge went offline") || d.includes("bridge was removed") ||
+      d.includes("bridge connection broke"), "errBridgeOffline"],
+    [d.includes("bridge didn't answer in time"), "errBridgeTimeout"],
+    [d.includes("unknown or expired code"), "errBridgeCode"],
+    [d.includes("set up on the server at home itself"), "errBridgeServerPrinter"],
     [status === 401, "errToken"],
     [d.includes("did not start"), "errNotStarted"],
     [d.includes("refused to start"), "errRefused"],
@@ -381,6 +394,20 @@ export class Api {
     this.request<Printer>(`/api/printers/${encodeURIComponent(id)}`, { method: "PATCH", body: p });
   deletePrinter = (id: string) =>
     this.request<{ deleted: string }>(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // bridges (cloud, docs/BRIDGE.md)
+  bridges = () => this.request<Bridge[]>("/api/bridges");
+  pairBridge = (code: string, name?: string) =>
+    this.request<Bridge>("/api/bridges/pair", { method: "POST", body: { code, ...(name ? { name } : {}) } });
+  renameBridge = (id: string, name: string) =>
+    this.request<Bridge>(`/api/bridges/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } });
+  deleteBridge = (id: string) =>
+    this.request<{ deleted: string }>(`/api/bridges/${encodeURIComponent(id)}`, { method: "DELETE" });
+  bridgeDiscover = (id: string) =>
+    this.request<BridgeFound[]>(`/api/bridges/${encodeURIComponent(id)}/discover`, { method: "POST", timeout: 40000 });
+  bridgeAddPrinter = (id: string, printer: { name: string; type: string; machine?: string; cosmos?: boolean }, sealed: string) =>
+    this.request<Printer>(`/api/bridges/${encodeURIComponent(id)}/printers`, { method: "POST", body: { printer, sealed }, timeout: 40000 });
+  bridgePrinterAccess = (printerId: string, sealed: string) =>
+    this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printerId)}/bridge-access`, { method: "PUT", body: { sealed } });
   sources = () => this.request<Source[]>("/api/sources");
   search = (q: string, source: string, page: number, sort: SortKey) =>
     this.request<SearchPage>(`/api/search?q=${encodeURIComponent(q)}&source=${source}&page=${page}&sort=${sort}`,

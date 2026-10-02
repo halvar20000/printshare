@@ -1,6 +1,9 @@
 // Cloud: a printer of the account - name, type, OrcaSlicer model - and how the app reaches it on the home Wi-Fi
 // (address, PrusaLink password, API key: stored only on this phone, docs/CLOUD.md). id "new" adds a printer.
+// With a bridge (docs/BRIDGE.md, ?bridge=<id> or a printer that has one): the bridge searches its home network, and
+// address/password/key are sealed for the bridge - the cloud passes them on without being able to read them.
 import Ionicons from "@expo/vector-icons/Ionicons";
+import * as Crypto from "expo-crypto";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Switch, Text, TextInput, View } from "react-native";
@@ -12,6 +15,7 @@ import { lanPrinter } from "@/lib/lan";
 import { discoverPrinters, NoWifiError, type Found } from "@/lib/lan/discover";
 import LanDiscovery from "../../../modules/lan-discovery/src/LanDiscoveryModule";
 import { loadAccess, saveAccess } from "@/lib/printerAccess";
+import { seal } from "@/lib/seal";
 import { space, useColors } from "@/lib/theme";
 
 type Kind = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint";
@@ -19,7 +23,7 @@ const KINDS: Kind[] = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint"];
 const needsModel = (k: Kind) => k === "prusalink" || k === "octoprint";
 
 export default function CloudPrinter() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, bridge: bridgeParam } = useLocalSearchParams<{ id: string; bridge?: string }>();
   const isNew = id === "new";
   const { api, server, t } = useApp();
   const c = useColors();
@@ -45,10 +49,32 @@ export default function CloudPrinter() {
   const [manual, setManual] = useState(!isNew);
   const [known, setKnown] = useState<string[]>([]);
   const scanRun = useRef(0);
+  // the bridge this printer sits behind (new: from the route; existing: from the printer)
+  const [viaBridge, setViaBridge] = useState<string | null>(bridgeParam ?? null);
+  const [bridgeInfo, setBridgeInfo] = useState<{ name: string; key: string | null } | null>(null);
+  useEffect(() => {
+    if (!api || !viaBridge) return;
+    api.bridges().then(bs => {
+      const b = bs.find(x => x.id === viaBridge);
+      setBridgeInfo(b ? { name: b.name, key: b.public_key } : null);
+    }).catch(() => {});
+  }, [api, viaBridge]);
 
   const runScan = () => {
     const run = ++scanRun.current;
     const live = () => scanRun.current === run;
+    if (bridgeParam && api) {
+      // the bridge searches its own network (no progress steps: one request)
+      api.bridgeDiscover(bridgeParam)
+        .then(list => {
+          if (!live()) return;
+          setFound(list.map(f => ({ type: f.type as Found["type"], address: f.address, name: f.name, cosmos: f.cosmos, detail: f.detail })));
+          setKnown(list.filter(f => f.added).map(f => f.address));
+          setScan("done");
+        })
+        .catch(e => { if (live()) { setScan("done"); setError(errorText(t, e)); } });
+      return;
+    }
     discoverPrinters({ wifi: () => LanDiscovery.wifiAddressAsync(), udp: (m, p, ts, ms) => LanDiscovery.udpProbeAsync(m, p, ts, ms) },
       f => { if (live()) setFound(l => [...l, f]); }, () => !live(),
       (done, total) => { if (live() && (done % 8 === 0 || done === total)) setScan({ pct: Math.round(done * 100 / total) }); })
@@ -57,10 +83,13 @@ export default function CloudPrinter() {
   };
   useEffect(() => {
     if (!isNew || !server) return;
-    loadAccess(server).then(a => setKnown(Object.values(a).map(x => x.address.replace(/^https?:\/\//, "")))).catch(() => {});
+    if (!bridgeParam) {
+      loadAccess(server).then(a => setKnown(Object.values(a).map(x => x.address.replace(/^https?:\/\//, "")))).catch(() => {});
+    }
     runScan();
     const runs = scanRun;
     return () => { runs.current++; };                        // stop when the screen closes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isNew, server]);
   const startScan = () => {
     setFound([]);
@@ -89,6 +118,7 @@ export default function CloudPrinter() {
         setType((KINDS as string[]).includes(p.type) ? p.type as Kind : "elegoo_sdcp");
         setCosmos(!!p.cosmos);
         setMachine(p.machine);
+        if (p.bridge) setViaBridge(p.bridge);
       }
       const a = access[id];
       setAddress(a?.address ?? "");
@@ -135,6 +165,23 @@ export default function CloudPrinter() {
     try {
       const body = { name: name.trim() || autoName, type, cosmos: type === "moonraker" ? cosmos : false,
                      ...(machine && (needsModel(type) || type === "moonraker") ? { machine } : {}) };
+      if (viaBridge) {
+        // address and secrets go sealed to the bridge; the cloud and this phone don't keep them
+        const secrets = { ...(address.trim() ? { address: address.trim() } : {}),
+                          ...(access.password ? { password: access.password } : {}),
+                          ...(access.apiKey?.trim() ? { api_key: access.apiKey.trim() } : {}) };
+        const sealed = () => {
+          if (!bridgeInfo?.key) throw new Error(t("errBridgeKey"));
+          return seal(bridgeInfo.key, secrets, n => Crypto.getRandomBytes(n));
+        };
+        if (isNew) await api.bridgeAddPrinter(viaBridge, body, sealed());
+        else {
+          await api.updatePrinter(id, body);
+          if (Object.keys(secrets).length) await api.bridgePrinterAccess(id, sealed());
+        }
+        router.back();
+        return;
+      }
       const p: Printer = isNew ? await api.addPrinter(body) : await api.updatePrinter(id, body);
       await saveAccess(server, p.id, access);
       router.back();
@@ -152,7 +199,7 @@ export default function CloudPrinter() {
       await saveAccess(server, id, null);
       router.back();
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorText(t, e));
     }
   };
 
@@ -166,12 +213,14 @@ export default function CloudPrinter() {
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
-      disabled={missingModel || (isNew && !address.trim())} />}>
+      disabled={missingModel || (isNew && !address.trim()) || (isNew && !!viaBridge && missingCreds)} />}>
       <Stack.Screen options={{ title: isNew ? t("addPrinter") : name || t("printer") }} />
       {error ? <Banner kind="error" text={error} /> : null}
+      {viaBridge ? <Banner kind="info" icon="git-network-outline"
+        text={t(isNew ? "bridgeAddHint" : "bridgePrinterHint", { bridge: bridgeInfo?.name ?? "…" })} /> : null}
 
       {isNew ? (
-        <Section title={t("lanFindTitle")} footer={found.length ? t("discoverHint") : undefined}>
+        <Section title={t(bridgeParam ? "bridgeFindTitle" : "lanFindTitle")} footer={found.length ? t("discoverHint") : undefined}>
           {found.map((f, i) => {
             const added = known.includes(f.address);
             return (
@@ -188,13 +237,14 @@ export default function CloudPrinter() {
           {scan && typeof scan === "object" ? (
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: space }}>
               <ActivityIndicator color={c.accent} />
-              <Text style={{ color: c.sub, fontSize: 15 }}>{t("discoverRunning", { pct: scan.pct })}</Text>
+              <Text style={{ color: c.sub, fontSize: 15 }}>
+                {bridgeParam ? t("bridgeSearching") : t("discoverRunning", { pct: scan.pct })}</Text>
             </View>
           ) : (
             <>
               {scan === "nowifi" || (scan === "done" && !found.length) ? (
                 <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, padding: space }}>
-                  {t(scan === "nowifi" ? "discoverNoWifi" : "discoverNone")}
+                  {t(scan === "nowifi" ? "discoverNoWifi" : bridgeParam ? "bridgeNone" : "discoverNone")}
                 </Text>
               ) : null}
               <Row icon="refresh" label={t("discoverAgain")} onPress={startScan} />
@@ -206,7 +256,8 @@ export default function CloudPrinter() {
 
       {manual || picked ? (<>
       <Section title={t("printerType")} footer={t.table.printerTypeHints[type]}>
-        <Row icon="print-outline" label={typeLabel(type)} value={t("change")} onPress={() => setSheet("type")} />
+        <Row icon="print-outline" label={typeLabel(type)} value={viaBridge && !isNew ? undefined : t("change")}
+          onPress={viaBridge && !isNew ? undefined : () => setSheet("type")} />
         {type === "moonraker" ? (
           <>
             <Divider />
@@ -222,7 +273,7 @@ export default function CloudPrinter() {
         ) : null}
       </Section>
 
-      <Section title={t("lanAddress")} footer={t("lanAddressHint")}>
+      <Section title={t("lanAddress")} footer={t(!viaBridge ? "lanAddressHint" : isNew ? "bridgeAddressHint" : "bridgeAccessHint")}>
         <TextInput value={address} onChangeText={v => { setAddress(v); setTest(null); }}
           placeholder={type === "octoprint" ? "octopi.local" : "192.168.1.50"}
           placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} keyboardType="url"
@@ -244,12 +295,16 @@ export default function CloudPrinter() {
               accessibilityLabel={type === "octoprint" ? t("octoApiKey") : t("apiKeyOptional")} style={input} />
           </>
         ) : null}
-        <Divider />
-        <View style={{ padding: space }}>
-          <Button kind="secondary" title={t("testConnection")} icon="wifi-outline" onPress={testConnection}
-            loading={testing} disabled={!address.trim() || missingCreds} />
-          {test ? <Text style={{ color: test.ok ? c.ok : c.danger, marginTop: 10, fontSize: 14 }}>{test.text}</Text> : null}
-        </View>
+        {!viaBridge ? (
+          <>
+            <Divider />
+            <View style={{ padding: space }}>
+              <Button kind="secondary" title={t("testConnection")} icon="wifi-outline" onPress={testConnection}
+                loading={testing} disabled={!address.trim() || missingCreds} />
+              {test ? <Text style={{ color: test.ok ? c.ok : c.danger, marginTop: 10, fontSize: 14 }}>{test.text}</Text> : null}
+            </View>
+          </>
+        ) : null}
       </Section>
       {type === "prusalink" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("prusaHint")}</Text> : null}

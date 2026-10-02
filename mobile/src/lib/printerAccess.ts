@@ -35,8 +35,11 @@ async function lanFor(server: Server, printer: Printer) {
   return lanPrinter(printer.type, access);
 }
 
+/** Cloud printers on the home Wi-Fi are reached by the phone; own servers and bridges (docs/BRIDGE.md) by the server. */
+export const viaServer = (server: Server, printer: Printer) => !server.cloud || !!printer.bridge;
+
 export async function printerStatus(api: Api, server: Server, printer: Printer): Promise<PrinterStatus> {
-  if (!server.cloud) return api.status(printer.id);
+  if (viaServer(server, printer)) return api.status(printer.id);
   const lan = await lanFor(server, printer);
   try {
     return await lan.status();
@@ -47,7 +50,7 @@ export async function printerStatus(api: Api, server: Server, printer: Printer):
 
 export async function printerControl(api: Api, server: Server, printer: Printer,
                                      action: "pause" | "resume" | "cancel"): Promise<void> {
-  if (!server.cloud) {
+  if (viaServer(server, printer)) {
     await api.control(printer.id, action);
     return;
   }

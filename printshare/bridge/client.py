@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import random
+import re
 import socket
 import time
 import uuid
@@ -72,6 +73,14 @@ def ensure_identity(settings) -> dict[str, Any]:
         st["private_key"], st["public_key"] = seal.keypair()
         save_state(settings, st)
     return st
+
+
+def default_name() -> str:
+    """Name suggested to the cloud: PRINTSHARE_NAME, else the host name - unless it is a Docker container id."""
+    name = (os.environ.get("PRINTSHARE_NAME") or socket.gethostname() or "").strip()
+    if not name or re.fullmatch(r"[0-9a-f]{12}|[0-9a-f]{64}", name) or name in ("localhost", "homeassistant"):
+        return "PocketPrint3D Server"
+    return f"PocketPrint3D ({name[:40]})"
 
 
 class BridgeClient:
@@ -181,7 +190,7 @@ class BridgeClient:
         async with httpx.AsyncClient(timeout=20) as http:
             r = await http.post(f"{base}/api/bridge/pair/start", json={
                 "bridge_id": st["bridge_id"], "public_key": st["public_key"], "version": self.version,
-                "name": socket.gethostname()[:60] or "PocketPrint3D Bridge"})
+                "name": default_name()})
             if r.status_code != 200:
                 raise RuntimeError(f"pairing refused by {base}: HTTP {r.status_code} {r.text[:200]}")
             start = r.json()
