@@ -268,6 +268,15 @@ const de = {
   spoolCopy: "Als neue Spule kopieren", spoolArchive: "Archivieren (leer)", spoolUnarchive: "Wieder aktiv",
   spoolDelete: "Spule löschen", spoolDeleteQ: "Spule #{id} löschen?",
   spoolFromDb: "Aus Datenbank wählen", spoolDbCount: "{n} Filamente",
+  // OpenPrintTag NFC spools
+  nfcRead: "Von NFC-Tag lesen (OpenPrintTag)", nfcPick: "Spule per NFC wählen",
+  nfcHold: "Halte das Handy an den NFC-Tag der Spule …", nfcCancel: "Abbrechen",
+  nfcOff: "NFC ist ausgeschaltet – schalte es in den Einstellungen des Handys ein.", nfcNone: "Dieses Handy hat kein NFC.",
+  nfcTimeout: "Kein Tag gefunden – halte das Handy ruhig an die Spule und versuche es noch einmal.",
+  nfcReadFailed: "Der Tag konnte nicht gelesen werden – Handy ruhig halten und noch einmal versuchen.",
+  nfcNotOpt: "Auf diesem Tag ist kein OpenPrintTag.",
+  nfcFilled: "Vom Tag übernommen: {tag}", nfcMatched: "{spool} gewählt (Tag: {tag}).",
+  nfcNoMatch: "Keine passende Spule für „{tag}“.", nfcAdd: "Als neue Spule anlegen",
   spoolDbHint: "Hersteller und Filament aus SpoolmanDB (offene Filament-Datenbank) – füllt Bezeichnung, Material, Farbe und Gewicht aus.",
 };
 
@@ -516,6 +525,14 @@ const en: Strings = {
   spoolCopy: "Copy as a new spool", spoolArchive: "Archive (empty)", spoolUnarchive: "Active again",
   spoolDelete: "Delete spool", spoolDeleteQ: "Delete spool #{id}?",
   spoolFromDb: "Choose from the database", spoolDbCount: "{n} filaments",
+  nfcRead: "Read from NFC tag (OpenPrintTag)", nfcPick: "Choose spool by NFC",
+  nfcHold: "Hold the phone to the spool's NFC tag …", nfcCancel: "Cancel",
+  nfcOff: "NFC is switched off – turn it on in the phone settings.", nfcNone: "This phone has no NFC.",
+  nfcTimeout: "No tag found – hold the phone still on the spool and try again.",
+  nfcReadFailed: "The tag could not be read – hold the phone still and try again.",
+  nfcNotOpt: "There is no OpenPrintTag on this tag.",
+  nfcFilled: "Taken from the tag: {tag}", nfcMatched: "{spool} chosen (tag: {tag}).",
+  nfcNoMatch: "No matching spool for “{tag}”.", nfcAdd: "Add as a new spool",
   spoolDbHint: "Brand and filament from SpoolmanDB (open filament database) – fills in name, material, colour and weight.",
 };
 

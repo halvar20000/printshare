@@ -2,7 +2,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
@@ -14,7 +14,9 @@ import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/
 import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
-import { addBooking, loadLastSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
+import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
+import { cancelScan, matchSpool, nfcStatus, scanSpool } from "@/lib/nfc";
+import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
@@ -183,11 +185,12 @@ export default function JobScreen() {
   useEffect(() => {
     if (server && printerId) loadLastSpools(server, printerId).then(setLastSpools);
   }, [server, printerId]);
-  useEffect(() => {
+  // reloaded whenever the screen comes back (e.g. after adding a spool for a scanned tag)
+  useFocusEffect(useCallback(() => {
     if (!smUrl || !reviewing || !server) return;
     openSpoolman(server, smUrl).spools().then(list => { setSpools(list); setSmError(""); })
       .catch(e => setSmError((e as Error).message));
-  }, [smUrl, reviewing, server]);
+  }, [smUrl, reviewing, server]));
   const tracker = pstatus && pstatus !== "offline" ? pstatus.spoolman ?? null : null;
   const printerBooks = !!tracker?.connected;               // Moonraker books the filament itself
   const afcSpools = printerBooks && printerLanes.length > 0; // ... on the spools AFC assigned to the slots
@@ -203,6 +206,29 @@ export default function JobScreen() {
     }
     return out;
   }, [colours, printerLanes, laneFor, afcSpools, spoolChoice, printerBooks, tracker, lastSpools, spools]);
+  // OpenPrintTag: hold the phone to the spool -> the matching spool for the colour that fits the tag best
+  const hasNfc = useMemo(() => nfcStatus() !== "none", []);
+  const [scanning, setScanning] = useState(false);
+  const [nfcMsg, setNfcMsg] = useState<{ kind: "ok" | "warn"; text: string; tag?: OpenPrintTag } | null>(null);
+  const pickByNfc = async () => {
+    if (!spools) return;
+    tap();
+    setScanning(true); setNfcMsg(null);
+    try {
+      const tag = await scanSpool(t);
+      const sp = matchSpool(tag, spools);
+      if (!sp) { setNfcMsg({ kind: "warn", text: t("nfcNoMatch", { tag: tagLabel(tag) }), tag }); return; }
+      // the colour whose material fits the tag, closest colour first; else the first one
+      const fitting = colours.filter(col => fits(col.preset, { material: tag.materialType } as Parameters<typeof fits>[1]));
+      const target = (fitting.length ? fitting : colours)[0];
+      setSpoolChoice(prev => ({ ...prev, [target.index]: sp.id }));
+      setNfcMsg({ kind: "ok", text: t("nfcMatched", { spool: spoolLabel(sp), tag: tagLabel(tag) }) });
+    } catch (e) {
+      if ((e as Error).message) setNfcMsg({ kind: "warn", text: (e as Error).message });
+    } finally {
+      setScanning(false);
+    }
+  };
   const spoolById = (id: number | null | undefined) => (id != null ? spools?.find(s => s.id === id) : undefined);
   const spoolWarnings = useMemo(() => {
     const out: string[] = [];
@@ -466,6 +492,14 @@ export default function JobScreen() {
         : printerBooks && !afcSpools && colours.length > 1 ? <Banner kind="info" icon="disc-outline" text={t("spoolsMultiPrinter")} />
         : (
           <Section title={t("spools")} footer={t(afcSpools ? "spoolsHintAfc" : printerBooks ? "spoolsHintPrinter" : "spoolsHint")}>
+            {hasNfc && !afcSpools ? (
+              <>
+                {scanning
+                  ? <Row icon="close-circle-outline" label={t("nfcHold")} sub={t("nfcCancel")} onPress={() => { tap(); cancelScan(); }} />
+                  : <Row icon="radio-outline" label={t("nfcPick")} onPress={pickByNfc} />}
+                <Divider />
+              </>
+            ) : null}
             {colours.map((col, i) => {
               const sp = spoolById(spoolFor[col.index]);
               return (
@@ -483,6 +517,11 @@ export default function JobScreen() {
             })}
           </Section>
         )
+      ) : null}
+      {!done && nfcMsg ? <Banner kind={nfcMsg.kind} icon="radio-outline" text={nfcMsg.text} /> : null}
+      {!done && nfcMsg?.tag && smUrl === CLOUD_SPOOLS ? (
+        <Button kind="secondary" title={t("nfcAdd")} icon="add" style={{ marginBottom: 14 }}
+          onPress={() => router.push({ pathname: "/spool/[id]", params: { id: "new", tag: JSON.stringify({ ...nfcMsg.tag, main: undefined, aux: undefined }) } })} />
       ) : null}
       {!done ? spoolWarnings.map(w => <Banner key={w} kind="warn" icon="disc-outline" text={w} />) : null}
       {spoolSheet != null && spools ? (

@@ -1,12 +1,15 @@
 // One cloud spool (server 0.17.0): brand, name, material, colour, weights, location; copy, archive, delete.
 // id "new" adds one; ?copy=<id> starts from an existing spool (a stack of identical spools). "From the database" fills
-// the fields from SpoolmanDB (server 0.19.0): brand -> filament.
+// the fields from SpoolmanDB (server 0.19.0): brand -> filament; "Read from NFC tag" from an OpenPrintTag spool
+// (?tag=<json> when the review screen scanned a spool that has no entry yet).
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
 import type { FilamentPreset } from "@/lib/api";
+import { cancelScan, nfcStatus, scanSpool } from "@/lib/nfc";
+import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { useApp } from "@/lib/app";
 import { CLOUD_SPOOLS, openSpoolman, type SpoolInput } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
@@ -20,7 +23,7 @@ const num = (v: string) => {
 };
 
 export default function SpoolForm() {
-  const { id, copy } = useLocalSearchParams<{ id: string; copy?: string }>();
+  const { id, copy, tag: tagParam } = useLocalSearchParams<{ id: string; copy?: string; tag?: string }>();
   const isNew = id === "new";
   const { server, api, t } = useApp();
   const c = useColors();
@@ -41,6 +44,37 @@ export default function SpoolForm() {
   const [brand, setBrand] = useState<string | null>(null);
   const [presets, setPresets] = useState<FilamentPreset[] | null>(null);
   const [dbError, setDbError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [nfcInfo, setNfcInfo] = useState("");
+  const hasNfc = useMemo(() => nfcStatus() !== "none", []);
+
+  const applyTag = (tg: Partial<OpenPrintTag>) => {
+    setVendor(tg.brand ?? ""); setName(tg.name ?? ""); setMaterial(tg.materialType ?? "");
+    if (tg.color) setColor(tg.color);
+    if (tg.fullWeight) setWeight(String(tg.fullWeight));
+    if (tg.remainingWeight != null) setRemaining(String(Math.round(tg.remainingWeight * 10) / 10));
+    setSpoolWeight(tg.emptySpoolWeight ?? null);
+    setDensity(tg.density ?? null);
+    if (tg.location) setLocation(tg.location);
+  };
+  const readTag = async () => {
+    tap();
+    setScanning(true); setDbError(""); setNfcInfo("");
+    try {
+      const tg = await scanSpool(t);
+      applyTag(tg);
+      setNfcInfo(t("nfcFilled", { tag: tagLabel(tg as OpenPrintTag) }));
+    } catch (e) {
+      if ((e as Error).message) setDbError((e as Error).message);
+    } finally {
+      setScanning(false);
+    }
+  };
+  const [tagApplied, setTagApplied] = useState(false);
+  if (tagParam && !tagApplied) {           // from the review screen: a scanned spool that isn't in the list yet
+    setTagApplied(true);
+    try { applyTag(JSON.parse(tagParam)); } catch { /* ignore */ }
+  }
   const [archived, setArchived] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -137,10 +171,20 @@ export default function SpoolForm() {
       <Stack.Screen options={{ title: isNew ? t("spoolNew") : t("spoolEdit", { id }) }} />
       {error ? <Banner kind="error" text={error} /> : null}
       {dbError ? <Banner kind="warn" text={dbError} /> : null}
+      {nfcInfo ? <Banner kind="ok" icon="radio-outline" text={nfcInfo} /> : null}
+      {scanning ? <Banner kind="info" icon="radio-outline" text={t("nfcHold")} /> : null}
 
       <Section footer={t("spoolDbHint")}>
         <Row icon="library-outline" label={t("spoolFromDb")} value={brand ?? undefined}
           onPress={() => { tap(); setDbError(""); setSheet("brand"); }} />
+        {hasNfc ? (
+          <>
+            <Divider />
+            {scanning
+              ? <Row icon="close-circle-outline" label={t("nfcCancel")} onPress={() => { tap(); cancelScan(); }} />
+              : <Row icon="radio-outline" label={t("nfcRead")} onPress={readTag} />}
+          </>
+        ) : null}
       </Section>
 
       <Section>

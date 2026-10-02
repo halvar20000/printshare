@@ -469,6 +469,11 @@ Pages is down) and condenses it to one entry per brand + name + material + colou
 Android: spool form → "Aus Datenbank wählen" → brand → filament fills vendor, name, material, colour, weight and sends
 `spool_weight` + `filament.density` along.
 
+### OpenPrintTag (NFC spools, app side)
+No server API: the Android app reads OpenPrintTag spools (Prusa's open NFC standard, https://specs.openprinttag.org)
+itself and fills the spool form / picks the matching spool – see `mobile/src/lib/openprinttag.ts` (parser) and
+`mobile/src/lib/nfc.ts` (matching) for an implementation the iOS app can follow (Core NFC `NFCISO15693Tag`).
+
 ## Profiles (own OrcaSlicer presets)
 | | |
 |---|---|

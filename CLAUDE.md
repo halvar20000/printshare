@@ -621,6 +621,23 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   Created with `create-expo-module --local` (non-interactive), autolinked from `modules/`. Native → new app build.
 - **To check on a real phone:** the login survives an app restart; downloads on the site don't start a system download.
 
+## OpenPrintTag NFC spools (2026-10-02, app only, Android)
+- Spec read from specs.openprinttag.org (Docsify: `nfc_data_format.md`, `nfc_technical_details.md`,
+  `fff_material_types.md`): NFC-V/ISO 15693 (ICODE SLIX2, 80×4 B), CC (E1/E2, 8-byte CC when byte 2 = 0) → NDEF TLV
+  (0x03) → MIME record `application/vnd.openprinttag` → payload = CBOR meta {0 main_offset, 1 size, 2 aux_offset, 3 size}
+  + main (8 class, 9 type enum, 10 material_name, 11 brand, 16/17 nominal/actual net g, 18 empty spool g, 19 colour RGB(A)
+  bytes, 29 density, 30 diameter, 34/35 print °C, 37/38 bed °C, 52 abbreviation …) + aux (0 consumed_weight, 4
+  storage_location, often an indefinite map; fresh = zeros).
+- Native module `mobile/modules/nfc-tag` (own Expo module, read only: `enableReaderMode(FLAG_READER_NFC_V)`, Get System
+  Info 0x2B, Read Single Block 0x20; `status()`, `readAsync(timeoutMs)` → {uid, data base64, blockSize},
+  `cancelAsync()`; NFC permission + `uses-feature required=false`). `react-native-nfc-manager` avoided (legacy module).
+- `lib/openprinttag.ts` (CBOR decoder + parser), `lib/nfc.ts` (`scanSpool`, `matchSpool`: same material required, brand
+  +3, name +2, colour ±; ties → remaining weight closest to the tag; score ≥ 2). Spool form "Von NFC-Tag lesen"; review
+  screen "Spule per NFC wählen" (+ "Als neue Spule anlegen" with cloud spools, `spool/new?tag=`).
+- Tests: tags generated per spec by `mobile/scripts/test-data/make_openprinttag_tags.py` (cbor2), parser + matching in
+  node. **Not yet with a real tag** (needs a Prusament spool or a blank OpenPrintTag). Writing (consumed weight after the
+  print, workgroup rules) not done.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

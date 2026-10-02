@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["NfcTagModule"]
+  },
+  "android": {
+    "modules": ["io.github.halvar20000.nfctag.NfcTagModule"]
+  }
+}
