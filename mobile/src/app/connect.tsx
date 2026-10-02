@@ -14,14 +14,14 @@ export default function Connect() {
   const { t, server, setServer } = useApp();
   const c = useColors();
   const router = useRouter();
-  const params = useLocalSearchParams<{ url?: string; token?: string; remote?: string }>();
+  const params = useLocalSearchParams<{ url?: string; token?: string; remote?: string; mode?: string }>();
   const [url, setUrl] = useState(params.url ?? server?.url ?? "");
   const [remote, setRemote] = useState(params.remote ?? server?.remoteUrl ?? "");
   const [token, setToken] = useState(params.token ?? server?.token ?? "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const auto = useRef(false);
-  const [mode, setMode] = useState<"cloud" | "own">(params.url || (server && !server.cloud) ? "own" : "cloud");
+  const [mode, setMode] = useState<"cloud" | "own">(params.url || params.mode === "own" || (server && !server.cloud) ? "own" : "cloud");
   const [email, setEmail] = useState(server?.email ?? "");
   const [code, setCode] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);

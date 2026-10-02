@@ -56,6 +56,11 @@ export default function Settings() {
     }
   };
 
+  const spoolsRow = (
+    <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
+      value={spoolman ? undefined : t("spoolsOptional")} onPress={() => router.push("/spoolman")} />
+  );
+
   if (cloud && server) {
     return (
       <Screen>
@@ -66,7 +71,7 @@ export default function Settings() {
           {me ? <><Divider /><Row icon="layers-outline" label={t("slicesToday", { used: me.limits.slices_today,
             limit: me.limits.slices_per_day })} /></> : null}
           <Divider />
-          <Row icon="swap-horizontal-outline" label={t("changeServer")} onPress={() => router.push("/connect")} />
+          <Row icon="swap-horizontal-outline" label={t("changeAccount")} onPress={() => router.push("/connect")} />
           <Divider />
           <Row icon="log-out-outline" label={t("logout")} onPress={logout} />
         </Section>
@@ -84,11 +89,6 @@ export default function Settings() {
             onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
         </Section>
 
-        <Section title={t("spoolman")}>
-          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
-            value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
-        </Section>
-
         <Section title={t("language")}>
           <View style={{ padding: 12 }}>
             <Segmented<LangPref> values={["auto", "de", "en"]} value={langPref} onChange={setLangPref}
@@ -96,7 +96,11 @@ export default function Settings() {
           </View>
         </Section>
 
-        <Section title={t("about")} footer={t("aboutText")}>
+        <Section title={t("advanced")}>
+          {spoolsRow}
+        </Section>
+
+        <Section title={t("about")} footer={t("aboutTextCloud")}>
           <Row icon="information-circle-outline" label={t("version")} value={Constants.expoConfig?.version ?? "–"} />
           <Divider />
           <Row icon="shield-checkmark-outline" label="pocketprint3d.com/privacy" onPress={() => Linking.openURL("https://pocketprint3d.com/privacy/")} />
@@ -138,31 +142,24 @@ export default function Settings() {
         </Section>
       ) : null}
 
-      {server ? (
-        <Section title={t("manyfoldTitle")} footer={t("manyfoldSub")}>
-          <Row icon="library-outline" label="Manyfold" onPress={() => router.push("/manyfold")} />
-        </Section>
-      ) : null}
-
-      {server ? (
-        <Section title={t("failureTitle")} footer={t("failureSub")}>
-          <Row icon="eye-outline" label={t("failureTitle")} onPress={() => router.push("/failure-detection")} />
-        </Section>
-      ) : null}
-
-      {server ? (
-        <Section title={t("spoolman")}>
-          <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
-            value={spoolman ? undefined : t("spoolmanOff")} onPress={() => router.push("/spoolman")} />
-        </Section>
-      ) : null}
-
       <Section title={t("language")}>
         <View style={{ padding: 12 }}>
           <Segmented<LangPref> values={["auto", "de", "en"]} value={langPref} onChange={setLangPref}
             labels={{ auto: t("langAuto"), de: "Deutsch", en: "English" }} />
         </View>
       </Section>
+
+      {server ? (
+        <Section title={t("advanced")}>
+          {spoolsRow}
+          <Divider />
+          <Row icon="library-outline" label={t("manyfoldTitle")} sub={t("manyfoldSub")}
+            onPress={() => router.push("/manyfold")} />
+          <Divider />
+          <Row icon="eye-outline" label={t("failureTitle")} sub={t("failureSub")}
+            onPress={() => router.push("/failure-detection")} />
+        </Section>
+      ) : null}
 
       <Section title={t("about")} footer={t("aboutText")}>
         <Row icon="information-circle-outline" label={t("version")} value={Constants.expoConfig?.version ?? "–"} />

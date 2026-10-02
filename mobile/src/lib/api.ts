@@ -163,6 +163,23 @@ export function normalizeUrl(url: string): string {
 export function friendlyError(t: T, status: number, detail: string): string {
   const d = detail.toLowerCase();
   const rules: [boolean, Parameters<T>[0]][] = [
+    // messages of the app's own printer connections (lib/lan) and of the newer server features
+    [d.includes("rejected the api key") || d.includes("rejected the password"), "errLanAuth"],
+    [d.includes("enter the octoprint api key") || d.includes("enter the prusalink password"), "errLanAuth"],
+    [d.includes("not connected in octoprint") || d.includes("is the printer connected?"), "errLanOcto"],
+    [d.includes("no writable storage"), "errLanStorage"],
+    [d.includes("accepted the start but did not begin") || d.includes("stored the file but did not start"), "errNotStarted"],
+    [d.includes("no print is running"), "errNoPrint"],
+    [d.includes("not reachable on the wi-fi") || d.includes("did not answer") || d.includes("did not send its status") ||
+      /^(octoprint|prusalink|the printer) answered http/.test(d), "errLanOffline"],
+    [d.includes("refused the upload"), "errLanUpload"],
+    [d.includes("spoolman not reachable") || d.startsWith("spoolman answered http"), "errSpoolmanOffline"],
+    [d.includes("manyfold refused"), "errManyfoldKey"],
+    [d.includes("manyfold not reachable") || d.includes("manyfold sent no json"), "errManyfoldOffline"],
+    [d.includes("ml api"), "errMlOffline"],
+    [d.includes("bundle not found or private"), "errOrcaPrivate"],
+    [d.includes("not an orca cloud share link"), "errOrcaLink"],
+    [d.includes("makerworld only allows downloads"), "errMakerWorld"],
     [status === 401, "errToken"],
     [d.includes("did not start"), "errNotStarted"],
     [d.includes("refused to start"), "errRefused"],
@@ -184,6 +201,13 @@ export function friendlyError(t: T, status: number, detail: string): string {
   ];
   for (const [hit, key] of rules) if (hit) return t(key);
   return detail || t("errUnknown");
+}
+
+/** Text for any error shown to the user: server errors are already translated, the rest goes through the same rules. */
+export function errorText(t: T, e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  const msg = e instanceof Error ? e.message : String(e ?? "");
+  return friendlyError(t, 0, msg);
 }
 
 // Address that answered last, per server. Kept outside Api so it survives re-creating the client.

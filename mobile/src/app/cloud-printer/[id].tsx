@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Switch, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync } from "@/components/ui";
-import type { Printer } from "@/lib/api";
+import { errorText, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { lanPrinter } from "@/lib/lan";
 import { loadAccess, saveAccess } from "@/lib/printerAccess";
@@ -80,7 +80,7 @@ export default function CloudPrinter() {
         lan.close();
       }
     } catch (e) {
-      setTest({ ok: false, text: `${t("lanUnreachable")} (${(e as Error).message})` });
+      setTest({ ok: false, text: errorText(t, e) });
     } finally {
       setTesting(false);
     }
@@ -91,7 +91,7 @@ export default function CloudPrinter() {
     setBusy(true);
     setError("");
     try {
-      const body = { name: name.trim(), type, cosmos: type === "moonraker" ? cosmos : false,
+      const body = { name: name.trim() || autoName, type, cosmos: type === "moonraker" ? cosmos : false,
                      ...(machine && (needsModel(type) || type === "moonraker") ? { machine } : {}) };
       const p: Printer = isNew ? await api.addPrinter(body) : await api.updatePrinter(id, body);
       await saveAccess(server, p.id, access);
@@ -117,21 +117,19 @@ export default function CloudPrinter() {
   const input = { color: c.text, fontSize: 16, paddingHorizontal: space, paddingVertical: 14 };
   const typeLabel = (k: Kind) => t.table.printerTypes[k];
   const missingModel = needsModel(type) && !machine;
+  // a name is optional: without one the printer is called after its model or type
+  const autoName = (machine && (needsModel(type) || type === "moonraker") ? machine.replace(/\s+[\d.]+\s*nozzle$/i, "") : "")
+    || (type === "moonraker" && cosmos ? "Centauri Carbon" : typeLabel(type));
   const missingCreds = (type === "prusalink" && !password && !apiKey) || (type === "octoprint" && !apiKey);
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
-      disabled={!name.trim() || missingModel} />}>
+      disabled={missingModel} />}>
       <Stack.Screen options={{ title: isNew ? t("addPrinter") : name || t("printer") }} />
       {error ? <Banner kind="error" text={error} /> : null}
 
-      <Section title={t("printerName")}>
-        <TextInput value={name} onChangeText={setName} placeholder="Centauri Carbon" placeholderTextColor={c.sub}
-          accessibilityLabel={t("printerName")} style={input} maxLength={60} />
-      </Section>
-
       <Section title={t("printerType")} footer={t.table.printerTypeHints[type]}>
-        <Row icon="print-outline" label={t("printerType")} value={typeLabel(type)} onPress={() => setSheet("type")} />
+        <Row icon="print-outline" label={typeLabel(type)} value={t("change")} onPress={() => setSheet("type")} />
         {type === "moonraker" ? (
           <>
             <Divider />
@@ -180,6 +178,11 @@ export default function CloudPrinter() {
         {t("prusaHint")}</Text> : null}
       {type === "octoprint" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("octoHint")}</Text> : null}
+
+      <Section title={t("printerNameAuto")} footer={name.trim() ? undefined : t("printerNameAutoHint", { name: autoName })}>
+        <TextInput value={name} onChangeText={setName} placeholder={autoName} placeholderTextColor={c.sub}
+          accessibilityLabel={t("printerName")} style={input} maxLength={60} />
+      </Section>
 
       {!isNew ? (
         <Section>

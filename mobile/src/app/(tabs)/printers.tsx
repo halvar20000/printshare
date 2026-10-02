@@ -9,7 +9,7 @@ import { CameraImage } from "@/components/camera";
 import { WatchInfo } from "@/components/watch";
 
 import { Badge, Banner, Button, Card, Empty, ProgressBar, Screen } from "@/components/ui";
-import type { Printer, PrinterStatus } from "@/lib/api";
+import { errorText, type Printer, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { duration, temp } from "@/lib/format";
 import { NoAddressError, printerControl, printerStatus } from "@/lib/printerAccess";
@@ -52,7 +52,7 @@ export default function Printers() {
       const list = await Promise.all(ps.map(async p => {
         // cloud: the app asks the printer itself on the home Wi-Fi
         try { return { printer: p, status: await printerStatus(api, server!, p) }; }
-        catch (e) { return { printer: p, status: null, error: (e as Error).message, noAddress: e instanceof NoAddressError }; }
+        catch (e) { return { printer: p, status: null, error: errorText(t, e), noAddress: e instanceof NoAddressError }; }
       }));
       setEntries(list);
       setNow(Date.now());
@@ -93,7 +93,7 @@ export default function Printers() {
     const run = async () => {
       setActing(`${p.id}:${action}`);
       try { await printerControl(api, server!, p, action); }
-      catch (e) { setError((e as Error).message); }
+      catch (e) { setError(errorText(t, e)); }
       finally { setActing(""); setTimeout(load, 800); }
     };
     if (action !== "cancel") return run();

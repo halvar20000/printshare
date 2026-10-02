@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { friendlyError, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { errorText, friendlyError, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
 import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/printerAccess";
@@ -56,7 +56,6 @@ export default function JobScreen() {
   const [job, setJob] = useState<Job | null>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [plateOk, setPlateOk] = useState(false);
   const [sending, setSending] = useState<"print" | "upload" | null>(null);
   const [printerNames, setPrinterNames] = useState<Record<string, string>>({});
   const [levelingDefault, setLevelingDefault] = useState<Record<string, boolean | null>>({});
@@ -189,8 +188,8 @@ export default function JobScreen() {
   useFocusEffect(useCallback(() => {
     if (!smUrl || !reviewing || !server) return;
     openSpoolman(server, smUrl).spools().then(list => { setSpools(list); setSmError(""); })
-      .catch(e => setSmError((e as Error).message));
-  }, [smUrl, reviewing, server]));
+      .catch(e => setSmError(errorText(t, e)));
+  }, [smUrl, reviewing, server, t]));
   const tracker = pstatus && pstatus !== "offline" ? pstatus.spoolman ?? null : null;
   const printerBooks = !!tracker?.connected;               // Moonraker books the filament itself
   const afcSpools = printerBooks && printerLanes.length > 0; // ... on the spools AFC assigned to the slots
@@ -264,7 +263,9 @@ export default function JobScreen() {
   const send = async (start: boolean) => {
     if (!api || !job) return;
     const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
-    if (start && !(await confirmAsync(t("confirmStartQ", { printer: pname }), t("start"), t("cancelBtn")))) return;
+    // the safety check (NF-05) sits on the button: plate empty, material loaded, then start
+    const material = shortName(job.result?.profiles?.filament) || t("filament");
+    if (start && !(await confirmAsync(t("confirmStartPlateQ", { printer: pname, material }), t("start"), t("cancelBtn")))) return;
     setActionError("");
     setSending(start ? "print" : "upload");
     if (cloud && server && printerObj) {
@@ -280,7 +281,7 @@ export default function JobScreen() {
         if (start) await afterStart(fileName).catch(() => {});
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
-        setActionError(e instanceof NoAddressError ? t("needLanAddress") : `${t("errRelay")} ${(e as Error).message}`);
+        setActionError(e instanceof NoAddressError ? t("needLanAddress") : `${t("errRelay")} ${errorText(t, e)}`);
       } finally {
         setRelay(null);
         setSending(null);
@@ -403,7 +404,7 @@ export default function JobScreen() {
   const uploaded = job.state === "uploaded" || relayed === "uploaded";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
-  const canPrint = plateOk && !busy && kind !== "offline" && !sending && !laneWarnings.some(w => w.blocking);
+  const canPrint = !busy && kind !== "offline" && !sending && !laneWarnings.some(w => w.blocking);
   const laneLabel = (tool?: number) => {
     const l = printerLanes.find(x => x.tool === tool);
     if (!l) return "–";
@@ -488,7 +489,7 @@ export default function JobScreen() {
       ) : null}
 
       {!done && smUrl && (spools || smError) ? (
-        smError ? <Banner kind="warn" icon="disc-outline" text={t("spoolmanUnreachable", { error: smError })} />
+        smError ? <Banner kind="warn" icon="disc-outline" text={smError} />
         : printerBooks && !afcSpools && colours.length > 1 ? <Banner kind="info" icon="disc-outline" text={t("spoolsMultiPrinter")} />
         : (
           <Section title={t("spools")} footer={t(afcSpools ? "spoolsHintAfc" : printerBooks ? "spoolsHintPrinter" : "spoolsHint")}>
@@ -566,13 +567,6 @@ export default function JobScreen() {
         <>
           {busy ? <Banner kind="warn" text={t("printerBusy", { printer: pname })} /> : null}
           {kind === "offline" ? <Banner kind="error" text={t("printerOffline", { printer: pname })} /> : null}
-          <Card style={{ padding: 16, flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ color: c.text, fontSize: 16, flex: 1, lineHeight: 22 }}>
-              {t("confirmPlate", { material: shortName(p.filament) || t("filament") })}
-            </Text>
-            <Switch value={plateOk} onValueChange={v => { tap(); setPlateOk(v); }} trackColor={{ true: c.accent, false: c.track }}
-              accessibilityLabel={t("confirmPlate", { material: shortName(p.filament) })} />
-          </Card>
           {levelingOn != null ? (
             <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", marginTop: 10 }}>
               <View style={{ flex: 1 }}>

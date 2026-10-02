@@ -5,6 +5,15 @@ newcomer (e.g. from Reddit) through the Android app in cloud mode – first star
 prepare → print – and lists every point where someone without technical knowledge might stop. Screens were recorded
 in the web build against the real server (cloud mode); the same applies to the iOS app where it has the same flow.
 
+## Status
+- **Step 1 done (2026-10-02, Android app):** 2, 3, 4, 5, 6, 7 (order + automatic name; model preselection comes with
+  discovery), 8, 10. Welcome screen with "Kostenlos anmelden" + small "Eigener Server? (für Fortgeschrittene)" link;
+  card "Erster Schritt: Drucker hinzufügen" on the home screen while a cloud account has no printer; the plate check is
+  now the confirmation dialog of "Drucken" ("Ist die Druckplatte leer und PLA geladen? …"), no hidden switch;
+  `errorText()`/`friendlyError()` translate the LAN and newer server messages; settings group Spoolman, Manyfold and
+  failure detection under "Erweitert"; cloud "Über" text no longer says "no cloud".
+- Open: 1 (find printers on the Wi-Fi – step 2), 9, P3.
+
 ## P1 – people get stuck here
 
 | # | Where | Today | Proposal |

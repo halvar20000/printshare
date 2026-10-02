@@ -6,6 +6,7 @@ import { Text, TextInput, View } from "react-native";
 
 import { BookingCard } from "@/components/bookings";
 import { Banner, Button, Divider, Row, Screen, Section, Segmented } from "@/components/ui";
+import { errorText } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { CLOUD_SPOOLS, loadBookings, loadSpoolmanUrl, openSpoolman, saveSpoolmanUrl, type Booking } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
@@ -47,7 +48,7 @@ export default function SpoolmanScreen() {
       setTest({ ok: true, text: t("spoolmanOk", { version: info.version, n: spools.length }) });
       return true;
     } catch (e) {
-      setTest({ ok: false, text: t("spoolmanUnreachable", { error: (e as Error).message }) });
+      setTest({ ok: false, text: errorText(t, e) });
       return false;
     } finally {
       setTesting(false);

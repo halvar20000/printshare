@@ -19,10 +19,13 @@ export default function Home() {
   const [link, setLink] = useState("");
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<JobSummary[]>([]);
+  const [noPrinter, setNoPrinter] = useState(false);
 
   useFocusEffect(useCallback(() => {
     api?.jobs().then(j => setRecent(j.slice(0, 3))).catch(() => {});
-  }, [api]));
+    if (api && server?.cloud) api.printers().then(p => setNoPrinter(!p.length)).catch(() => {});
+    else setNoPrinter(false);
+  }, [api, server]));
 
   const go = (l: string) => {
     const found = extractLink(l);
@@ -48,7 +51,11 @@ export default function Home() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
         <Empty icon="cube-outline" title={t("notConnectedTitle")} sub={t("notConnectedSub")}>
-          <Button title={t("connectNow")} icon="link" onPress={() => router.push("/connect")} />
+          <Button title={t("connectNow")} icon="mail-outline" onPress={() => router.push("/connect")} />
+          <Pressable onPress={() => router.push({ pathname: "/connect", params: { mode: "own" } })} accessibilityRole="link"
+            style={{ marginTop: 18, padding: 8 }}>
+            <Text style={{ color: c.sub, fontSize: 14, textAlign: "center", textDecorationLine: "underline" }}>{t("ownServerLink")}</Text>
+          </Pressable>
         </Empty>
       </SafeAreaView>
     );
@@ -61,6 +68,17 @@ export default function Home() {
         <Text style={{ color: c.text, fontSize: 32, fontWeight: "800", marginTop: 12 }}>{t("homeTitle")}</Text>
         <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginTop: 8, marginBottom: 22 }}>{t("homeSub")}</Text>
 
+        {noPrinter ? (
+          <Card style={{ padding: 16, marginBottom: 16, borderWidth: 2, borderColor: c.accent }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Ionicons name="print-outline" size={24} color={c.accent} />
+              <Text style={{ color: c.text, fontSize: 17, fontWeight: "700", flex: 1 }}>{t("firstPrinterTitle")}</Text>
+            </View>
+            <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, marginTop: 6, marginBottom: 12 }}>{t("firstPrinterSub")}</Text>
+            <Button title={t("addPrinterNow")} icon="add-circle-outline"
+              onPress={() => router.push({ pathname: "/cloud-printer/[id]", params: { id: "new" } })} />
+          </Card>
+        ) : null}
         {error ? <Banner kind="warn" text={error} /> : null}
         <Card style={{ padding: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: c.input, borderRadius: 10 }}>
