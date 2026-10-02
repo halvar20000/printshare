@@ -24,7 +24,8 @@ log = logging.getLogger(__name__)
 # method → timeout in seconds (BRIDGE.md section 6)
 METHODS: dict[str, float] = {
     "printers.list": 10, "printer.status": 15, "printer.control": 30, "printer.controls": 15,
-    "printer.adjust": 15, "printer.temperatures": 15, "printer.camera.snapshot": 15, "printer.power": 20,
+    "printer.adjust": 15, "printer.temperatures": 15, "printer.camera": 15, "printer.camera.snapshot": 15,
+    "printer.power": 20,
     "job.send": 15 * 60, "watch.state": 10, "watch.mute": 10, "discover": 30,
     "printer.add": 30, "printer.update": 30, "printer.remove": 30,
 }
@@ -67,6 +68,7 @@ class BridgeHub:
         self._ids = itertools.count(1)
         self.on_seen = on_seen               # callback(bridge_id, version) → last_seen in the database
         self.listeners: list = []            # callback(bridge_id, user_id, event, data), e.g. push notifications later
+        self.on_printers = None              # callback(bridge_id, user_id, printers) on hello and printers.changed
 
     # ---------- state ----------
     def online(self, bridge_id: str) -> bool:
@@ -108,6 +110,7 @@ class BridgeHub:
                 pass
         if self.on_seen:
             self.on_seen(conn.bridge_id, version)
+        self._printers_changed(conn)
         await ws.send_text(json.dumps({"type": "welcome", "bridge_id": conn.bridge_id, "min_version": MIN_VERSION,
                                        "methods": sorted(METHODS)}))
         log.info("bridge %s connected (%s, %d printers)", conn.bridge_id, version, len(conn.printers))
@@ -148,6 +151,7 @@ class BridgeHub:
             data = msg.get("data") if isinstance(msg.get("data"), dict) else {}
             if msg["event"] == "printers.changed":
                 conn.printers = _printers(data.get("printers"))
+                self._printers_changed(conn)
             elif msg["event"] == "printer.state" and isinstance(data.get("printer"), str):
                 conn.states[data["printer"]] = {**data, "at": time.time()}
             for listener in self.listeners:
@@ -155,6 +159,13 @@ class BridgeHub:
                     listener(conn.bridge_id, conn.user_id, msg["event"], data)
                 except Exception:  # noqa: BLE001
                     log.exception("bridge event listener")
+
+    def _printers_changed(self, conn: Connection) -> None:
+        if self.on_printers:
+            try:
+                self.on_printers(conn.bridge_id, conn.user_id, conn.printers)
+            except Exception:  # noqa: BLE001
+                log.exception("bridge printers")
 
     @staticmethod
     def _fail_pending(conn: Connection, err: BridgeError) -> None:

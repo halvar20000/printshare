@@ -1,10 +1,10 @@
 # PocketPrint3D bridge – concept (2026-10-02)
 
-Status: **steps 2 + 3 built** – cloud side in 0.24.0 (`printshare/cloud/bridges.py`, `cloud/hub.py`), bridge mode of the
-server in 0.25.0 (`printshare/bridge/`: `client.py` pairing + socket loop, `dispatch.py` methods on top of the server's own
-endpoint functions, `registry.py` printers added from the app, `discovery.py`, `seal.py`). Tests: `tests/test_bridges.py`,
-`tests/test_bridge_client.py` (home server as a separate process against simulated printers). Next: step 4 (cloud
-forwarding of the printer endpoints), step 5 (app), step 1 (Bambu, after Sunday's probe).
+Status: **steps 2–4 built** – cloud side in 0.24.0 (`printshare/cloud/bridges.py`, `cloud/hub.py`), bridge mode of the
+server in 0.25.0 (`printshare/bridge/`: `client.py`, `dispatch.py`, `registry.py`, `discovery.py`, `seal.py`), cloud
+forwarding in 0.26.0 (bridge printers synced into the account, the app's printer endpoints forwarded, discover/add through
+the bridge). Tests: `tests/test_bridges.py`, `tests/test_bridge_client.py` (home server as a separate process). Next:
+step 5 (Android app), step 6 (packaging), step 1 (Bambu, after Sunday's probe).
 
 ## 1. Goal
 

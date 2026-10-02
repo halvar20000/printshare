@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.26.0
+- PocketPrint3D Cloud: printers of a connected bridge show up in the account by themselves, and status, pause/resume/
+  cancel, temperatures, fans/light, camera pictures, power and sending a print go through the bridge - from anywhere.
+  Printers can also be found and added at home through the bridge.
+
 ## 0.25.0
 - Bridge mode: your PocketPrint3D server can connect to a free PocketPrint3D Cloud account, so the app reaches your
   printers from anywhere - only an outgoing connection, no port forwarding. Switch it on (Unraid: "Connect to

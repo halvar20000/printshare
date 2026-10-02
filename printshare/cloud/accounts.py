@@ -178,6 +178,12 @@ class Accounts:
             return self.db.execute("DELETE FROM printers WHERE user_id = ? AND id = ?",
                                    (user_id, printer_id)).rowcount > 0
 
+    def delete_bridge_printers(self, bridge_id: str, keep_user: str | None = None) -> int:
+        """Printers synced from a bridge (removed bridge, or the bridge moved to another account)."""
+        with self.lock:
+            return self.db.execute("DELETE FROM printers WHERE json_extract(config, '$.bridge') = ? AND user_id != ?",
+                                   (bridge_id, keep_user or "")).rowcount
+
     # ---------- limits ----------
     def count_slice(self, user_id: str, limit: int, now: float | None = None) -> int:
         """Book one slice for today; AccountError 429 when the daily limit is reached."""

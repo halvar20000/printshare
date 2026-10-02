@@ -185,6 +185,9 @@ class PrinterConfig:
     password: str | None = None   # prusalink
     auto_leveling: bool = True    # elegoo_sdcp
     mainboard_id: str | None = None  # elegoo_sdcp; looked up via UDP discovery if not set
+    bridge: str | None = None     # cloud: the printer sits behind this bridge (docs/BRIDGE.md) …
+    remote: str | None = None     # … under this id on the bridge
+    custom_name: bool = False     # cloud, bridge printers: the user renamed it (the bridge's name no longer wins)
     slicing: SlicingConfig = field(default_factory=SlicingConfig)
 
 

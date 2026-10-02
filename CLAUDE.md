@@ -740,6 +740,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   "Connect to PocketPrint3D Cloud") or `POST /api/bridge`. New deps: `cryptography`. Test: home server as a subprocess
   against the in-process cloud and fake printers (pair → online → status/pause → job.send → sealed printer.add/remove →
   removed from the app → new code).
+- **Step 4 (cloud forwarding) done, 0.26.0:** `PrinterConfig.bridge/remote/custom_name`; `api._sync_bridge_printers` (hub
+  `on_printers` on hello + `printers.changed`: rows per account with `bridge`, `remote`; ids = remote id or `<id>-<bridge4>`;
+  a name changed in the app stays; rows of vanished printers removed; `Accounts.delete_bridge_printers` on bridge removal
+  and when another account pairs it); `_via_bridge()` + `_forward()` at the top of status/control/controls/adjust/
+  temperatures/camera/camera snapshot/power/watch mute and in `/send` (spawns `job.send`, 15 min, progress → job log);
+  `/api/bridges/{id}/discover|printers`, `PUT /api/printers/{id}/bridge-access`. New bridge method `printer.camera`
+  (0.25.0 bridges answer unknown_method for it). Camera through a bridge: snapshots only (`stream: false`).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

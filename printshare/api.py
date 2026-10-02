@@ -47,6 +47,7 @@ One-shot (CLI / iOS Shortcut):
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import dataclasses
 import json
@@ -107,7 +108,7 @@ async def _lifespan(_app):
     await BRIDGE_CLIENT.stop()
 
 
-app = FastAPI(title="PocketPrint3D", version="0.25.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.26.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -149,6 +150,8 @@ def _cloud_setup() -> None:
     SPOOLS = Spools(ACCOUNTS)
     BRIDGES = Bridges(ACCOUNTS)
     HUB.on_seen = BRIDGES.seen
+    HUB.on_printers = lambda *a: _sync_bridge_printers(*a)       # defined further down
+    HUB.listeners[:] = [lambda *a: _bridge_event(*a)]
     MAILER = BrevoMailer(settings.brevo_api_key) if settings.mail == "brevo" else LogMailer()
 
 
@@ -195,6 +198,19 @@ def _local_only(acct: Account) -> None:
     """In the cloud the printer is on the user's home network: the app talks to it, not the server."""
     if acct.cloud or acct.id == "admin":
         raise HTTPException(409, "the printer is reached through the app on your home network")
+
+
+def _via_bridge(acct: "Account", printer_id: str) -> tuple[str, str] | None:
+    """Cloud: (bridge id, printer id on the bridge) when the printer sits behind one of the account's bridges."""
+    if not acct.cloud:
+        return None
+    p = _printer(acct, printer_id)
+    return (p.bridge, p.remote or p.id) if p.bridge else None
+
+
+async def _forward(acct: "Account", printer_id: str, method: str, **params: Any) -> Any:
+    bridge_id, remote = _via_bridge(acct, printer_id)
+    return await bridge_call(acct, bridge_id, method, {"printer": remote, **params})
 
 
 def _printer(acct: "Account", printer_id: str | None) -> PrinterConfig:
@@ -427,7 +443,9 @@ def bridges_pair(req: BridgePair, acct: Account = Depends(auth)) -> dict[str, An
     """App: the code shown by the bridge → the bridge belongs to this account."""
     if not acct.cloud:
         raise HTTPException(404, "bridges exist only in PocketPrint3D Cloud")
-    return _bridge_out(_bridge_call(_bridges().confirm_pairing, acct.id, req.code, req.name))
+    b = _bridge_call(_bridges().confirm_pairing, acct.id, req.code, req.name)
+    ACCOUNTS.delete_bridge_printers(b["id"], keep_user=acct.id)     # it may have belonged to another account
+    return _bridge_out(b)
 
 
 @app.get("/api/bridges")
@@ -450,6 +468,7 @@ async def bridges_delete(bridge_id: str, acct: Account = Depends(auth)) -> dict[
     if not acct.cloud or not _bridges().delete(acct.id, bridge_id):
         raise HTTPException(404, "unknown bridge")
     await HUB.disconnect(bridge_id)
+    ACCOUNTS.delete_bridge_printers(bridge_id)
     return {"deleted": bridge_id}
 
 
@@ -483,6 +502,91 @@ async def bridge_gcode(job_id: str, request: Request, lanes: str | None = None) 
     return await download_gcode(job_id, lanes, _user_account(user, ""))
 
 
+def _sync_bridge_printers(bridge_id: str, user_id: str, printers: list[dict[str, Any]]) -> None:
+    """The bridge's printers become printers of the account (kept while the bridge is offline, so jobs and profiles stay).
+    Name, type and slicing model come from the bridge; a name the user changed in the app stays."""
+    rows = ACCOUNTS.printers(user_id)
+    mine = {r.get("remote"): r for r in rows if r.get("bridge") == bridge_id}
+    taken = {r["id"] for r in rows if r.get("bridge") != bridge_id}
+    seen = set()
+    for p in printers[:50]:
+        rid = p["id"]
+        caps = p.get("capabilities") if isinstance(p.get("capabilities"), dict) else {}
+        old = mine.get(rid) or {}
+        pid = old.get("id")
+        if not pid:
+            base = re.sub(r"[^a-z0-9]+", "-", rid.lower()).strip("-")[:24] or "printer"
+            pid = base if base not in taken else f"{base}-{bridge_id[:4].lower()}"
+        taken.add(pid)
+        seen.add(rid)
+        sl = dict(old.get("slicing") or {})
+        if p.get("machine"):
+            sl["machine"] = p["machine"]
+        if caps.get("cosmos"):
+            sl["machine_preset"] = "cosmos"
+        else:
+            sl.pop("machine_preset", None)
+        cfg = {"id": pid, "type": str(p.get("type") or old.get("type") or "moonraker"),
+               "name": old["name"] if old.get("custom_name") else str(p.get("name") or rid)[:60],
+               "auto_leveling": caps.get("leveling") if isinstance(caps.get("leveling"), bool) else old.get("auto_leveling", True),
+               "slicing": sl, "bridge": bridge_id, "remote": rid, "custom_name": bool(old.get("custom_name"))}
+        if cfg != old:
+            ACCOUNTS.save_printer(user_id, cfg)
+    for rid, old in mine.items():
+        if rid not in seen:
+            ACCOUNTS.delete_printer(user_id, old["id"])
+
+
+def _bridge_event(bridge_id: str, user_id: str, event: str, data: dict[str, Any]) -> None:
+    """Upload steps of job.send show up in the job's log, like on a home server."""
+    if event == "job.progress":
+        job = JOBS.get(str(data.get("job") or ""))
+        if job is not None and job.get("owner") == user_id and isinstance(data.get("message"), str):
+            job.setdefault("log", []).append(data["message"][:200])
+
+
+class BridgePrinterAdd(BaseModel):
+    printer: dict[str, Any]           # {"name", "type", "machine"?, "cosmos"?} - nothing secret
+    sealed: str | None = None         # pp3d-seal-v1 blob of {"address", "password"?, "api_key"?} for this bridge
+
+
+@app.post("/api/bridges/{bridge_id}/discover")
+async def bridges_discover(bridge_id: str, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    """Printers the bridge finds on its home network (to add them with one tap)."""
+    if not acct.cloud:
+        raise HTTPException(404, "unknown bridge")
+    _bridge_call(_bridges().get, acct.id, bridge_id)
+    return await bridge_call(acct, bridge_id, "discover")
+
+
+@app.post("/api/bridges/{bridge_id}/printers")
+async def bridges_add_printer(bridge_id: str, req: BridgePrinterAdd, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Add a printer at home through the bridge; it becomes a printer of the account right away."""
+    if not acct.cloud:
+        raise HTTPException(404, "unknown bridge")
+    _bridge_call(_bridges().get, acct.id, bridge_id)
+    fields = {k: req.printer[k] for k in ("name", "type", "machine", "cosmos") if k in req.printer}
+    added = await bridge_call(acct, bridge_id, "printer.add", {"printer": fields, "sealed": req.sealed})
+    _sync_bridge_printers(bridge_id, acct.id, HUB.info(bridge_id)["printers"] or [added])
+    row = next((p for p in ACCOUNTS.printers(acct.id) if p.get("bridge") == bridge_id and p.get("remote") == added.get("id")), None)
+    if row is None:
+        raise HTTPException(502, "the bridge added the printer but didn't report it")
+    return _printer_json(_user_account(acct.user, acct.token), row["id"])
+
+
+class BridgePrinterAccess(BaseModel):
+    sealed: str                       # new address / password / key, sealed for the printer's bridge
+
+
+@app.put("/api/printers/{printer_id}/bridge-access")
+async def bridge_printer_access(printer_id: str, req: BridgePrinterAccess, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Change how the bridge reaches a printer it was given by the app (address, password, API key)."""
+    if not _via_bridge(acct, printer_id):
+        raise HTTPException(409, "this printer is not reached through a bridge")
+    await _forward(acct, printer_id, "printer.update", sealed=req.sealed)
+    return {"ok": True}
+
+
 async def bridge_call(acct: Account, bridge_id: str, method: str, params: dict[str, Any] | None = None) -> Any:
     """A request to one of the account's bridges; errors become HTTP errors with a clear text."""
     try:
@@ -512,7 +616,7 @@ class PrinterSettings(BaseModel):
 def _printer_config(pid: str, req: PrinterSettings, old: dict[str, Any] | None = None) -> dict[str, Any]:
     old = old or {}
     name = (req.name if req.name is not None else old.get("name", "")).strip()
-    ptype = req.type or old.get("type")
+    ptype = old.get("type") if old.get("bridge") else (req.type or old.get("type"))
     if not 1 <= len(name) <= 60:
         raise HTTPException(400, "the printer needs a name (up to 60 characters)")
     if ptype not in PRINTER_TYPES:
@@ -535,6 +639,9 @@ def _printer_config(pid: str, req: PrinterSettings, old: dict[str, Any] | None =
     cfg = {"id": pid, "name": name, "type": ptype,
            "auto_leveling": req.auto_leveling if req.auto_leveling is not None else old.get("auto_leveling", True),
            "slicing": sl}
+    if old.get("bridge"):                       # a bridge printer stays one (type and link come from the bridge)
+        cfg.update(type=old["type"], bridge=old["bridge"], remote=old.get("remote"),
+                   custom_name=bool(old.get("custom_name")) or (req.name is not None and req.name.strip() != old.get("name")))
     return cfg
 
 
@@ -542,7 +649,7 @@ def _printer_config(pid: str, req: PrinterSettings, old: dict[str, Any] | None =
 def add_printer(req: PrinterSettings, acct: Account = Depends(auth)) -> dict[str, Any]:
     if not acct.cloud:
         raise HTTPException(409, "printers are set up in the server's configuration")
-    if len(acct.settings.printers) >= MAX_PRINTERS:
+    if sum(1 for p in acct.settings.printers if not p.bridge) >= MAX_PRINTERS:
         raise HTTPException(400, f"at most {MAX_PRINTERS} printers per account")
     pid = re.sub(r"[^a-z0-9]+", "-", (req.name or "printer").lower()).strip("-")[:24] or "printer"
     if any(p.id == pid for p in acct.settings.printers):
@@ -573,9 +680,15 @@ def update_printer(printer_id: str, req: PrinterSettings, acct: Account = Depend
 
 
 @app.delete("/api/printers/{printer_id}")
-def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+async def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     if not acct.cloud:
         raise HTTPException(409, "printers are set up in the server's configuration")
+    if _via_bridge(acct, printer_id):
+        # only printers added through the app can go; the bridge says so for the others
+        await _forward(acct, printer_id, "printer.remove")
+        ACCOUNTS.delete_printer(acct.id, printer_id)        # may already be gone through the bridge's printers.changed
+        user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})
+        return {"deleted": printer_id}
     if not ACCOUNTS.delete_printer(acct.id, printer_id):
         raise HTTPException(404, f"Unknown printer {printer_id!r}")
     user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})     # its profile/power settings too
@@ -730,7 +843,9 @@ def _printer_json(acct: Account, printer_id: str) -> dict[str, Any]:
             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
             # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
             "power": plug.load(acct.settings.config_dir, p.id) is not None,
-            "cosmos": p.slicing.machine_preset == "cosmos"}
+            "cosmos": p.slicing.machine_preset == "cosmos",
+            # docs/BRIDGE.md: reached through a bridge at home (the app uses these endpoints instead of the Wi-Fi)
+            "bridge": p.bridge}
 
 
 def _defaults(acct: "Account", printer: PrinterConfig, process: str) -> dict[str, Any]:
@@ -802,6 +917,8 @@ async def options(printer_id: str, process: str | None = None, acct: Account = D
 
 @app.get("/api/printers/{printer_id}/status")
 async def status(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.status")
     _local_only(acct)
     printer = _printer(acct, printer_id)
     try:
@@ -910,8 +1027,10 @@ def watch_frame(printer_id: str, acct: Account = Depends(auth)) -> Response:
 
 
 @app.post("/api/printers/{printer_id}/watch/mute")
-def watch_mute(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+async def watch_mute(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """'False alarm': no more alerts for the rest of this print."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "watch.mute")
     _watch_home(acct)
     _printer(acct, printer_id)
     WATCHER.mute(printer_id)
@@ -951,6 +1070,8 @@ async def _power_call(coro_fn):
 
 @app.get("/api/printers/{printer_id}/power")
 async def power_state(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.power")
     _local_only(acct)
     _printer(acct, printer_id)
     cfg = plug.load(acct.settings.config_dir, printer_id)
@@ -965,6 +1086,8 @@ async def power_state(printer_id: str, acct: Account = Depends(auth)) -> dict[st
 
 @app.post("/api/printers/{printer_id}/power")
 async def power_switch(printer_id: str, req: PowerSwitch, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.power", on=req.on)
     _local_only(acct)
     cfg = _power_cfg(acct, printer_id)
     if not req.on:
@@ -1030,6 +1153,8 @@ async def power_entities(printer_id: str, req: PowerSettings, acct: Account = De
 
 @app.get("/api/printers/{printer_id}/controls")
 async def printer_controls(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.controls")
     _local_only(acct)
     adapter = get_adapter(_printer(acct, printer_id))
     if not hasattr(adapter, "controls"):
@@ -1049,6 +1174,9 @@ class Adjustment(BaseModel):
 
 @app.post("/api/printers/{printer_id}/adjust")
 async def adjust(printer_id: str, req: Adjustment, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.adjust", kind=req.kind, id=req.id, value=req.value,
+                              confirm=req.confirm)
     _local_only(acct)
     adapter = get_adapter(_printer(acct, printer_id))
     caps = await printer_controls(printer_id, acct)
@@ -1098,6 +1226,8 @@ async def adjust(printer_id: str, req: Adjustment, acct: Account = Depends(auth)
 async def temperatures(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Temperature history: from the printer where it keeps one (Moonraker, OctoPrint), else what
     PocketPrint3D saw in the last 30 minutes of status queries."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.temperatures")
     _local_only(acct)
     adapter = get_adapter(_printer(acct, printer_id))
     if hasattr(adapter, "temperature_history"):
@@ -1128,6 +1258,9 @@ async def _camera(acct: "Account", printer_id: str) -> cam.Camera:
 
 @app.get("/api/printers/{printer_id}/camera")
 async def camera_info(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        info = await _forward(acct, printer_id, "printer.camera")
+        return {**info, "stream": False}            # through a bridge: still images only (BRIDGE.md section 11)
     _local_only(acct)
     try:
         return (await _camera(acct, printer_id)).info()
@@ -1140,6 +1273,13 @@ async def camera_info(printer_id: str, acct: Account = Depends(auth)) -> dict[st
 @app.get("/api/printers/{printer_id}/camera/snapshot")
 async def camera_snapshot(printer_id: str, w: int | None = None, acct: Account = Depends(auth)) -> Response:
     """Current camera image; `w` scales it down (thumbnails, mobile data)."""
+    if _via_bridge(acct, printer_id):
+        shot = await _forward(acct, printer_id, "printer.camera.snapshot", **({"w": w} if w else {}))
+        try:
+            jpeg = base64.b64decode(shot["jpeg"])
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(502, "the bridge sent no picture")
+        return Response(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
     _local_only(acct)
     source = await _camera(acct, printer_id)
     try:
@@ -1178,6 +1318,8 @@ class ControlRequest(BaseModel):
 
 @app.post("/api/printers/{printer_id}/control")
 async def control(printer_id: str, req: ControlRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.control", action=req.action, confirm=req.confirm)
     _local_only(acct)
     printer = _printer(acct, printer_id)
     if req.action not in CONTROL_ACTIONS:
@@ -1588,13 +1730,32 @@ class SendRequest(BaseModel):
 
 @app.post("/api/jobs/{job_id}/send")
 async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
-    _local_only(acct)
     job = _own_job(acct, job_id)
+    printer_id = (job.get("result") or {}).get("printer")
+    if not (printer_id and _via_bridge(acct, printer_id)):
+        _local_only(acct)
     if req.start and not req.confirm:
         raise HTTPException(400, "starting a print needs confirm=true")  # NF-05
     if job["state"] not in ("sliced", "uploaded"):
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
     result = JobResult(**job["result"])
+    via = _via_bridge(acct, result.printer)
+    if via:
+        # the bridge checks the rest itself (busy printer, lanes, spool) - with the same code as a home server
+        job.update(state="sending", error=None)
+        params = {"printer": via[1], "job": job_id, "start": req.start, "confirm": req.confirm,
+                  "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id}
+
+        async def forward() -> None:
+            try:
+                r = await HUB.call(via[0], acct.id, "job.send", params)
+                job["leveling"] = req.leveling
+                job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"))
+            except BridgeError as e:
+                job.update(state="sliced", error=f"Sending failed: {e}")
+
+        _spawn(forward())
+        return {"job": job_id}
     if req.spool_id is not None and _printer(acct, result.printer).type != "moonraker":
         raise HTTPException(400, "spool_id only for Klipper printers with Moonraker's Spoolman link")
     try:

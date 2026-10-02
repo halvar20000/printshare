@@ -157,7 +157,7 @@ async def _remove(client: BridgeClient, pid: str) -> dict[str, Any]:
     api = _api()
     added = registry.load(api.settings.config_dir)
     if not any(p["id"] == pid for p in added):
-        raise MethodError("invalid", "only printers added through the app can be removed here")
+        raise MethodError("invalid", "this printer is set up on the server at home itself - remove it there")
     registry.save(api.settings.config_dir, [p for p in added if p["id"] != pid])
     api._reload_settings()
     await client.event("printers.changed", {"printers": printers_list()})
@@ -198,6 +198,8 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _call(api.adjust, pid, req, acct)
     if method == "printer.temperatures":
         return await _call(api.temperatures, pid, acct)
+    if method == "printer.camera":
+        return await _call(api.camera_info, pid, acct)
     if method == "printer.camera.snapshot":
         return await _snapshot(pid, params)
     if method == "printer.power":

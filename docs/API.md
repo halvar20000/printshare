@@ -468,6 +468,22 @@ events `printer.state`, `watch.alert`, `job.progress`, `printers.changed`).
   `/api/jobs/{job}/gcode`); 401 for other tokens, 404 for other accounts' jobs.
 - `GET /api/admin/stats` adds `bridges`, `bridges_online`.
 
+**Printers behind a bridge (0.26.0):** a connected bridge's printers become printers of the account automatically (on
+every connect and every `printers.changed`; they stay while the bridge is offline, so jobs and slicing profiles keep
+working). `GET /api/printers` marks them with `"bridge": "<bridge id>"` (`null` = reached by the phone on the Wi-Fi).
+For these printers the cloud **forwards** the usual endpoints to the bridge instead of answering 409:
+`GET /api/printers/{id}/status|controls|temperatures|camera|camera/snapshot|power`, `POST /api/printers/{id}/control|adjust|power|watch/mute`,
+`POST /api/jobs/{job}/send` (same body; `confirm` is checked by the cloud and the bridge; busy printer, lanes and spool
+by the bridge; upload steps appear in the job's `log`). `camera` says `"stream": false` (still pictures only through a
+bridge). Bridge offline → 503 with a clear text, no answer → 504. Name and slicing model come from the bridge; a name
+changed with `PATCH /api/printers/{id}` stays. `DELETE /api/printers/{id}` removes a printer on the bridge too (only
+printers added through the app; others → 400).
+- `POST /api/bridges/{id}/discover` → printers the bridge finds at home (`[{"type", "address", "name", "cosmos"?,
+  "detail"?, "added"}]`; the address is only for display/sealing, it never needs to be sent back in plain text).
+- `POST /api/bridges/{id}/printers {"printer": {"name", "type", "machine"?, "cosmos"?}, "sealed": "<pp3d-seal-v1 of
+  {address, password?, api_key?} for this bridge's public_key>"}` → the new printer of the account (as in `GET /api/printers`).
+- `PUT /api/printers/{id}/bridge-access {"sealed"}` – new address/password/key for a printer added this way.
+
 ### Bridge mode of a home server (0.25.0)
 On the user's own server (not in the cloud), with the server's token:
 - `GET /api/bridge` → `{"enabled", "state": "off|pairing|connecting|connected|error", "code": "K7Q4-M2ZX" | null,

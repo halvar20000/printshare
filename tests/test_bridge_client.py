@@ -171,7 +171,7 @@ def test_bridge_end_to_end(cloud_live, tmp_path):
                     b = (await c.get(f"{cl}/api/bridges", headers=anna)).json()
                     return b[0] if b and b[0]["online"] else None
                 bridge = await _until(online)
-                assert [p["id"] for p in bridge["printers"]] == ["voron"] and bridge["version"] == "0.25.0"
+                assert [p["id"] for p in bridge["printers"]] == ["voron"] and bridge["version"] == api.app.version
                 st = await home_state()
                 assert st["state"] == "connected" and st["account"] == "anna@example.com" and st["code"] is None
 
@@ -222,8 +222,68 @@ def test_bridge_end_to_end(cloud_live, tmp_path):
                 assert [p["id"] for p in (await call("printers.list"))["result"]] == ["voron"]
                 assert isinstance((await call("discover"))["result"], list)
 
+                # ---- step 4: the app's own endpoints, forwarded by the cloud ----
+                api_ = f"{cl}/api"
+                printers = (await c.get(f"{api_}/printers", headers=anna)).json()
+                assert [(p["id"], p["bridge"]) for p in printers] == [("voron", bridge["id"])]
+                voron.state = "printing"
+                r = await c.get(f"{api_}/printers/voron/status", headers=anna)
+                assert r.status_code == 200 and r.json()["kind"] == "active"
+                r = await c.post(f"{api_}/printers/voron/control", json={"action": "resume"}, headers=anna)
+                assert r.status_code == 200 and voron.actions[-1] == "resume"
+                r = await c.post(f"{api_}/printers/voron/control", json={"action": "cancel"}, headers=anna)
+                assert r.status_code == 409 and "confirm" in r.json()["detail"]
+                assert (await c.get(f"{api_}/printers/voron/controls", headers=anna)).json()["heaters"]
+                assert (await c.get(f"{api_}/printers/voron/temperatures", headers=anna)).status_code == 200
+                cam = (await c.get(f"{api_}/printers/voron/camera", headers=anna)).json()
+                assert cam["available"] and cam["snapshot"] and cam["stream"] is False
+                r = await c.get(f"{api_}/printers/voron/camera/snapshot?w=320", headers=anna)
+                assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg" and r.content[:2] == b"\xff\xd8"
+                assert (await c.get(f"{api_}/printers/voron/power", headers=anna)).json()["available"] is False
+                # the normal send endpoint: the job goes through the bridge, its upload steps land in the job log
+                voron.state = "standby"
+                api.JOBS["j2"] = {"id": "j2", "owner": uid, "state": "sliced", "created": time.time(), "log": [],
+                                  "error": None, "kind": "prepare", "request": {},
+                                  "result": {"printer": "voron", "source_file": "cube.stl", "gcode": str(g),
+                                             "print_time": "1m", "filament_g": 1.0, "filament_m": 0.3}}
+                r = await c.post(f"{api_}/jobs/j2/send", json={"start": True}, headers=anna)
+                assert r.status_code == 400, "the cloud asks for the confirmation itself"
+                r = await c.post(f"{api_}/jobs/j2/send", json={"start": True, "confirm": True}, headers=anna)
+                assert r.status_code == 200
+                job = await _until(lambda: _with(c.get(f"{api_}/jobs/j2", headers=anna),
+                                                 lambda r: r.json()["state"] != "sending" and r.json()))
+                assert job["state"] == "started" and not job["error"], job
+                assert job["log"], "upload steps from the bridge"
+                assert len(voron.uploads) == 2
+                # rename in the app: stays when the bridge reports its printers again
+                r = await c.patch(f"{api_}/printers/voron", json={"name": "Mein Voron"}, headers=anna)
+                assert r.status_code == 200 and r.json()["name"] == "Mein Voron" and r.json()["bridge"] == bridge["id"]
+                # discover + add through the bridge with the app's endpoints
+                assert isinstance((await c.post(f"{api_}/bridges/{bridge['id']}/discover", headers=anna)).json(), list)
+                sealed = seal.seal(bridge["public_key"], {"address": f"127.0.0.1:{octo_port}", "api_key": "OCTOKEY"})
+                r = await c.post(f"{api_}/bridges/{bridge['id']}/printers", headers=anna, json={
+                    "printer": {"name": "Octo Pi", "type": "octoprint", "machine": MK4S, "url": "http://evil"}, "sealed": sealed})
+                assert r.status_code == 200, r.text
+                assert r.json()["id"] == "octo-pi" and r.json()["machine"] == MK4S
+                assert (await c.get(f"{api_}/printers/octo-pi/status", headers=anna)).json()["kind"] in ("idle", "active")
+                names = {p["id"]: p["name"] for p in (await c.get(f"{api_}/printers", headers=anna)).json()}
+                assert names == {"voron": "Mein Voron", "octo-pi": "Octo Pi"}
+                assert "octo_port" not in json.dumps(api.ACCOUNTS.printers(uid)) and "OCTOKEY" not in json.dumps(api.ACCOUNTS.printers(uid))
+                assert str(octo_port) not in json.dumps(api.ACCOUNTS.printers(uid)), "addresses never reach the cloud"
+                # new key for the OctoPrint printer, sealed again
+                new = seal.seal(bridge["public_key"], {"api_key": "OCTOKEY2"})
+                assert (await c.put(f"{api_}/printers/octo-pi/bridge-access", json={"sealed": new}, headers=anna)).status_code == 200
+                assert "OCTOKEY2" in (home / "config" / "printers-added.yaml").read_text()
+                # remove: only what was added through the app
+                r = await c.delete(f"{api_}/printers/voron", headers=anna)
+                assert r.status_code == 400 and "server" in r.json()["detail"]
+                assert (await c.delete(f"{api_}/printers/octo-pi", headers=anna)).status_code == 200
+                assert [p["id"] for p in (await c.get(f"{api_}/printers", headers=anna)).json()] == ["voron"]
+                assert "octo-pi" not in (home / "config" / "printers-added.yaml").read_text()
+
                 # removed from the app: the bridge forgets its token and shows a new code
                 assert (await c.delete(f"{cl}/api/bridges/{bridge['id']}", headers=anna)).status_code == 200
+                assert (await c.get(f"{cl}/api/printers", headers=anna)).json() == [], "its printers go with it"
                 st = await _until(lambda: _with(home_state(), lambda s: s and s.get("code") and s))
                 assert st["state"] == "pairing" and not st["paired"]
 
