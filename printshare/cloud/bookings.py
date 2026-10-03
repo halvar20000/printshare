@@ -22,6 +22,7 @@ from .accounts import AccountError, Accounts
 
 WAIT_START_S = 20 * 60          # heating + leveling can take a while before the file shows up
 GIVE_UP_S = 3 * 24 * 3600       # printer never seen again
+STALE_DONE_S = 10 * 60          # "finished" with our file right after the start: maybe the previous run of it
 MAX_OPEN = 50                   # open bookings per account
 KEEP_BOOKED_S = 15 * 60         # booked ones are shown ("3.7 g booked") for a while, then deleted
 
@@ -56,6 +57,8 @@ def judge(b: dict[str, Any], st: dict[str, Any] | None, now: float) -> dict[str,
         kind = st.get("kind")
         if kind in ("active", "paused"):
             return {**b, "seen": True, "progress": progress}
+        if kind in ("done", "stopped", "error") and not b["seen"] and age < STALE_DONE_S:
+            return b               # right after the start: maybe still the previous run of the same file
         if kind == "done":
             return {**b, "state": "ready"}
         if kind in ("stopped", "error"):

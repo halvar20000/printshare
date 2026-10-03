@@ -160,7 +160,8 @@ export default function Home() {
                       </Text>
                     </View>
                     <Badge text={t.table.jobStates[j.state] ?? j.state}
-                      kind={j.state === "error" ? "error" : j.state === "started" ? "ok" : j.state === "sliced" ? "accent" : "neutral"} />
+                      kind={j.state === "error" ? "error" : j.state === "finished" ? "ok" : j.state === "cancelled" ? "warn"
+                        : j.state === "started" || j.state === "sliced" ? "accent" : "neutral"} />
                   </Pressable>
                 </View>
               ))}

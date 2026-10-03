@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.0
+- Jobs follow their print: "Printing" → "Printed" or "Cancelled" when the printer is done, instead of staying on
+  "Started". Printed jobs can be printed again. Also for prints the phone sends on the Wi-Fi.
+- Spool bookings: a "finished" shown by the printer right after the start (the previous run of the same file) is no longer
+  taken as the end of the new print.
+
 ## 0.32.0
 - Time-lapse: switch on "Record a time-lapse" before printing (off by default) and your server takes one camera picture
   per layer (every 30 s for printers without layer information) and makes a short MP4 when the print is over - watch and

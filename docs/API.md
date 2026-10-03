@@ -349,6 +349,13 @@ or in the home server's work folder). After a restart a job that was `slicing`/`
 server update …"), one that was `sending` is `sliced` again with that note in `error` (send it again). At most 50 jobs per
 account (cloud) / per server, none older than 14 days; older ones disappear together with their G-code.
 
+**Jobs follow their print (0.33.0):** after `started` a job becomes `finished` or `cancelled` (`printshare/jobtrack.py`;
+fields `seen_printing`, `progress`, `started_at`, `finished_at`). Who looks: the home server every 30 s, the cloud every
+minute for printers behind a bridge, the app for printers on its Wi-Fi (`POST /api/observe {"statuses"}`, same as
+`/api/bookings/observe`). The phone's own sends in the cloud: `POST /api/jobs/{id}/relayed {"start", "file"}` (file =
+name on the printer). A printer still showing the previous run of the same file as finished/cancelled within 10 min of the
+start doesn't end the job (same rule for spool bookings). `finished`/`cancelled` jobs can be sent again (`/send`, `/relayed`).
+
 ### `GET /api/jobs/{job}`
 ```json
 {"id": "843289d5b2", "kind": "prepare", "state": "sliced",

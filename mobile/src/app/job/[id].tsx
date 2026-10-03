@@ -62,6 +62,7 @@ export default function JobScreen() {
   const [leveling, setLeveling] = useState<boolean | null>(null);
   // time-lapse (server 0.32.0): only where the server/bridge reaches the camera; off by default
   const [timelapse, setTimelapse] = useState(false);
+  const [again, setAgain] = useState(false);
   const [pstatus, setPstatus] = useState<PrinterStatus | "offline" | null>(null);
   const [showLog, setShowLog] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -135,14 +136,15 @@ export default function JobScreen() {
     return () => { alive = false; };
   }, [api, camCapable, printerObj]);
   const hasCam = camCapable && camFound;
-  // follow the time-lapse until its video is ready
+  // follow a running print (→ finished / cancelled) and its time-lapse until the video is ready
   const jobId = job?.id;
   const tlState = job?.timelapse?.state;
+  const following = job?.state === "started" || tlState === "recording" || tlState === "rendering";
   useEffect(() => {
-    if (!api || !jobId || (tlState !== "recording" && tlState !== "rendering")) return;
+    if (!api || !jobId || !following) return;
     const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 15000);
     return () => clearInterval(iv);
-  }, [api, jobId, tlState]);
+  }, [api, jobId, following]);
   const refreshPrinter = useCallback(() => {
     if (!api || !server || !printerId) return;
     if (cloud && !printerObj) return;               // printer list not loaded yet
@@ -299,6 +301,8 @@ export default function JobScreen() {
             spoolId: start ? activeSpool : undefined,
             onStep: step => setRelay({ step, part: 0 }), onProgress: part => setRelay(r => ({ step: r?.step ?? "upload", part })) });
         setRelayed(start ? "started" : "uploaded");
+        setAgain(false);
+        api.markRelayed(job.id, start, fileName).then(() => api.job(job.id)).then(setJob).catch(() => {});
         if (start) await afterStart(fileName).catch(() => {});
         if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       } catch (e) {
@@ -320,6 +324,7 @@ export default function JobScreen() {
         if (j.state !== "sending") break;
       }
       if (j) setJob(j);
+      setAgain(false);
       if (j?.error) setActionError(friendlyError(t, 0, j.error));
       else if (start && j?.state === "started") {
         await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
@@ -422,7 +427,9 @@ export default function JobScreen() {
   const fewer = r?.copies_requested && r.copies != null && r.copies < r.copies_requested
     ? t("copiesFit", { n: r.copies, m: r.copies_requested }) : null;
   const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
-  const done = job.state === "started" || relayed === "started";
+  // the print is over (server 0.33.0 follows it): show the result, "print again" brings the review back
+  const over = job.state === "finished" || job.state === "cancelled";
+  const done = !again && (job.state === "started" || over || relayed === "started");
   const uploaded = job.state === "uploaded" || relayed === "uploaded";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
@@ -444,7 +451,8 @@ export default function JobScreen() {
 
   const footer = done ? (
     <>
-      <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
+      {over ? <Button title={t("printAgain")} icon="refresh" onPress={() => { setRelayed(null); setAgain(true); }} />
+        : <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />}
       {!cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
         onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
@@ -469,9 +477,12 @@ export default function JobScreen() {
     <Screen footer={footer}>
       {done || uploaded ? (
         <View style={{ alignItems: "center", paddingVertical: 20 }}>
-          <Ionicons name={done ? "checkmark-circle" : "cloud-done"} size={64} color={c.ok} />
-          <Text style={{ color: c.text, fontSize: 22, fontWeight: "700", marginTop: 10 }}>{t(done ? "startedTitle" : "uploadedTitle")}</Text>
-          <Text style={{ color: c.sub, fontSize: 15, marginTop: 6, textAlign: "center" }}>{t(done ? "startedSub" : "uploadedSub")}</Text>
+          <Ionicons name={job.state === "cancelled" ? "close-circle" : done ? "checkmark-circle" : "cloud-done"} size={64}
+            color={job.state === "cancelled" ? c.warn : c.ok} />
+          <Text style={{ color: c.text, fontSize: 22, fontWeight: "700", marginTop: 10 }}>
+            {t(job.state === "finished" ? "finishedTitle" : job.state === "cancelled" ? "cancelledTitle" : done ? "startedTitle" : "uploadedTitle")}</Text>
+          <Text style={{ color: c.sub, fontSize: 15, marginTop: 6, textAlign: "center" }}>
+            {t(job.state === "finished" ? "finishedSub" : job.state === "cancelled" ? "cancelledSub" : done ? "startedSub" : "uploadedSub")}</Text>
           {job.timelapse ? (
             job.timelapse.state === "ready" ? (
               <Button title={t("timelapseWatch")} icon="film-outline" style={{ marginTop: 16, alignSelf: "stretch" }}

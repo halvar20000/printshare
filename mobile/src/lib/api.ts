@@ -119,7 +119,7 @@ export type JobOptions = Partial<{
   copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
-export type JobState = "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
+export type JobState = "finished" | "cancelled" | "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
 export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
@@ -394,6 +394,12 @@ export class Api {
     this.request<{ job: string }>(`/api/jobs/${id}/send`,
       { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}),
                                 ...(timelapse ? { timelapse: true } : {}) } });
+  /** Cloud: the phone sent the G-code itself (Wi-Fi) - the server follows the print from now on (0.33.0). */
+  markRelayed = (id: string, start: boolean, file: string) =>
+    this.request<{ state: string }>(`/api/jobs/${encodeURIComponent(id)}/relayed`, { method: "POST", body: { start, file } });
+  /** Cloud: statuses of printers the phone reaches on its Wi-Fi - started jobs learn that they finished (0.33.0). */
+  observe = (statuses: Record<string, PrinterStatus | null>) =>
+    this.request<unknown>("/api/observe", { method: "POST", body: { statuses } });
   /** The time-lapse video (MP4) of a job; video players can't send headers, so the token goes into the URL. */
   async timelapseUrl(id: string): Promise<string> {
     const tp = tokenParam(this.server);

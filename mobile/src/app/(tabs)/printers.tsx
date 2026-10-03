@@ -1,7 +1,7 @@
 // Live status and control of every printer (DR-04, DR-05, DR-06); details in control/[id] (issue #5).
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Text, View } from "react-native";
 
 import { BookingCard, bookedText } from "@/components/bookings";
@@ -22,6 +22,7 @@ type Entry = { printer: Printer; status: PrinterStatus | null; error?: string; n
 export default function Printers() {
   const { api, server, t } = useApp();
   const cloud = !!server?.cloud;
+  const lastObserve = useRef(0);
   const c = useColors();
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [error, setError] = useState("");
@@ -58,6 +59,12 @@ export default function Printers() {
       setEntries(list);
       setNow(Date.now());
       setError("");
+      // cloud: tell the server what the printers on this Wi-Fi do, so started jobs learn that they finished (0.33.0)
+      const lanSeen = list.filter(e => !e.printer.bridge && !e.webLan && e.status);
+      if (server?.cloud && api && lanSeen.length && Date.now() - lastObserve.current > 30000) {
+        lastObserve.current = Date.now();
+        api.observe(Object.fromEntries(lanSeen.map(e => [e.printer.id, e.status]))).catch(() => {});
+      }
       // web app: printers only the phone reaches aren't reported (their status is unknown here, not "off")
       const res = await settleBookings(server!, Object.fromEntries(list.filter(e => !e.webLan).map(e => [e.printer.id, e.status])), api);
       setOpenBookings(res.open);

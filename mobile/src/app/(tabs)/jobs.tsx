@@ -49,8 +49,8 @@ export default function Jobs() {
       renderItem={({ item: j }) => {
         const meta = [names[j.printer ?? ""] ?? j.printer, j.print_time ? printTime(j.print_time) : null,
           j.filament_g != null ? `${j.filament_g.toFixed(1)} g` : null, ago(t, j.created)].filter(Boolean).join(" · ");
-        const kind = j.state === "error" ? "error" : j.state === "started" || j.state === "done" ? "ok"
-          : j.state === "sliced" ? "accent" : "neutral";
+        const kind = j.state === "error" ? "error" : j.state === "finished" || j.state === "done" ? "ok"
+          : j.state === "cancelled" ? "warn" : j.state === "started" || j.state === "sliced" ? "accent" : "neutral";
         return (
           <Pressable onPress={() => { tap(); router.push(`/job/${j.id}`); }} accessibilityRole="button"
             style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", padding: 14, borderRadius: radius,

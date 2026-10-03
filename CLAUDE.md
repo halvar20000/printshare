@@ -812,6 +812,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   server: `viaServer` + `cameraInfo`), status/"Zeitraffer ansehen" after start, `app/timelapse/[id].tsx` with
   `components/VideoPlayer(.web).tsx` (WebView `<video>` - no new native module). Checked end to end in the web build with a
   bridge and the fake camera; **not yet with a real printer camera**.
+- **Jobs follow their print, 0.33.0** (Thomas: job stayed "started" after a finished bridge print): `printshare/jobtrack.py`
+  (`track()` like the bookings' `judge()`; states `finished`/`cancelled`; a stale finished/cancelled of the previous run of
+  the same file within 10 min of `started_at` is ignored - added to `bookings.judge` too), `_track_jobs()` fed by the home
+  loop (`_jobs_track_loop`, 30 s), the cloud loop (`_check_bridge_bookings` now also covers started jobs) and
+  `/api/observe` (app, Wi-Fi printers, every 30 s from the printers tab); `/api/jobs/{id}/relayed` for the phone's own sends.
+  App: badges Druckt/Gedruckt/Abgebrochen, result screen + "Erneut drucken", job screen polls while started.
 - Web 404 handling: the web app is served from the 404 handler (`_http_errors`, only for "Not Found" outside api/ static/
   spoolman/), not a catch-all route - routes added later (tests, harnesses) win.
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in

@@ -78,6 +78,7 @@ from .cloud.bookings import Bookings
 from .cloud.upload_keys import UploadKeys
 from . import gcode_info
 from .jobstore import JobStore, job_dir
+from . import jobtrack
 from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
 from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient
@@ -114,6 +115,7 @@ async def _lifespan(_app):
         WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
         TIMELAPSE.start_loop()     # time-lapse recordings (0.32.0)
+        _spawn(_jobs_track_loop()) # started jobs → finished / cancelled (0.33.0)
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
@@ -122,7 +124,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.32.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.33.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -497,8 +499,17 @@ def bookings_observe(req: BookingObserve, acct: Account = Depends(auth)) -> dict
     booked = []
     for pid, st in list(req.statuses.items())[:50]:
         if pid in known:
-            booked += _bookings_call(db.observe, acct.id, pid, st if isinstance(st, dict) else None)
+            st = st if isinstance(st, dict) else None
+            booked += _bookings_call(db.observe, acct.id, pid, st)
+            _track_jobs(acct.id, pid, st)
     return {**db.list(acct.id), "booked_now": booked}
+
+
+@app.post("/api/observe")
+def observe(req: BookingObserve, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The app reports the statuses of printers it reaches on its Wi-Fi (cloud): started jobs learn that they finished,
+    spool bookings in the account are settled. Same as /api/bookings/observe."""
+    return bookings_observe(req, acct)
 
 
 @app.post("/api/bookings/{booking_id}/resolve")
@@ -515,11 +526,26 @@ def bookings_delete(booking_id: str, acct: Account = Depends(auth)) -> dict[str,
     return {"deleted": booking_id}
 
 
+def _track_jobs(owner: str, printer_id: str, status: dict[str, Any] | None) -> None:
+    """Started jobs of this printer learn from its status that they finished or were cancelled (0.33.0)."""
+    kind = printer_kind(status.get("state")) if status else None
+    for job in list(JOBS.values()):
+        if job.get("owner", "local") == owner and job.get("state") in jobtrack.TRACKED \
+                and (job.get("printer") or (job.get("result") or {}).get("printer")) == printer_id:
+            jobtrack.track(job, status, kind)
+
+
+def _started_printers() -> set[tuple[str, str]]:
+    return {(j.get("owner", "local"), j.get("printer") or (j.get("result") or {}).get("printer"))
+            for j in list(JOBS.values()) if j.get("state") in jobtrack.TRACKED}
+
+
 async def _check_bridge_bookings() -> None:
-    """Waiting bookings of printers behind a bridge: ask the bridge for the status (nobody has to have the app open)."""
+    """Printers behind a bridge with waiting bookings or started jobs: ask the bridge for the status (nobody has to have
+    the app open)."""
     if BOOKINGS is None:
         return
-    for user_id, printer_id in BOOKINGS.waiting_printers():
+    for user_id, printer_id in sorted(set(BOOKINGS.waiting_printers()) | _started_printers()):
         row = next((p for p in ACCOUNTS.printers(user_id) if p.get("id") == printer_id), None)
         if not row or not row.get("bridge"):
             continue                       # reached by the phone: it reports the status itself
@@ -533,6 +559,7 @@ async def _check_bridge_bookings() -> None:
                 if e.code not in ("offline", "bridge_offline", "unknown_printer"):
                     continue                # busy / timeout: try again next round
                 status = None
+        _track_jobs(user_id, printer_id, status)
         try:
             await asyncio.to_thread(BOOKINGS.observe, user_id, printer_id, status)
         except accounts.AccountError:
@@ -2061,6 +2088,21 @@ def _validate_options(acct: "Account", printer: PrinterConfig, o: OptionsModel) 
     return opts
 
 
+JOB_TRACK_S = 30
+
+
+async def _jobs_track_loop() -> None:
+    """Home server: started jobs follow their printer until the print is over (0.33.0)."""
+    while True:
+        await asyncio.sleep(JOB_TRACK_S)
+        for owner, printer_id in _started_printers():
+            try:
+                st = await get_adapter(settings.printer(printer_id)).status()
+            except Exception:  # noqa: BLE001 - unknown printer or off: nothing learned
+                continue
+            _track_jobs(owner, printer_id, st)
+
+
 async def _jobs_loop() -> None:
     """Mirror the jobs into the job store every few seconds; clean up old ones once an hour."""
     last_prune = 0.0
@@ -2140,7 +2182,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         _local_only(acct)
     if req.start and not req.confirm:
         raise HTTPException(400, "starting a print needs confirm=true")  # NF-05
-    if job["state"] not in ("sliced", "uploaded"):
+    if job["state"] not in ("sliced", "uploaded", "finished", "cancelled"):     # printed before: print it again
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
     result = JobResult(**job["result"])
     via = _via_bridge(acct, result.printer)
@@ -2158,6 +2200,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
                 job["printer_file"] = (r or {}).get("file")
                 if req.start and req.timelapse:
                     job["timelapse"] = {"state": "recording", "frames": 0}
+                if req.start:
+                    job.update(started_at=time.time(), seen_printing=False, progress=None, finished_at=None)
                 job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"))
             except BridgeError as e:
                 job.update(state="sliced", error=f"Sending failed: {e}")
@@ -2204,6 +2248,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
                 rec = TIMELAPSE.start(result.printer, job_id, Path(result.gcode).name, out,
                                       cloud_job=(job.get("request") or {}).get("cloud_job"))
                 job["timelapse"] = {"state": rec.state, "frames": 0}
+            if req.start:
+                job.update(started_at=time.time(), seen_printing=False, progress=None, finished_at=None)
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
         except Exception as e:  # noqa: BLE001
             # the sliced G-code is still valid: allow another attempt
@@ -2247,6 +2293,25 @@ async def preview(job_id: str, format: int = 1, acct: Account = Depends(auth)) -
     bed = await asyncio.to_thread(_bed, acct, job["result"]["printer"])
     data = await asyncio.to_thread(gcode_preview.build, gcode, bed)
     return gcode_preview.as_version(data, format)
+
+
+class RelayedRequest(BaseModel):
+    start: bool
+    file: str                     # the file's name on the printer
+
+
+@app.post("/api/jobs/{job_id}/relayed")
+def job_relayed(job_id: str, req: RelayedRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Cloud: the app sent the G-code to the printer itself (home Wi-Fi) - the job says so and follows the print."""
+    job = _own_job(acct, job_id)
+    if job["state"] not in ("sliced", "uploaded", "finished", "cancelled"):
+        raise HTTPException(409, f"job is {job['state']}")
+    job["printer_file"] = Path(req.file).name[:200]
+    if req.start:
+        job.update(state="started", started_at=time.time(), seen_printing=False, progress=None, finished_at=None)
+    else:
+        job.update(state="uploaded")
+    return {"state": job["state"]}
 
 
 @app.get("/api/jobs/{job_id}/timelapse")
