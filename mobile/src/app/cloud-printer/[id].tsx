@@ -325,6 +325,9 @@ export default function CloudPrinter() {
 
       {!isNew ? (
         <Section>
+          <Row icon="desktop-outline" label={t("orcaRow")}
+            onPress={() => router.push({ pathname: "/orca-upload/[id]", params: { id, name } })} />
+          <Divider />
           <Row icon="document-text-outline" label={t("printerProfile")}
             onPress={() => router.push({ pathname: "/printer/[id]", params: { id } })} />
           <Divider />

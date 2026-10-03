@@ -794,6 +794,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   removed ones), lifespan exit syncs once more, `load()` at import marks interrupted slicing/running → error,
   sending → sliced. `prune()` (on every new job + hourly): 50 per owner (was 50 for the whole server!), 14 days, removes the
   job's own G-code folder `<gcode>/<printer>/<job id>`. Still not cleaned: uploads and the download cache per user.
+- **Step 3 (send from OrcaSlicer) done, 0.31.0:** `cloud/upload_keys.py` (`pp3do_…` per printer, hashed, replaced on renew,
+  deleted with the printer), `/octoprint/api/version` + `/octoprint/api/files/local` (multipart via python-multipart, new
+  dependency) → job (`_gcode_result`: estimates + `gcode_info.orca_settings()` reading Orca's footer
+  `printer_settings_id/print_settings_id/filament_settings_id/filament_colour`), `print=true` + bridge printer →
+  `_orca_print` (send + booking on `Bookings.last_spool`). Job state `uploading` (interrupted → error). Fixture
+  `tests/data/orca_cone.gcode` = real Orca 2.4.2 G-code with the middle cut out. App `app/orca-upload/[id].tsx`. Not yet
+  tried with the OrcaSlicer desktop app itself.
 - Web 404 handling: the web app is served from the 404 handler (`_http_errors`, only for "Not Found" outside api/ static/
   spoolman/), not a catch-all route - routes added later (tests, harnesses) win.
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in

@@ -41,6 +41,13 @@ no app is open; printers on the phone's Wi-Fi are reported by the app (`/api/boo
 print through a bridge with a cloud spool, page closed, printer finished → 3.67 g booked by the cloud alone.
 Open: an own Spoolman at home through the bridge (today the phone books those).
 
+## Send from OrcaSlicer (step 3, 0.31.0)
+Desktop users slice in OrcaSlicer as before and send to PocketPrint3D (physical printer "Octo/Klipper", docs/API.md): the
+print gets a job (preview, spools, slots, confirmation in the app/browser) and spool bookings like any other print. "Upload
+and print" starts right away through a bridge. App: printer → "Aus OrcaSlicer am Computer senden" (`app/orca-upload/[id].tsx`).
+Checked with the HTTP calls OrcaSlicer makes (real Orca 2.4.2 G-code); **not yet with the OrcaSlicer desktop itself**.
+Open: OrcaSlicer's "Upload and print" for printers only the phone reaches (waits in the app), multi-colour spool booking
+for Orca uploads, the same for home servers.
+
 ## Next (docs/BRIDGE.md, product plan)
-2. "Send from OrcaSlicer": an OctoPrint-compatible upload per printer, so desktop-sliced prints go through PocketPrint3D too.
 3. The same web app on home servers instead of the classic page.

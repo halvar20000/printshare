@@ -17,8 +17,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-RUNNING = ("slicing", "sending", "running")
+RUNNING = ("slicing", "sending", "running", "uploading")
 INTERRUPTED = {
+    "uploading": ("error", "The upload was interrupted by a server update - please send it again."),
     "slicing": ("error", "Interrupted by a server update - please slice again."),
     "running": ("error", "Interrupted by a server update - please try again."),
     "sending": ("sliced", "Sending was interrupted by a server update - please send again."),

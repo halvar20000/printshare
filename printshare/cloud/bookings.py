@@ -142,6 +142,16 @@ class Bookings:
                 "open": [b for b in rows if b["state"] == "ask"],
                 "booked": [b for b in rows if b["state"] == "booked"]}
 
+    def last_spool(self, user_id: str, printer: str) -> dict[str, Any] | None:
+        """The spool of the latest single-spool booking on this printer (default for prints sent from OrcaSlicer)."""
+        for r in self.acc._q("SELECT uses, booked_uses FROM bookings WHERE user_id = ? AND printer = ? "
+                             "ORDER BY created DESC LIMIT 10", (user_id, printer)):
+            uses = json.loads(r["uses"]) + json.loads(r["booked_uses"])
+            spools = {u["spool"] for u in uses}
+            if len(spools) == 1:
+                return uses[0]
+        return None
+
     def waiting_printers(self) -> list[tuple[str, str]]:
         """(user, printer) pairs with bookings waiting for a status - for the cloud's own check of bridge printers."""
         return [(r["user_id"], r["printer"]) for r in

@@ -75,6 +75,8 @@ from .cloud import accounts
 from .cloud.spools import Spools
 from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
+from .cloud.upload_keys import UploadKeys
+from . import gcode_info
 from .jobstore import JobStore
 from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient
@@ -118,7 +120,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.30.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.31.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -154,18 +156,20 @@ MAILER: Mailer | None = None
 SPOOLS: Spools | None = None
 BRIDGES: Bridges | None = None
 BOOKINGS: Bookings | None = None
+UPLOAD_KEYS: UploadKeys | None = None
 HUB = BridgeHub()
 
 
 def _cloud_setup() -> None:
-    global ACCOUNTS, MAILER, SPOOLS, BRIDGES, BOOKINGS
+    global ACCOUNTS, MAILER, SPOOLS, BRIDGES, BOOKINGS, UPLOAD_KEYS
     if not settings.cloud:
-        ACCOUNTS = MAILER = SPOOLS = BRIDGES = BOOKINGS = None
+        ACCOUNTS = MAILER = SPOOLS = BRIDGES = BOOKINGS = UPLOAD_KEYS = None
         return
     ACCOUNTS = accounts.Accounts(settings.cloud_db)
     SPOOLS = Spools(ACCOUNTS)
     BRIDGES = Bridges(ACCOUNTS)
     BOOKINGS = Bookings(ACCOUNTS, SPOOLS)
+    UPLOAD_KEYS = UploadKeys(ACCOUNTS)
     HUB.on_seen = BRIDGES.seen
     HUB.on_printers = lambda *a: _sync_bridge_printers(*a)       # defined further down
     HUB.listeners[:] = [lambda *a: _bridge_event(*a)]
@@ -543,6 +547,161 @@ async def _bookings_loop() -> None:
             logging.getLogger(__name__).exception("bookings check")
 
 
+# ---------- cloud: send from OrcaSlicer (docs/WEB.md step 3, 0.31.0) ----------
+# OrcaSlicer's physical printer "Octo/Klipper" → https://api.pocketprint3d.com/octoprint with X-Api-Key = the printer's key.
+# The G-code becomes a job of the account ("ready to print": spools, slots, confirmation in the app). "Upload and Print"
+# starts it right away on printers behind a bridge (the user confirmed in OrcaSlicer) and books the spool used last.
+OCTO_VERSION = {"api": "0.1", "server": "1.10.0", "text": "OctoPrint 1.10.0 (PocketPrint3D)"}
+GCODE_SUFFIXES = (".gcode", ".gco", ".g")
+
+
+def _upload_keys() -> UploadKeys:
+    if not settings.cloud or UPLOAD_KEYS is None:
+        raise HTTPException(404, "sending from OrcaSlicer works with PocketPrint3D Cloud")
+    return UPLOAD_KEYS
+
+
+def _public_url(request: Request) -> str:
+    from . import bootstrap
+    return (bootstrap.server_url() or str(request.base_url)).rstrip("/")
+
+
+@app.get("/api/printers/{printer_id}/orca-upload")
+def orca_upload_state(printer_id: str, request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Is sending from OrcaSlicer set up for this printer? (The key itself is only shown when it is created.)"""
+    if not acct.cloud:
+        raise HTTPException(404, "sending from OrcaSlicer works with PocketPrint3D Cloud")
+    _printer(acct, printer_id)
+    info = _upload_keys().info(acct.id, printer_id)
+    return {"enabled": info is not None, "url": _public_url(request) + "/octoprint", **(info or {})}
+
+
+@app.post("/api/printers/{printer_id}/orca-upload")
+def orca_upload_create(printer_id: str, request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """A new key for OrcaSlicer (shown once; an older key of this printer stops working)."""
+    if not acct.cloud:
+        raise HTTPException(404, "sending from OrcaSlicer works with PocketPrint3D Cloud")
+    _printer(acct, printer_id)
+    key = _upload_keys().create(acct.id, printer_id)
+    return {"enabled": True, "url": _public_url(request) + "/octoprint", "key": key}
+
+
+@app.delete("/api/printers/{printer_id}/orca-upload")
+def orca_upload_delete(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(404, "sending from OrcaSlicer works with PocketPrint3D Cloud")
+    return {"deleted": _upload_keys().delete(acct.id, printer_id)}
+
+
+def _octo_auth(request: Request) -> tuple[Account, PrinterConfig]:
+    key = request.headers.get("x-api-key") or request.query_params.get("apikey") or ""
+    found = _upload_keys().resolve(key) if key else None
+    user = ACCOUNTS.user(found[0]) if found else None
+    if user is None:
+        raise HTTPException(403, "Invalid API key - create one in the PocketPrint3D app (printer → Send from OrcaSlicer)")
+    acct = _user_account(user, "")
+    try:
+        return acct, acct.settings.printer(found[1])
+    except KeyError:
+        raise HTTPException(403, "this key's printer no longer exists - create a new key in the app")
+
+
+@app.get("/octoprint/api/version")
+def octoprint_version(request: Request) -> dict[str, Any]:
+    """OrcaSlicer's "Test" button."""
+    _octo_auth(request)
+    return OCTO_VERSION
+
+
+def _gcode_result(printer: PrinterConfig, name: str, path: Path) -> JobResult:
+    from .slicer import _parse_estimates, filament_grams
+    print_time, grams, meters, layers = _parse_estimates(path)
+    info = gcode_info.orca_settings(path)
+    per = filament_grams(path)
+    fils = info.get("filaments") or []
+    colours = info.get("colours") or []
+    filaments = [{"index": i + 1, "color": colours[i] if i < len(colours) else None, "preset": fils[i] if i < len(fils) else "",
+                  "grams": per[i] if i < len(per) else None} for i in range(max(len(per), len(fils)))] if len(per) > 1 else []
+    profiles = {"machine": info.get("printer") or "OrcaSlicer", "process": info.get("process") or "",
+                "filament": fils[0] if fils else "", "bed_type": ""}
+    return JobResult(printer.id, name, str(path), print_time, grams, meters, layers, profiles, {}, filaments=filaments)
+
+
+async def _orca_print(acct: Account, job: dict[str, Any]) -> None:
+    """"Upload and Print" on a printer behind a bridge: send and start, then book the spool used last on it."""
+    try:
+        await send(job["id"], SendRequest(start=True, confirm=True), acct)
+    except HTTPException as e:
+        job["log"].append(f"Not started: {e.detail}")
+        return
+    for _ in range(15 * 60):
+        if job["state"] != "sending":
+            break
+        await asyncio.sleep(1)
+    if job["state"] != "started" or BOOKINGS is None:
+        return
+    grams = [f["grams"] for f in (job["result"].get("filaments") or [])] or [job["result"].get("filament_g")]
+    last = BOOKINGS.last_spool(acct.id, job["printer"])
+    if last is None or len(grams) != 1 or not grams[0]:
+        job["log"].append("No spool booked - choose it in the app next time (single colour, cloud spools)")
+        return
+    try:
+        BOOKINGS.create(acct.id, job["printer"], job.get("printer_file") or Path(job["result"]["gcode"]).name,
+                        [{"spool": last["spool"], "grams": grams[0], "label": last.get("label") or ""}],
+                        printer_name=_printer(acct, job["printer"]).name, job=job["id"])
+        job["log"].append(f"Spool booked when finished: {last.get('label') or '#' + str(last['spool'])}")
+    except accounts.AccountError as e:
+        job["log"].append(f"No spool booked: {e}")
+
+
+@app.post("/octoprint/api/files/local", status_code=201)
+async def octoprint_upload(request: Request) -> dict[str, Any]:
+    """OrcaSlicer "Upload" / "Upload and Print": multipart `file` (+ `print`, `select`, `path`)."""
+    acct, printer = _octo_auth(request)
+    limit = settings.limit_upload_mb * 1024 * 1024
+    if int(request.headers.get("content-length") or 0) > limit + 1_000_000:
+        raise HTTPException(413, f"the G-code is larger than {settings.limit_upload_mb} MB")
+    form = await request.form(max_files=1, max_fields=10)
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        raise HTTPException(400, "no file in the upload")
+    name = re.sub(r"[^\w.\- ()]+", "_", Path(upload.filename or "print.gcode").name).strip(" .")[:120] or "print.gcode"
+    if not name.lower().endswith(GCODE_SUFFIXES):
+        raise HTTPException(415, "only G-code (.gcode) can be sent - binary G-code (.bgcode) and 3MF are not supported")
+    start = str(form.get("print") or "").lower() == "true"
+    job = _new_job("prepare", "uploading", {"link": f"orcaslicer:{name}", "printer": printer.id, "file": None,
+                                            "source": "orcaslicer"}, owner=acct.id)
+    job["printer"] = printer.id
+    dest = Path(acct.settings.gcode_dir) / printer.id / job["id"] / name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    size = 0
+    try:
+        with dest.open("wb") as fh:
+            while chunk := await upload.read(1 << 20):
+                size += len(chunk)
+                if size > limit:
+                    raise HTTPException(413, f"the G-code is larger than {settings.limit_upload_mb} MB")
+                fh.write(chunk)
+        result = await asyncio.to_thread(_gcode_result, printer, name, dest)
+    except HTTPException:
+        JOBS.pop(job["id"], None)
+        shutil.rmtree(dest.parent, ignore_errors=True)
+        raise
+    job.update(state="sliced", result=result.as_dict())
+    job["log"].append("Received from OrcaSlicer")
+    sliced_for = result.profiles.get("machine")
+    if printer.slicing.machine and sliced_for not in ("OrcaSlicer", printer.slicing.machine):
+        job["log"].append(f"Sliced for {sliced_for}, this printer is set to {printer.slicing.machine}")
+    started = bool(start and printer.bridge)
+    if start and not printer.bridge:
+        job["log"].append("Start it in the app (this printer is reached by your phone on the Wi-Fi)")
+    if started:
+        _spawn(_orca_print(acct, job))
+    return {"done": True, "effectiveSelect": False, "effectivePrint": started,
+            "files": {"local": {"name": name, "path": name, "origin": "local",
+                                "refs": {"resource": f"{_public_url(request)}/api/jobs/{job['id']}"}}}}
+
+
 # ---------- cloud mode: bridges at home (docs/BRIDGE.md) ----------
 def _bridges() -> Bridges:
     if not settings.cloud or BRIDGES is None:
@@ -850,6 +1009,8 @@ async def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict
         return {"deleted": printer_id}
     if not ACCOUNTS.delete_printer(acct.id, printer_id):
         raise HTTPException(404, f"Unknown printer {printer_id!r}")
+    if UPLOAD_KEYS is not None:
+        UPLOAD_KEYS.delete(acct.id, printer_id)
     user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})     # its profile/power settings too
     return {"deleted": printer_id}
 

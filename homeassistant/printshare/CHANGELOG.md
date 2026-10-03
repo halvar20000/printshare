@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.31.0
+- PocketPrint3D Cloud: send from OrcaSlicer on your computer. Add PocketPrint3D as a physical printer (host type
+  Octo/Klipper) with the address and key from the app (printer → "Send from OrcaSlicer"). The G-code shows up as a job
+  with print time, filament and preview; "Upload and print" starts it right away on printers behind a bridge and books
+  the spool used last.
+
 ## 0.30.0
 - Jobs survive a restart or an update: sliced models stay in the job list and can still be sent. A job that was being
   sliced or sent at that moment says so. Old jobs clean up after themselves: at most 50 (per account in the cloud), none

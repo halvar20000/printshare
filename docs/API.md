@@ -467,6 +467,21 @@ finished. An own Spoolman at home keeps the app's own bookings (phone).
   printing for 20 min or another file → ask; unreachable 3 days → ask. Each spool is removed once booked (no double booking).
 - `GET /api/jobs/{id}` has `printer_file` after a send through a bridge (the file's name on the printer).
 
+## Send from OrcaSlicer (0.31.0, cloud – docs/WEB.md step 3)
+OrcaSlicer's physical printer, host type **Octo/Klipper**: URL `https://api.pocketprint3d.com/octoprint`, API key = the
+printer's key. PocketPrint3D answers the two OctoPrint calls OrcaSlicer makes:
+- `GET /octoprint/api/version` (header `X-Api-Key`) → `{"api", "server", "text": "OctoPrint 1.10.0 (PocketPrint3D)"}` (Orca
+  checks that `text` starts with "OctoPrint"); 403 for unknown keys.
+- `POST /octoprint/api/files/local` multipart `file` (+ `print`, `path`) → 201 `{"done": true, "effectivePrint",
+  "files": {"local": {"name", "refs": {"resource": ".../api/jobs/<id>"}}}}`. Only `.gcode/.gco/.g` (415 for 3MF and
+  binary G-code), at most `limit_upload_mb` (413). The file becomes a job of the account (state `sliced`, result with
+  time/grams/layers from the G-code, `profiles` from Orca's `printer_settings_id`/`print_settings_id`/
+  `filament_settings_id`, `filaments` with colours for multi-colour G-code). With `print=true` and a printer behind a
+  bridge it is sent and started right away and a booking is made on the spool of the last single-spool booking of that
+  printer; other printers: the job waits for the app (note in its `log`).
+- App: `GET|POST|DELETE /api/printers/{id}/orca-upload` → `{"enabled", "url", "created"?, "last_used"?}`; POST answers the
+  new `key` (`pp3do_…`, shown once, stored hashed; an older key of that printer stops working; deleted with the printer).
+
 ## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
 A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is
 built; forwarding the printer endpoints to a bridge comes with step 4.

@@ -119,7 +119,7 @@ export type JobOptions = Partial<{
   copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
-export type JobState = "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
+export type JobState = "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
 export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
@@ -416,6 +416,15 @@ export class Api {
     this.request<Printer>(`/api/printers/${encodeURIComponent(id)}`, { method: "PATCH", body: p });
   deletePrinter = (id: string) =>
     this.request<{ deleted: string }>(`/api/printers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  // send from OrcaSlicer (cloud, server 0.31.0): OctoPrint-compatible upload with one key per printer
+  orcaUpload = (printer: string) =>
+    this.request<{ enabled: boolean; url: string; created?: number; last_used?: number | null }>(
+      `/api/printers/${encodeURIComponent(printer)}/orca-upload`);
+  createOrcaUpload = (printer: string) =>
+    this.request<{ enabled: boolean; url: string; key: string }>(`/api/printers/${encodeURIComponent(printer)}/orca-upload`,
+      { method: "POST" });
+  deleteOrcaUpload = (printer: string) =>
+    this.request<{ deleted: boolean }>(`/api/printers/${encodeURIComponent(printer)}/orca-upload`, { method: "DELETE" });
   // spool bookings in the account (cloud spools, server 0.29.0)
   bookings = () => this.request<ServerBookings>("/api/bookings");
   createBooking = (b: { printer: string; file: string; uses: { spool: number; grams: number; label?: string }[];
