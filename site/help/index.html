@@ -80,7 +80,7 @@
       <tr><td>Slicing</td><td>in the cloud</td><td>in the cloud</td><td>at home</td></tr>
       <tr><td>Printing at home</td><td>✓ phone on the Wi-Fi</td><td>✓</td><td>✓</td></tr>
       <tr><td>Printing from anywhere</td><td>–</td><td>✓ also from the browser</td><td>✓ with the bridge switch (or Tailscale)</td></tr>
-      <tr><td>Camera, controls</td><td>–</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Camera, controls, time-lapse</td><td>–</td><td>✓</td><td>✓</td></tr>
       <tr><td>Extras</td><td></td><td></td><td>model library, AI failure detection, smart plug, exact Klipper times</td></tr>
     </table></div>
 
@@ -129,6 +129,15 @@
       <li>When printing, choose the spool per colour. You get a warning if one isn't enough or the material doesn't match.</li>
       <li>The used filament is booked when the print is finished. With spools in the account this also works when the app is closed (printers behind a bridge).</li>
       <li>New spools: pick them from the filament database, or hold the phone to an OpenPrintTag NFC spool (Android).</li>
+    </ul>
+
+    <h3>Time-lapse</h3>
+    <ul class="plain">
+      <li>On the review screen switch on <span class="path">Record a time-lapse</span> (off by default). The switch appears
+        for printers with a camera that your own server or a bridge reaches.</li>
+      <li>While printing, one picture is taken per layer (Centauri Carbon, Klipper) or every 30 seconds (Prusa, OctoPrint).</li>
+      <li>When the print is done, a short video is made. On the job: <span class="path">Watch the time-lapse</span> –
+        with <span class="path">Download the video</span>. It is deleted with the job after 14 days.</li>
     </ul>
 
     <h3>Multicolour (AFC / CANVAS)</h3>

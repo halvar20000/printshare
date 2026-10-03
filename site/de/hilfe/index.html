@@ -81,7 +81,7 @@
       <tr><td>Druck berechnen</td><td>in der Cloud</td><td>in der Cloud</td><td>zu Hause</td></tr>
       <tr><td>Drucken zu Hause</td><td>✓ Handy im WLAN</td><td>✓</td><td>✓</td></tr>
       <tr><td>Drucken von überall</td><td>–</td><td>✓ auch aus dem Browser</td><td>✓ mit dem Brücken-Schalter (oder Tailscale)</td></tr>
-      <tr><td>Kamera, Steuerung</td><td>–</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Kamera, Steuerung, Zeitraffer</td><td>–</td><td>✓</td><td>✓</td></tr>
       <tr><td>Extras</td><td></td><td></td><td>Modell-Bibliothek, KI-Fehlererkennung, smarte Steckdose, genaue Klipper-Zeiten</td></tr>
     </table></div>
 
@@ -130,6 +130,15 @@
       <li>Beim Drucken wählst du die Spule pro Farbe. Du wirst gewarnt, wenn eine nicht reicht oder das Material nicht passt.</li>
       <li>Das verbrauchte Filament wird gebucht, wenn der Druck fertig ist. Mit Spulen im Konto auch dann, wenn die App geschlossen ist (Drucker hinter einer Brücke).</li>
       <li>Neue Spulen: aus der Filament-Datenbank wählen oder das Handy an eine OpenPrintTag-NFC-Spule halten (Android).</li>
+    </ul>
+
+    <h3>Zeitraffer</h3>
+    <ul class="plain">
+      <li>Auf der Druckübersicht <span class="path">Zeitraffer aufnehmen</span> einschalten (standardmäßig aus). Der Schalter
+        erscheint bei Druckern mit Kamera, die dein eigener Server oder eine Brücke erreicht.</li>
+      <li>Beim Drucken wird pro Schicht ein Bild gemacht (Centauri Carbon, Klipper) oder alle 30 Sekunden (Prusa, OctoPrint).</li>
+      <li>Wenn der Druck fertig ist, entsteht ein kurzes Video. Im Auftrag: <span class="path">Zeitraffer ansehen</span> – mit
+        <span class="path">Video herunterladen</span>. Es wird nach 14 Tagen mit dem Auftrag gelöscht.</li>
     </ul>
 
     <h3>Mehrfarbdruck (AFC / CANVAS)</h3>
