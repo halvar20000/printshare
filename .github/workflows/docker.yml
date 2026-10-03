@@ -7,7 +7,8 @@ name: Docker image
 on:
   push:
     branches: [main]
-    paths-ignore: ["mobile/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "**.md"]
+    # mobile/ counts: the web app (app.pocketprint3d.com) is built from it into the image
+    paths-ignore: ["mobile/README.md", "mobile/scripts/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "**.md"]
   workflow_dispatch:
 
 permissions:

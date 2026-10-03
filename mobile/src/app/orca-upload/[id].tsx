@@ -68,6 +68,10 @@ export default function OrcaUpload() {
       {error ? <Banner kind="error" text={error} /> : null}
       {!state ? <ActivityIndicator color={c.accent} /> : null}
 
+      <Section title={t("orcaWhyTitle")} footer={t("orcaWhyNot")}>
+        <Text style={{ color: c.text, fontSize: 15, lineHeight: 22, padding: space }}>{t("orcaWhy")}</Text>
+      </Section>
+
       {state && (key || state.enabled) ? (
         <Section title={t("orcaAccess")} footer={key ? t("orcaKeyOnce") : undefined}>
           <Row icon="link-outline" label={t("orcaUrl")} value={copied === "url" ? t("copied") : undefined}
