@@ -68,7 +68,7 @@ ol.big > li { counter-increment: step; position: relative; background: var(--car
 ol.big > li::before { content: counter(step); position: absolute; left: 16px; top: 14px; width: 34px; height: 34px;
   border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-weight: 800; display: flex;
   align-items: center; justify-content: center; font-size: 17px; }
-ol.big > li strong:first-child { display: block; font-size: 18px; margin-bottom: 2px; }
+ol.big > li > strong:first-child { display: block; font-size: 18px; margin-bottom: 2px; }
 ol.big > li p { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
 .path { display: inline-block; background: var(--accent-soft); color: var(--fg); border-radius: 8px; padding: 1px 8px;
   font-size: 14px; font-weight: 600; white-space: nowrap; }
@@ -82,3 +82,5 @@ ol.big > li p { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
 .help ul.plain { padding-left: 20px; }
 .help ul.plain li { margin: 0 0 6px; }
 @media (max-width: 520px) { ol.big > li { padding-left: 56px; } ol.big > li::before { left: 12px; } .path { white-space: normal; } }
+code.cmd { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  margin: 6px 0; font-size: 14px; overflow-x: auto; white-space: pre; user-select: all; -webkit-user-select: all; color: var(--fg); }

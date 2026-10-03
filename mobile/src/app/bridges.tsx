@@ -3,7 +3,7 @@
 // Its printers then appear in the account by themselves; more can be added through the bridge.
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Text, TextInput, View } from "react-native";
 
 import { Badge, Banner, Button, Card, Divider, Row, Screen, Section, confirmAsync } from "@/components/ui";
 import { errorText, type Bridge } from "@/lib/api";
@@ -66,6 +66,8 @@ export default function Bridges() {
   return (
     <Screen>
       <Text style={{ color: c.sub, fontSize: 15, lineHeight: 21, marginBottom: 16 }}>{t("bridgeIntro")}</Text>
+      <Row icon="hardware-chip-outline" label={t("bridgeGuide")} sub={t("bridgeGuideSub")}
+        onPress={() => Linking.openURL(t.lang === "de" ? "https://pocketprint3d.com/de/bruecke/" : "https://pocketprint3d.com/bridge/")} />
       {error ? <Banner kind="error" text={error} /> : null}
       {paired ? <Banner kind="ok" text={t("bridgePaired", { name: paired })} /> : null}
 

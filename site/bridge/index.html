@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up a bridge – PocketPrint3D</title>
+<meta name="description" content="Print from anywhere with PocketPrint3D: set up a bridge on a Raspberry Pi – shopping list and step-by-step guide for beginners.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/bruecke/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap help">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/">PocketPrint3D</a>
+    <nav><a href="/help/">Help</a><a href="/de/bruecke/" hreflang="de">Deutsch</a></nav>
+  </header>
+
+  <h1>Set up a bridge</h1>
+  <p style="color:var(--muted);margin:0 0 18px">With a bridge at home you reach your printers from anywhere and from the browser –
+    status, camera, printing, time-lapse. The bridge only connects <em>outwards</em>: nothing to open in your router, your printers
+    stay off the internet.</p>
+
+  <div class="tip"><strong>Already running an Unraid server, Home Assistant or a Docker machine?</strong> Then you don't need new
+    hardware: just switch on <em>Connect to PocketPrint3D Cloud</em> there (Unraid template, Home Assistant add-on option) – see
+    <a href="/help/#advanced">Help</a>. This page is for everyone else.</div>
+
+  <section>
+    <h2>1. What you need – about €60</h2>
+    <div class="table-wrap"><table>
+      <tr><th>Part</th><th>What to look for</th><th>approx.</th></tr>
+      <tr><td><strong>Raspberry Pi 3 Model B</strong> (or 3B+, 4, 5)</td><td>A Pi 3 is plenty. It has an Ethernet socket – that matters.</td><td>€38</td></tr>
+      <tr><td><strong>Power supply</strong></td><td>For the Pi 3: micro-USB, 5 V, 2.5 A (ideally the official one). Pi 4/5: USB-C (3 A / 5 A).</td><td>€10</td></tr>
+      <tr><td><strong>microSD card</strong></td><td>16 or 32 GB, a brand card (e.g. SanDisk, Samsung).</td><td>€8</td></tr>
+      <tr><td><strong>Case</strong></td><td>Matching the model, so nothing shorts.</td><td>€6</td></tr>
+      <tr><td><strong>Network cable</strong></td><td>From the Pi to your router (or a network switch). There's often one lying around.</td><td>€3</td></tr>
+    </table></div>
+    <p style="color:var(--muted);font-size:15px">Available from electronics shops such as The Pi Hut, Pimoroni, Berrybase or Reichelt.
+      Once: a computer with a card reader (or a USB card reader for a few euros).</p>
+    <div class="tip"><strong>Why a cable?</strong> No Wi-Fi to set up, a more reliable connection, and the bridge finds your printers
+      on your home network by itself. A Raspberry Pi Zero 2 W (Wi-Fi only) works too, but is harder to set up.</div>
+  </section>
+
+  <section>
+    <h2>2. Setting up – about 20 minutes</h2>
+    <ol class="big">
+      <li><strong>Install Raspberry Pi Imager</strong>
+        <p>On your computer: <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> → download and install
+          (Windows, Mac or Linux).</p></li>
+      <li><strong>Write the card</strong>
+        <p>Put the microSD card into the computer, start the Imager and choose:
+          <span class="path">Device: Raspberry Pi 3</span> (or your model) →
+          <span class="path">Operating system: Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)</span> →
+          <span class="path">Storage: your SD card</span>.</p></li>
+      <li><strong>Settings in advance</strong>
+        <p>When the Imager asks whether to customise settings: <em>Yes / Edit settings</em>.
+          <span class="path">Hostname: pocketprint3d</span> · <span class="path">Username: pi</span> + a password you remember ·
+          <strong>don't</strong> set up Wi-Fi · under <em>Services</em>: <span class="path">Enable SSH</span> with password.
+          Save, then <em>Write</em> – takes a few minutes.</p></li>
+      <li><strong>Connect the Pi</strong>
+        <p>Card into the Pi, network cable to the router, the power supply last. Wait two minutes – the green light blinks while it starts.</p></li>
+      <li><strong>Connect to the Pi</strong>
+        <p>Open a command window on your computer – Windows: Start → type <em>Command Prompt</em>; Mac: Applications → Utilities →
+          <em>Terminal</em>. Type:</p>
+        <code class="cmd">ssh pi@pocketprint3d.local</code>
+        <p>The first time type <code>yes</code>, then your password (it isn't shown while typing – that's normal).</p></li>
+      <li><strong>Install the bridge – one single command</strong>
+        <p>Copy this line, paste it into the window (right-click or Ctrl+V / ⌘V) and press Enter:</p>
+        <code class="cmd">curl -fsSL https://pocketprint3d.com/install-bridge.sh | sh</code>
+        <p>On a Pi 3 this takes about 5–10 minutes. At the end your <strong>pairing code</strong> appears, e.g. <code>K7Q4-M2ZX</code>.</p></li>
+      <li><strong>Enter the code in the app</strong>
+        <p>In the PocketPrint3D app (or at app.pocketprint3d.com):
+          <span class="path">Settings → Advanced → Print from anywhere</span> → enter the code → <span class="path">Connect</span>.
+          Then <span class="path">Add a printer through the bridge</span> – the bridge finds your printers itself. Done!</p></li>
+    </ol>
+    <div class="tip"><strong>Nothing to look after afterwards.</strong> The bridge starts again by itself after a power cut and gets new
+      versions at night. To see the code again: <code>pocketprint3d-code</code> (after step 5).</div>
+  </section>
+
+  <section>
+    <h3>Without a command window</h3>
+    <p>You can also use the Pi directly: connect a screen (HDMI) and a USB keyboard, log in with <code>pi</code> and your password and
+      type the command from step 6.</p>
+
+    <h3>If something doesn't work</h3>
+    <dl>
+      <dt>"pocketprint3d.local" isn't found</dt>
+      <dd>Look up the Pi's address in your router (device "pocketprint3d") and connect to that address, e.g.
+        <code>ssh pi@192.168.1.42</code>. Is the light on the network socket on?</dd>
+      <dt>A "32-bit" message while installing</dt>
+      <dd>The 32-bit system was written. Write the card again in the Imager with <em>Raspberry Pi OS Lite (64-bit)</em>.</dd>
+      <dt>The code has expired</dt>
+      <dd>It is valid for 10 minutes; a new one appears by itself. Show it with <code>pocketprint3d-code</code>.</dd>
+      <dt>The app says "bridge offline"</dt>
+      <dd>Does the Pi have power and is the network cable plugged in? After plugging in it takes about two minutes.</dd>
+    </dl>
+    <p style="color:var(--muted);font-size:15px">Curious what the command does? Read the script first:
+      <a href="/install-bridge.sh">install-bridge.sh</a>. It installs Docker and the bridge into <code>/opt/pocketprint3d-bridge</code>.
+      Questions or problems: <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
+  </section>
+
+  <footer>
+    <a href="/">Home</a><a href="/help/">Help</a><a href="/privacy/">Privacy</a><a href="/impressum/">Legal notice</a>
+  </footer>
+</div>
+</body>
+</html>
