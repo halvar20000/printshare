@@ -302,6 +302,21 @@ class BridgeClient:
                 pass
 
     # ---------- for the methods ----------
+    async def upload_timelapse(self, cloud_job: str, video: Path) -> None:
+        """A finished time-lapse to the cloud job it belongs to (only the cloud's own endpoint, with the bridge token)."""
+        st = load_state(self.settings())
+        url = f"{self.base_url()}/api/bridge/jobs/{cloud_job}/timelapse"
+
+        async def body():
+            with video.open("rb") as fh:
+                while chunk := fh.read(1 << 20):
+                    yield chunk
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30, write=600)) as http:
+            r = await http.post(url, content=body(), headers={"Authorization": f"Bearer {st.get('token', '')}",
+                                                               "Content-Type": "video/mp4"})
+        if r.status_code != 200:
+            raise RuntimeError(f"time-lapse upload failed: HTTP {r.status_code}")
+
     async def download_gcode(self, job: str, target_dir: Path, max_bytes: int = 200 * 1024 * 1024) -> Path:
         """G-code of a job of the paired account (only from the cloud's own job endpoint)."""
         st = load_state(self.settings())

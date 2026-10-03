@@ -86,7 +86,7 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
     local["result"] = api.JobResult(pid, path.name, str(path), None, None, None).as_dict()
     req = api.SendRequest(start=bool(params.get("start")), confirm=bool(params.get("confirm")),
                           leveling=params.get("leveling"), lanes=params.get("lanes") or None,
-                          spool_id=params.get("spool_id"))
+                          spool_id=params.get("spool_id"), timelapse=bool(params.get("timelapse")))
     try:
         await _call(api.send, local["id"], req, acct)
     except MethodError:

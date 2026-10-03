@@ -10,7 +10,7 @@ import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section
 import { errorText, friendlyError, WEB_APP, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
-import { NoAddressError, printerFileName, printerStatus, relayJob } from "@/lib/printerAccess";
+import { NoAddressError, printerFileName, printerStatus, relayJob, viaServer } from "@/lib/printerAccess";
 import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
@@ -60,6 +60,8 @@ export default function JobScreen() {
   const [printerNames, setPrinterNames] = useState<Record<string, string>>({});
   const [levelingDefault, setLevelingDefault] = useState<Record<string, boolean | null>>({});
   const [leveling, setLeveling] = useState<boolean | null>(null);
+  // time-lapse (server 0.32.0): only where the server/bridge reaches the camera; off by default
+  const [timelapse, setTimelapse] = useState(false);
   const [pstatus, setPstatus] = useState<PrinterStatus | "offline" | null>(null);
   const [showLog, setShowLog] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -123,6 +125,24 @@ export default function JobScreen() {
     if (printerId) setItem(`ps_level_${printerId}`, v ? "1" : "0");
   };
   const printerObj = printerList.find(p => p.id === printerId);
+  // a camera the server (own server or bridge) can record from
+  const camCapable = !!(server && printerObj && viaServer(server, printerObj));
+  const [camFound, setCamFound] = useState(false);
+  useEffect(() => {
+    if (!api || !camCapable || !printerObj) return;
+    let alive = true;
+    api.cameraInfo(printerObj.id).then(i => { if (alive) setCamFound(!!i.available); }).catch(() => { if (alive) setCamFound(false); });
+    return () => { alive = false; };
+  }, [api, camCapable, printerObj]);
+  const hasCam = camCapable && camFound;
+  // follow the time-lapse until its video is ready
+  const jobId = job?.id;
+  const tlState = job?.timelapse?.state;
+  useEffect(() => {
+    if (!api || !jobId || (tlState !== "recording" && tlState !== "rendering")) return;
+    const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 15000);
+    return () => clearInterval(iv);
+  }, [api, jobId, tlState]);
   const refreshPrinter = useCallback(() => {
     if (!api || !server || !printerId) return;
     if (cloud && !printerObj) return;               // printer list not loaded yet
@@ -292,7 +312,7 @@ export default function JobScreen() {
     }
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
-        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined);
+        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, start && hasCam && timelapse);
       let j: Job | null = null;
       for (let i = 0; i < 600; i++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -452,6 +472,18 @@ export default function JobScreen() {
           <Ionicons name={done ? "checkmark-circle" : "cloud-done"} size={64} color={c.ok} />
           <Text style={{ color: c.text, fontSize: 22, fontWeight: "700", marginTop: 10 }}>{t(done ? "startedTitle" : "uploadedTitle")}</Text>
           <Text style={{ color: c.sub, fontSize: 15, marginTop: 6, textAlign: "center" }}>{t(done ? "startedSub" : "uploadedSub")}</Text>
+          {job.timelapse ? (
+            job.timelapse.state === "ready" ? (
+              <Button title={t("timelapseWatch")} icon="film-outline" style={{ marginTop: 16, alignSelf: "stretch" }}
+                onPress={() => router.push({ pathname: "/timelapse/[id]", params: { id: job.id, name } })} />
+            ) : (
+              <Text style={{ color: job.timelapse.state === "failed" ? c.danger : c.sub, fontSize: 14, marginTop: 12, textAlign: "center" }}>
+                {job.timelapse.state === "recording" ? t("timelapseRecording", { n: job.timelapse.frames })
+                  : job.timelapse.state === "rendering" ? t("timelapseRendering")
+                  : t("timelapseFailed", { error: job.timelapse.error ?? "" })}
+              </Text>
+            )
+          ) : null}
         </View>
       ) : (
         <Text style={{ color: c.text, fontSize: 28, fontWeight: "800", marginBottom: 4 }}>{t("reviewTitle")}</Text>
@@ -592,6 +624,16 @@ export default function JobScreen() {
               </View>
               <Switch value={levelingOn} onValueChange={changeLeveling} trackColor={{ true: c.accent, false: c.track }}
                 accessibilityLabel={t("leveling")} />
+            </Card>
+          ) : null}
+          {hasCam ? (
+            <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", marginTop: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontSize: 16, lineHeight: 22 }}>{t("timelapse")}</Text>
+                <Text style={{ color: c.sub, fontSize: 13, marginTop: 2 }}>{t("timelapseSub")}</Text>
+              </View>
+              <Switch value={timelapse} onValueChange={v => { tap(); setTimelapse(v); }} trackColor={{ true: c.accent, false: c.track }}
+                accessibilityLabel={t("timelapse")} />
             </Card>
           ) : null}
           <Button kind="plain" title={t("editSettings")} icon="options-outline" onPress={editSettings} style={{ marginTop: 12 }} />

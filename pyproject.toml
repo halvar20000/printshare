@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "printshare"
-version = "0.31.0"
+version = "0.32.0"
 description = "Print Printables/Thingiverse models from your phone on non-Bambu printers (self-hosted)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -20,6 +20,7 @@ dependencies = [
   "websockets>=12",
   "cryptography>=42",
   "python-multipart>=0.0.9",
+  "imageio-ffmpeg>=0.5",
 ]
 
 [project.optional-dependencies]

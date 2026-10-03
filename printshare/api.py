@@ -77,7 +77,8 @@ from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
 from .cloud.upload_keys import UploadKeys
 from . import gcode_info
-from .jobstore import JobStore
+from .jobstore import JobStore, job_dir
+from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
 from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient
 from .bridge.dispatch import dispatch as bridge_dispatch
@@ -112,6 +113,7 @@ async def _lifespan(_app):
     if not settings.cloud:
         WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
+        TIMELAPSE.start_loop()     # time-lapse recordings (0.32.0)
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
@@ -120,7 +122,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.31.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.32.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -857,6 +859,12 @@ def _sync_bridge_printers(bridge_id: str, user_id: str, printers: list[dict[str,
 
 def _bridge_event(bridge_id: str, user_id: str, event: str, data: dict[str, Any]) -> None:
     """Upload steps of job.send show up in the job's log, like on a home server."""
+    if event == "timelapse.state":
+        job = JOBS.get(str(data.get("job") or ""))
+        if job is not None and job.get("owner") == user_id and data.get("state") in ("recording", "rendering", "failed"):
+            job["timelapse"] = {"state": data["state"], "frames": int(data.get("frames") or 0),
+                                "error": str(data.get("error") or "")[:200] or None}
+        return
     if event == "job.progress":
         job = JOBS.get(str(data.get("job") or ""))
         if job is not None and job.get("owner") == user_id and isinstance(data.get("message"), str):
@@ -903,6 +911,34 @@ async def bridge_printer_access(printer_id: str, req: BridgePrinterAccess, acct:
         raise HTTPException(409, "this printer is not reached through a bridge")
     await _forward(acct, printer_id, "printer.update", sealed=req.sealed)
     return {"ok": True}
+
+
+TIMELAPSE_MAX_MB = 300
+
+
+@app.post("/api/bridge/jobs/{job_id}/timelapse")
+async def bridge_timelapse_upload(job_id: str, request: Request) -> dict[str, Any]:
+    """A bridge delivers the finished time-lapse of a job of its account."""
+    bridge = _bridge_from_request(_token(request))
+    job = JOBS.get(job_id)
+    if job is None or job.get("owner") != bridge["user_id"]:
+        raise HTTPException(404, "unknown job")
+    d = job_dir(job)
+    if d is None:
+        raise HTTPException(409, "this job has no folder for a video")
+    d.mkdir(parents=True, exist_ok=True)
+    tmp, size = d / (TIMELAPSE_FILE + ".part"), 0
+    with tmp.open("wb") as fh:
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > TIMELAPSE_MAX_MB * 1024 * 1024:
+                fh.close()
+                tmp.unlink(missing_ok=True)
+                raise HTTPException(413, "time-lapse too large")
+            fh.write(chunk)
+    tmp.replace(d / TIMELAPSE_FILE)
+    job["timelapse"] = {"state": "ready", "frames": (job.get("timelapse") or {}).get("frames", 0), "size": size}
+    return {"ok": True, "size": size}
 
 
 async def bridge_call(acct: Account, bridge_id: str, method: str, params: dict[str, Any] | None = None) -> Any:
@@ -1262,6 +1298,37 @@ def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
     if log and now - log[-1][0] < 4:
         return
     log.append((now, {h: (v.get("actual"), v.get("target")) for h, v in heaters.items() if v.get("actual") is not None}))
+
+
+# ---------- time-lapse (0.32.0, own servers and bridges) ----------
+async def _tl_status(printer_id: str) -> dict[str, Any] | None:
+    try:
+        return await get_adapter(settings.printer(printer_id)).status()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _tl_snapshot(printer_id: str) -> bytes:
+    source = await _camera(Account("local", settings), printer_id)
+    jpeg = await cam.snapshot(source)
+    return await asyncio.to_thread(cam.scale, jpeg, 1280, 82)
+
+
+async def _tl_state(rec) -> None:
+    job = JOBS.get(rec.job)
+    if job is not None:
+        job["timelapse"] = {"state": rec.state, "frames": rec.frames, "error": rec.error}
+    if rec.cloud_job:
+        await BRIDGE_CLIENT.event("timelapse.state", {"job": rec.cloud_job, "state": rec.state, "frames": rec.frames,
+                                                      "error": rec.error})
+
+
+async def _tl_upload(rec) -> None:
+    await BRIDGE_CLIENT.upload_timelapse(rec.cloud_job, Path(rec.out))
+
+
+TIMELAPSE = TimelapseRecorder(lambda: settings.work_dir, _tl_status, _tl_snapshot, lambda s: printer_kind(s),
+                              on_state=_tl_state, upload=_tl_upload)
 
 
 # ---------- AI failure detection with the Obico ML API (0.23.0, own servers only) ----------
@@ -2061,6 +2128,8 @@ class SendRequest(BaseModel):
     lanes: dict[str, int] | None = None
     # Spoolman (0.16.0): spool that the printer's Moonraker books this print on (status "spoolman" not null)
     spool_id: int | None = Field(None, ge=1)
+    # time-lapse video of this print (0.32.0): own servers and printers behind a bridge, needs a camera
+    timelapse: bool = False
 
 
 @app.post("/api/jobs/{job_id}/send")
@@ -2079,7 +2148,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         # the bridge checks the rest itself (busy printer, lanes, spool) - with the same code as a home server
         job.update(state="sending", error=None)
         params = {"printer": via[1], "job": job_id, "start": req.start, "confirm": req.confirm,
-                  "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id}
+                  "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id, "timelapse": req.timelapse}
 
         async def forward() -> None:
             try:
@@ -2087,6 +2156,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
                 job["leveling"] = req.leveling
                 # the name the file has on the printer (the bridge names it after the model) - spool bookings match on it
                 job["printer_file"] = (r or {}).get("file")
+                if req.start and req.timelapse:
+                    job["timelapse"] = {"state": "recording", "frames": 0}
                 job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"))
             except BridgeError as e:
                 job.update(state="sliced", error=f"Sending failed: {e}")
@@ -2127,6 +2198,12 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
             await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
                            leveling=req.leveling, tools=tools, spool_id=req.spool_id)
             job["leveling"] = req.leveling
+            if req.start and req.timelapse and not settings.cloud:
+                # registered before the job says "started", so whoever sees "started" also sees the recording
+                out = job_dir(job) or Path(acct.settings.gcode_dir) / result.printer / job_id
+                rec = TIMELAPSE.start(result.printer, job_id, Path(result.gcode).name, out,
+                                      cloud_job=(job.get("request") or {}).get("cloud_job"))
+                job["timelapse"] = {"state": rec.state, "frames": 0}
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
         except Exception as e:  # noqa: BLE001
             # the sliced G-code is still valid: allow another attempt
@@ -2170,6 +2247,18 @@ async def preview(job_id: str, format: int = 1, acct: Account = Depends(auth)) -
     bed = await asyncio.to_thread(_bed, acct, job["result"]["printer"])
     data = await asyncio.to_thread(gcode_preview.build, gcode, bed)
     return gcode_preview.as_version(data, format)
+
+
+@app.get("/api/jobs/{job_id}/timelapse")
+def job_timelapse(job_id: str, acct: Account = Depends(auth)) -> FileResponse:
+    """The time-lapse video of a print (MP4), once it is ready."""
+    job = _own_job(acct, job_id)
+    d = job_dir(job)
+    video = d / TIMELAPSE_FILE if d else None
+    if video is None or not video.is_file():
+        raise HTTPException(404, "no time-lapse for this job (yet)")
+    name = Path((job.get("result") or {}).get("source_file") or job_id).stem + "-timelapse.mp4"
+    return FileResponse(video, media_type="video/mp4", filename=name, content_disposition_type="inline")
 
 
 @app.get("/api/jobs/{job_id}/gcode")

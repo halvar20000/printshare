@@ -801,6 +801,17 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `_orca_print` (send + booking on `Bookings.last_spool`). Job state `uploading` (interrupted → error). Fixture
   `tests/data/orca_cone.gcode` = real Orca 2.4.2 G-code with the middle cut out. App `app/orca-upload/[id].tsx`. Not yet
   tried with the OrcaSlicer desktop app itself.
+- **Time-lapse (variant A), 0.32.0:** Thomas: off by default, start with A (own pictures per layer), parking/smooth (B) and the
+  printer's own CC time-lapse (C) later. `printshare/timelapse.py` (`TimelapseRecorder`: active recordings in
+  `<work_dir>/timelapse/active.json` saved after every picture - a test caught that saving every 10th lost pictures on a
+  restart; picture per layer or every 30 s; end = done/stopped/another file, unreachable up to 6 h waits; `render()` with
+  the static ffmpeg of `imageio-ffmpeg` (new dependency, amd64 + arm64 wheels, ~76 MB binary)). Home/bridge: `send()`
+  starts it before marking the job started (test race), video in `job_dir()` (now always a job-own folder, fallback
+  `<gcode parent>/<job id>`), bridge → `timelapse.state` events (every 5th picture) + upload to
+  `/api/bridge/jobs/{job}/timelapse`; `GET /api/jobs/{id}/timelapse`. App: switch on the review screen (camera reachable via
+  server: `viaServer` + `cameraInfo`), status/"Zeitraffer ansehen" after start, `app/timelapse/[id].tsx` with
+  `components/VideoPlayer(.web).tsx` (WebView `<video>` - no new native module). Checked end to end in the web build with a
+  bridge and the fake camera; **not yet with a real printer camera**.
 - Web 404 handling: the web app is served from the 404 handler (`_http_errors`, only for "Not Found" outside api/ static/
   spoolman/), not a catch-all route - routes added later (tests, harnesses) win.
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in

@@ -142,6 +142,7 @@ class FakeMoonraker:
         self.uploads: list[dict] = []
         self.actions: list[str] = []
         self.state = "printing"
+        self.layer = 3
         self.afc = afc
         self.scripts: list[str] = []
         # Moonraker's [spoolman] module: None = not configured (404), else the active spool id
@@ -169,7 +170,7 @@ class FakeMoonraker:
     def _objects(self) -> dict:
         objs = {
             "print_stats": {"state": self.state, "filename": "cube.gcode", "print_duration": 60,
-                            "info": {"current_layer": 3, "total_layer": 100}},
+                            "info": {"current_layer": self.layer, "total_layer": 100}},
             "display_status": {"progress": 0.031},
             "extruder": {"temperature": 210.1, "target": 210},
             "heater_bed": {"temperature": 60.0, "target": 60},

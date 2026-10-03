@@ -136,6 +136,8 @@ export type Job = {
   request: { link: string; printer?: string | null; file?: string | null; options?: JobOptions; name?: string };
   /** sent through a bridge: the file's name on the printer (server 0.29.0) */
   printer_file?: string | null;
+  /** time-lapse of this print (server 0.32.0) */
+  timelapse?: { state: "recording" | "rendering" | "ready" | "failed"; frames: number; error?: string | null; size?: number };
 };
 export type JobSummary = {
   id: string; kind: string; state: JobState; error: string | null; created: number; printer?: string;
@@ -388,9 +390,15 @@ export class Api {
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
   /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>};
    *  spoolId (server 0.16.0): Spoolman spool Moonraker books the print on (status.spoolman not null) */
-  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number) =>
+  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number, timelapse?: boolean) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`,
-      { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}) } });
+      { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}),
+                                ...(timelapse ? { timelapse: true } : {}) } });
+  /** The time-lapse video (MP4) of a job; video players can't send headers, so the token goes into the URL. */
+  async timelapseUrl(id: string): Promise<string> {
+    const tp = tokenParam(this.server);
+    return `${await this.base()}/api/jobs/${encodeURIComponent(id)}/timelapse${tp ? `?${tp}` : ""}`;
+  }
   preview = (id: string) => this.request<Preview>(`/api/jobs/${id}/preview?format=2`, { timeout: 60000 });
   deleteJob = (id: string) => this.request<{ deleted: string }>(`/api/jobs/${id}`, { method: "DELETE" });
   /** Where the app downloads the G-code itself (cloud: it sends it to the printer); `lanes` = AFC slot mapping. */

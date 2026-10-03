@@ -33,12 +33,13 @@ CREATE INDEX IF NOT EXISTS jobs_owner ON jobs(owner, created);
 
 
 def job_dir(job: dict[str, Any]) -> Path | None:
-    """The job's own G-code folder (<gcode dir>/<printer>/<job id>), None if it has none."""
+    """The job's own folder: where its G-code lies (<gcode dir>/<printer>/<job id>), or - for G-code kept elsewhere - a
+    folder <job id> next to it (for the time-lapse). Deleting it never touches other jobs. None without G-code."""
     gcode = (job.get("result") or {}).get("gcode")
-    if not gcode:
+    if not gcode or not job.get("id"):
         return None
     d = Path(gcode).parent
-    return d if d.name == job.get("id") else None
+    return d if d.name == job.get("id") else d / str(job["id"])
 
 
 class JobStore:

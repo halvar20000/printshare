@@ -29,7 +29,7 @@ METHODS: dict[str, float] = {
     "job.send": 15 * 60, "watch.state": 10, "watch.mute": 10, "discover": 30,
     "printer.add": 30, "printer.update": 30, "printer.remove": 30,
 }
-EVENTS = ("printer.state", "watch.alert", "job.progress", "printers.changed")
+EVENTS = ("printer.state", "watch.alert", "job.progress", "printers.changed", "timelapse.state")
 HELLO_TIMEOUT_S = 10
 MIN_VERSION = "0.24.0"
 MAX_PENDING = 32                 # requests in flight per bridge

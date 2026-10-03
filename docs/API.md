@@ -482,6 +482,18 @@ printer's key. PocketPrint3D answers the two OctoPrint calls OrcaSlicer makes:
 - App: `GET|POST|DELETE /api/printers/{id}/orca-upload` → `{"enabled", "url", "created"?, "last_used"?}`; POST answers the
   new `key` (`pp3do_…`, shown once, stored hashed; an older key of that printer stops working; deleted with the printer).
 
+## Time-lapse (0.32.0)
+Recorded where the camera is reachable: on an own server, or on the bridge for printers behind one (the cloud can't).
+- `POST /api/jobs/{job}/send {…, "timelapse": true}` (with `start: true`): one camera picture per layer (printers with
+  `layer` in their status: Centauri Carbon, Klipper) or every 30 s (PrusaLink, OctoPrint); when the print is over an MP4 is
+  rendered (H.264, ~15 s, last picture held 1 s; ffmpeg from `imageio-ffmpeg`). Through a bridge the parameter is passed on
+  with `job.send`; the bridge reports `timelapse.state` events and uploads the video to
+  `POST /api/bridge/jobs/{job}/timelapse` (bridge token, raw MP4, ≤ 300 MB).
+- `GET /api/jobs/{id}` has `timelapse: {"state": "recording|rendering|ready|failed", "frames", "error"?}`.
+- `GET /api/jobs/{id}/timelapse` → the MP4 (`Content-Disposition: inline`, `?token=` works for video players); 404 until ready.
+  Stored in the job's folder, so it goes with the job (14 days).
+- The apps show the switch only for printers with a camera that the server reaches (own server, bridge printers).
+
 ## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
 A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is
 built; forwarding the printer endpoints to a bridge comes with step 4.

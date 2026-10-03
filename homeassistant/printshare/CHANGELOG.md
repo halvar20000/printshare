@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.0
+- Time-lapse: switch on "Record a time-lapse" before printing (off by default) and your server takes one camera picture
+  per layer (every 30 s for printers without layer information) and makes a short MP4 when the print is over - watch and
+  download it in the app or browser. Works on your own server and through a bridge (the video goes to your cloud job).
+  Needs the printer's camera.
+
 ## 0.31.0
 - PocketPrint3D Cloud: send from OrcaSlicer on your computer. Add PocketPrint3D as a physical printer (host type
   Octo/Klipper) with the address and key from the app (printer → "Send from OrcaSlicer"). The G-code shows up as a job
