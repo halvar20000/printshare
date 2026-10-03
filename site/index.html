@@ -24,14 +24,17 @@
       and sends it to your own printer. For open printers, without a manufacturer cloud. Free and open source.</p>
     <div class="buttons">
       <a class="btn primary" href="#how">Get started</a>
+      <a class="btn" href="https://app.pocketprint3d.com/">Open in your browser</a>
       <a class="btn" href="https://github.com/halvar20000/printshare">Source code</a>
     </div>
-    <p class="soon">Android app in beta testing · iOS app in development · free cloud or your own server (Unraid, Home Assistant, Docker)</p>
+    <p class="soon">Android app in beta testing · in your browser at app.pocketprint3d.com · iOS app in development · free cloud or your own server (Unraid, Home Assistant, Docker)</p>
   </section>
 
   <section>
     <h2>What it does</h2>
     <div class="grid">
+      <div class="card"><h3>On your computer too</h3><p>The same app and account in your browser at <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a>: search, prepare, 3D preview, spools – just drag a model file onto the page. Printing from the browser goes through a bridge at home.</p></div>
+      <div class="card"><h3>Send from OrcaSlicer</h3><p>Slicing on your computer? Add PocketPrint3D to OrcaSlicer as a physical printer (Octo/Klipper). Your desktop prints show up as jobs, reach the printer through your bridge and book the right spool – every print in one place.</p></div>
       <div class="card"><h3>Set up in seconds</h3><p>When you add a printer, the app searches your Wi-Fi: Centauri Carbon, Klipper/COSMOS, Prusa (PrusaLink) and OctoPrint show up in a list. One tap and it's set up – no IP addresses to look up. (Android; iOS follows.)</p></div>
       <div class="card"><h3>Find and print</h3><p>Search Printables and Thingiverse in the app, or open printables.com with your own login to see your likes and collections. MakerWorld models too: open the link in the app, download the 3MF in MakerWorld and share it back.</p></div>
       <div class="card"><h3>Your own library</h3><p>Running Manyfold at home? Your model collection shows up as a search source next to Printables – search, pictures, print.</p></div>
@@ -70,6 +73,7 @@
       <li><strong>Install the app</strong> and log in with your e-mail address (you get a 6-digit code, no password).</li>
       <li><strong>Add your printer</strong>: the app finds it on your home Wi-Fi – tap it, done (or enter its address yourself). The address stays on your phone.</li>
       <li><strong>Print</strong>: slicing runs on our server in Germany; at home the app sends the G-code over your Wi-Fi straight to the printer.</li>
+      <li><strong>On your computer (optional)</strong>: open <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> and log in with the same e-mail. Slicing in OrcaSlicer? Printer → <em>Send from OrcaSlicer</em> in the app gives you the address and key for OrcaSlicer's physical printer.</li>
       <li><strong>Away from home (optional)</strong>: run a bridge at home – the small <code>printshare-bridge</code> Docker image, or your own PocketPrint3D server with <em>Connect to PocketPrint3D Cloud</em> switched on – and enter its code in the app under <em>Settings → Advanced → Print from anywhere</em>.</li>
     </ol>
     <h3>Your own server – everything stays at home</h3>

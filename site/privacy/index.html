@@ -17,7 +17,7 @@
 
   <!-- Deutsche Fassung (maßgeblich) -->
   <h1 id="de">Datenschutzerklärung</h1>
-  <p class="muted">Stand: 2. Oktober 2026 (Ergänzung: printables.com in der App, NFC, Brücken, Druckersuche im WLAN)</p>
+  <p class="muted">Stand: 3. Oktober 2026 (Ergänzung: Browser-Version, Senden aus OrcaSlicer, Aufbewahrung der Aufträge)</p>
 
   <h2>1. Verantwortlicher</h2>
   <p>Thomas Herbrig<br>62a rue du Rhin<br>68680 Kembs<br>Frankreich<br>
@@ -85,9 +85,15 @@
       Art. 6 Abs. 1 lit. f DSGVO); sie wird mit dem Code nach etwa einer Stunde gelöscht. Die Zahl der Slice-Vorgänge pro
       Tag (für das Tageslimit).</li>
     <li><strong>Drucker:</strong> Name, Typ und gewähltes Druckermodell – <strong>keine</strong> Adressen oder Zugangsdaten.</li>
-    <li><strong>Modelle und Druckdateien:</strong> Dateien, die du hochlädst, Modelle, die der Server in deinem Auftrag von
-      Printables oder Thingiverse lädt (zwischengespeichert für 24 Stunden), eigene Slicer-Profile und der erzeugte G-Code.
-      Sie bleiben gespeichert, bis du den Auftrag oder dein Konto löschst.</li>
+    <li><strong>Modelle und Druckdateien:</strong> Dateien, die du hochlädst (aus der App, dem Browser oder OrcaSlicer),
+      Modelle, die der Server in deinem Auftrag von Printables oder Thingiverse lädt (zwischengespeichert für 24 Stunden),
+      eigene Slicer-Profile und der erzeugte G-Code. Druckaufträge mit ihrem G-Code werden nach spätestens 14 Tagen
+      automatisch gelöscht (höchstens 50 je Konto), früher, wenn du sie selbst löschst. Hochgeladene Modelldateien und
+      Profile bleiben, bis du dein Konto löschst.</li>
+    <li><strong>Senden aus OrcaSlicer (optional):</strong> ein Schlüssel je Drucker, nur als Prüfsumme gespeichert, mit dem
+      Zeitpunkt der letzten Nutzung.</li>
+    <li><strong>Im Browser (app.pocketprint3d.com):</strong> ein technisch notwendiges Cookie mit dem Sitzungsschlüssel
+      (nicht per Skript lesbar, 180 Tage, beim Abmelden gelöscht). Keine weiteren Cookies, kein Tracking.</li>
     <li><strong>Spulen (optional):</strong> wenn du Spulen in der Cloud verwaltest: Hersteller, Bezeichnung, Material, Farbe,
       Gewichte, Lagerort, Notiz und der gebuchte Verbrauch.</li>
     <li><strong>Brücken (optional):</strong> wenn du einen eigenen Server als Brücke verbindest: ihr Name, ihre Version, der
@@ -115,7 +121,7 @@
   <!-- English translation -->
   <h1 id="en">Privacy policy</h1>
   <p class="lang-note">English translation – the German version above is binding.</p>
-  <p class="muted">Last updated: 2 October 2026 (added: printables.com in the app, NFC, bridges, printer search on the Wi-Fi)</p>
+  <p class="muted">Last updated: 3 October 2026 (added: browser version, sending from OrcaSlicer, how long jobs are kept)</p>
 
   <h2>1. Controller</h2>
   <p>Thomas Herbrig, 62a rue du Rhin, 68680 Kembs, France – <a href="mailto:thomasherbrig@ipomme.fr">thomasherbrig@ipomme.fr</a></p>
@@ -172,9 +178,14 @@
     <li><strong>Abuse protection:</strong> the IP address when a login code is requested (rate limiting, Art. 6(1)(f) GDPR);
       it is deleted with the code after about an hour. The number of slicing jobs per day (for the daily limit).</li>
     <li><strong>Printers:</strong> name, type and chosen printer model – <strong>no</strong> addresses or access data.</li>
-    <li><strong>Models and print files:</strong> files you upload, models the server downloads from Printables or Thingiverse
-      on your behalf (cached for 24 hours), your own slicer profiles and the G-code produced. They are kept until you delete
-      the job or your account.</li>
+    <li><strong>Models and print files:</strong> files you upload (from the app, the browser or OrcaSlicer), models the server
+      downloads from Printables or Thingiverse on your behalf (cached for 24 hours), your own slicer profiles and the G-code
+      produced. Print jobs and their G-code are deleted automatically after 14 days at the latest (at most 50 per account),
+      earlier if you delete them yourself. Uploaded model files and profiles are kept until you delete your account.</li>
+    <li><strong>Sending from OrcaSlicer (optional):</strong> one key per printer, stored only as a hash, with the time it was
+      last used.</li>
+    <li><strong>In the browser (app.pocketprint3d.com):</strong> one technically necessary cookie with the session key (not
+      readable by scripts, 180 days, deleted when you log out). No other cookies, no tracking.</li>
     <li><strong>Spools (optional):</strong> if you manage spools in the cloud: brand, name, material, colour, weights,
       location, note and the booked usage.</li>
     <li><strong>Bridges (optional):</strong> if you connect your own server as a bridge: its name, version, time of the last

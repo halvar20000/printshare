@@ -24,14 +24,17 @@
       OrcaSlicer und schickt es an deinen eigenen Drucker. Für offene Drucker, ohne Hersteller-Cloud. Kostenlos und Open Source.</p>
     <div class="buttons">
       <a class="btn primary" href="#so">Loslegen</a>
+      <a class="btn" href="https://app.pocketprint3d.com/">Im Browser öffnen</a>
       <a class="btn" href="https://github.com/halvar20000/printshare">Quellcode</a>
     </div>
-    <p class="soon">Android-App im Betatest · iOS-App in Entwicklung · kostenlose Cloud oder eigener Server (Unraid, Home Assistant, Docker)</p>
+    <p class="soon">Android-App im Betatest · im Browser unter app.pocketprint3d.com · iOS-App in Entwicklung · kostenlose Cloud oder eigener Server (Unraid, Home Assistant, Docker)</p>
   </section>
 
   <section>
     <h2>Was die App kann</h2>
     <div class="grid">
+      <div class="card"><h3>Auch am Computer</h3><p>Dieselbe App und dasselbe Konto im Browser unter <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a>: suchen, vorbereiten, 3D-Vorschau, Spulen – einfach eine Modelldatei auf die Seite ziehen. Gedruckt wird aus dem Browser über eine Brücke zu Hause.</p></div>
+      <div class="card"><h3>Aus OrcaSlicer senden</h3><p>Du slicst am Computer? PocketPrint3D in OrcaSlicer als physischen Drucker (Octo/Klipper) eintragen. Deine Drucke vom Computer erscheinen als Aufträge, gehen über deine Brücke an den Drucker und buchen die richtige Spule – alle Drucke an einem Ort.</p></div>
       <div class="card"><h3>In Sekunden eingerichtet</h3><p>Beim Hinzufügen sucht die App deinen Drucker im WLAN: Centauri Carbon, Klipper/COSMOS, Prusa (PrusaLink) und OctoPrint erscheinen in einer Liste. Einmal tippen, fertig – keine IP-Adresse heraussuchen. (Android; iOS folgt.)</p></div>
       <div class="card"><h3>Finden und drucken</h3><p>In der App auf Printables und Thingiverse suchen oder printables.com mit deinem eigenen Konto öffnen – mit deinen Likes und Sammlungen. Auch MakerWorld: Link in der App öffnen, das 3MF in MakerWorld laden und mit der App teilen.</p></div>
       <div class="card"><h3>Deine eigene Bibliothek</h3><p>Manyfold läuft bei dir zu Hause? Deine Modellsammlung erscheint als Suchquelle neben Printables – suchen, Bilder ansehen, drucken.</p></div>
@@ -70,6 +73,7 @@
       <li><strong>App installieren</strong> und mit deiner E-Mail-Adresse anmelden (du bekommst einen 6-stelligen Code, kein Passwort).</li>
       <li><strong>Drucker hinzufügen</strong>: Die App findet ihn in deinem WLAN – antippen, fertig (oder die Adresse selbst eingeben). Die Adresse bleibt auf deinem Handy.</li>
       <li><strong>Drucken</strong>: Geslict wird auf unserem Server in Deutschland; zu Hause schickt die App den G-Code über dein WLAN direkt an den Drucker.</li>
+      <li><strong>Am Computer (optional)</strong>: <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> öffnen und mit derselben E-Mail anmelden. Du slicst in OrcaSlicer? Drucker → <em>Aus OrcaSlicer senden</em> in der App zeigt Adresse und Key für den physischen Drucker in OrcaSlicer.</li>
       <li><strong>Unterwegs (optional)</strong>: zu Hause eine Brücke laufen lassen – das kleine Docker-Image <code>printshare-bridge</code> oder dein eigener PocketPrint3D-Server mit <em>Mit PocketPrint3D Cloud verbinden</em> – und ihren Code in der App unter <em>Einstellungen → Erweitert → Unterwegs drucken</em> eingeben.</li>
     </ol>
     <h3>Eigener Server – alles bleibt zu Hause</h3>
