@@ -562,6 +562,14 @@ On the user's own server (not in the cloud), with the server's token:
   `printer.camera.snapshot {"printer", "w"?}` → `{"jpeg": base64, "type"}`; `discover` → `[{"type", "address", "name",
   "cosmos"?, "detail"?, "added"}]`. Error codes: `invalid`, `unknown_printer`, `busy`, `confirm_required`, `offline`.
 
+### Ready-made bridge on the Wi-Fi (0.34.0)
+No token, home servers only (404 in the cloud):
+- `GET /api/bridge/hello` → `{"pocketprint3d": "bridge" | "server", "version", "name", "bridge_id", "state", "paired",
+  "account" (masked, `t***@example.org`), "bridge_only", "pairable"}`.
+- `GET /api/bridge/local-code` → `{"code", "expires_in", "name"}` – only on a bridge-only install, while unpaired, from
+  the home network and by the bridge's own address (rules: docs/BRIDGE.md 5a); else 403, or 409 when no code is shown.
+- `GET /bridge` – HTML status page (also at `/` on a bridge-only install).
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

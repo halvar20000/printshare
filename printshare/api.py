@@ -50,11 +50,14 @@ import asyncio
 import base64
 import contextlib
 import dataclasses
+import html as htmllib
+import ipaddress
 import json
 import os
 import re
 import secrets
 import shutil
+import socket
 import time
 import uuid
 from collections import deque
@@ -81,7 +84,7 @@ from .jobstore import JobStore, job_dir
 from . import jobtrack
 from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
 from .cloud.hub import BridgeError, BridgeHub
-from .bridge.client import BridgeClient
+from .bridge.client import BridgeClient, default_name as bridge_default_name
 from .bridge.dispatch import dispatch as bridge_dispatch
 from . import orca_cloud
 from . import filament_db
@@ -124,7 +127,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.33.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.34.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -429,6 +432,130 @@ def bridge_reset(acct: Account = Depends(auth)) -> dict[str, Any]:
     _bridge_home(acct)
     BRIDGE_CLIENT.forget()
     return BRIDGE_CLIENT.public()
+
+
+# ---------- ready-made bridge (Raspberry Pi image, bridge container): found and paired from the app on the Wi-Fi ----------
+def _mask_email(email: str | None) -> str | None:
+    """"thomas@example.org" → "t***@example.org": enough to recognise one's own account, not to read someone else's."""
+    if not email or "@" not in email:
+        return None
+    user, domain = email.split("@", 1)
+    return f"{user[:1]}***@{domain}"
+
+
+def _local_pairing(request: Request) -> bool:
+    """The pairing code is handed out without a token only by a bridge-only install, only to the home network, and only
+    when the page was opened by the bridge's own address - an IP address, localhost, <name>.local or its host name. That
+    keeps out other websites (DNS rebinding: evil.example pointing at the bridge) and anyone behind a reverse proxy."""
+    if settings.cloud or not settings.bridge_only:
+        return False
+    if any(h in request.headers for h in ("x-forwarded-for", "forwarded", "x-real-ip")):
+        return False
+    try:
+        peer = ipaddress.ip_address(request.client.host if request.client else "")
+    except ValueError:
+        return False
+    if not (peer.is_private or peer.is_loopback or peer.is_link_local):
+        return False
+    host = urlsplit("//" + request.headers.get("host", "")).hostname or ""
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        pass
+    host = host.lower().rstrip(".")
+    own = socket.gethostname().lower()
+    return host in ("localhost", own) or host.endswith(".local")
+
+
+def _pairable() -> bool:
+    st = BRIDGE_CLIENT.public()
+    return bool(st["enabled"] and st["state"] == "pairing" and st["code"] and not st["paired"])
+
+
+@app.get("/api/bridge/hello")
+def bridge_hello() -> dict[str, Any]:
+    """No token: lets the app recognise a PocketPrint3D bridge on the Wi-Fi (and whether it still needs an account)."""
+    if settings.cloud:
+        raise HTTPException(404, "not a bridge")
+    st = BRIDGE_CLIENT.public()
+    return {"pocketprint3d": "bridge" if st["enabled"] else "server", "version": app.version,
+            "name": bridge_default_name(), "bridge_id": st["bridge_id"], "state": st["state"],
+            "paired": st["paired"], "account": _mask_email(st["account"]), "bridge_only": settings.bridge_only,
+            "pairable": settings.bridge_only and _pairable()}
+
+
+@app.get("/api/bridge/local-code")
+def bridge_local_code(request: Request) -> dict[str, Any]:
+    """The pairing code for the app on the same Wi-Fi ("Connect" on a found bridge) - see _local_pairing."""
+    if not _local_pairing(request):
+        raise HTTPException(403, "only from the home network, on a PocketPrint3D bridge")
+    if not _pairable():
+        raise HTTPException(409, "the bridge is not waiting for an account")
+    st = BRIDGE_CLIENT.public()
+    return {"code": st["code"], "expires_in": st["code_expires_in"], "name": bridge_default_name()}
+
+
+_BRIDGE_TEXT = {
+    "de": {"title": "PocketPrint3D-Brücke", "connected": "Verbunden mit dem Konto {account}. Alles fertig.",
+           "pair": "Öffne die PocketPrint3D-App im selben WLAN: Einstellungen → Erweitert → Unterwegs drucken. "
+                   "Die Brücke erscheint unter „Im WLAN gefunden“ - tippe auf „Verbinden“. Oder gib diesen Code ein:",
+           "valid": "Gültig für {min} Minuten - danach erscheint hier ein neuer.",
+           "wait": "Die Brücke startet ({state}) … diese Seite lädt sich selbst neu.",
+           "remote": "Den Kopplungscode zeigt diese Seite nur im Heimnetz, wenn sie über die Adresse der Brücke "
+                     "geöffnet wurde (z. B. http://pocketprint3d.local).",
+           "off": "Die Verbindung zu PocketPrint3D Cloud ist ausgeschaltet.",
+           "foot": "Diese Seite ist nur in deinem Heimnetz erreichbar. Die Brücke baut nur ausgehende Verbindungen auf."},
+    "en": {"title": "PocketPrint3D bridge", "connected": "Connected to the account {account}. All set.",
+           "pair": "Open the PocketPrint3D app on the same Wi-Fi: Settings → Advanced → Print from anywhere. The bridge "
+                   "shows up under “Found on your Wi-Fi” - tap “Connect”. Or enter this code:",
+           "valid": "Valid for {min} minutes - a new one appears here afterwards.",
+           "wait": "The bridge is starting ({state}) … this page reloads by itself.",
+           "remote": "This page shows the pairing code only on the home network, opened by the bridge's address "
+                     "(e.g. http://pocketprint3d.local).",
+           "off": "The connection to PocketPrint3D Cloud is switched off.",
+           "foot": "This page is only reachable on your home network. The bridge only makes outgoing connections."},
+}
+
+
+@app.get("/bridge", response_class=HTMLResponse)
+def bridge_page(request: Request) -> HTMLResponse:
+    """Status page of a bridge (the Raspberry Pi image shows it at http://pocketprint3d.local): connected, or the code."""
+    if settings.cloud:
+        raise HTTPException(404, "not a bridge")
+    lang = "de" if request.headers.get("accept-language", "").lower().startswith("de") else "en"
+    tx = _BRIDGE_TEXT[lang]
+    st = BRIDGE_CLIENT.public()
+    esc = htmllib.escape
+    if not st["enabled"]:
+        body = f"<p>{esc(tx['off'])}</p>"
+    elif st["state"] == "connected":
+        body = f'<p class="ok">✓ {esc(tx["connected"].format(account=_mask_email(st["account"]) or "?"))}</p>'
+    elif _pairable() and _local_pairing(request):
+        minutes = max(1, round((st["code_expires_in"] or 0) / 60))
+        body = (f"<p>{esc(tx['pair'])}</p><p class=\"code\">{esc(st['code'])}</p>"
+                f"<p class=\"sub\">{esc(tx['valid'].format(min=minutes))}</p>")
+    elif _pairable():
+        body = f"<p>{esc(tx['remote'])}</p>"
+    else:
+        body = f"<p>{esc(tx['wait'].format(state=st['state']))}</p>"
+        if st["error"]:
+            body += f'<p class="sub">{esc(str(st["error"]))}</p>'
+    page = f"""<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="10">
+<title>{esc(tx['title'])}</title><style>
+:root{{--bg:#f6f7f9;--card:#fff;--text:#16181d;--sub:#5b6270;--accent:#ff6a13;--ok:#1a7f37}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#111318;--card:#1b1e25;--text:#eceef2;--sub:#9aa1ad;--ok:#3fb950}}}}
+body{{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,sans-serif}}
+main{{max-width:560px;margin:40px auto;padding:0 16px}} .card{{background:var(--card);border-radius:16px;padding:24px}}
+h1{{font-size:22px;margin:0 0 4px}} .name{{color:var(--sub);margin:0 0 16px}} .sub{{color:var(--sub);font-size:15px}}
+.code{{font-size:40px;font-weight:700;letter-spacing:6px;text-align:center;color:var(--accent);margin:20px 0 8px}}
+.ok{{color:var(--ok);font-weight:600}} footer{{color:var(--sub);font-size:13px;margin-top:16px}}
+</style></head><body><main><div class="card"><h1>{esc(tx['title'])}</h1>
+<p class="name">{esc(bridge_default_name())} · {esc(app.version)}</p>{body}</div>
+<footer>{esc(tx['foot'])}</footer></main></body></html>"""
+    return HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY",
+                                       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'"})
 
 
 # ---------- cloud: spool bookings in the account (docs/WEB.md step 2, 0.29.0) ----------
@@ -2410,7 +2537,9 @@ def _webapp_index(d: Path) -> HTMLResponse:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
+def index(request: Request) -> HTMLResponse:
+    if settings.bridge_only and not settings.cloud:
+        return bridge_page(request)
     d = _webapp()
     if d is not None:
         return _webapp_index(d)

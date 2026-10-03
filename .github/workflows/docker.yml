@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     # mobile/ counts: the web app (app.pocketprint3d.com) is built from it into the image
-    paths-ignore: ["mobile/README.md", "mobile/scripts/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "**.md"]
+    paths-ignore: ["mobile/README.md", "mobile/scripts/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "pi-image/**", ".github/workflows/pi-image.yml", "**.md"]
   workflow_dispatch:
 
 permissions:
@@ -192,6 +192,8 @@ jobs:
           out=$(curl -sf -H "Authorization: Bearer t" localhost:8484/api/bridge) || fail "no answer from /api/bridge"
           echo "$out"
           echo "$out" | grep -q '"enabled":true' || fail "bridge mode not on: $out"
+          hello=$(curl -sf localhost:8484/api/bridge/hello) || fail "no answer from /api/bridge/hello"
+          echo "$hello" | grep -q '"bridge_only":true' || fail "not a bridge-only install: $hello"
           docker logs $c | tail -20
           docker rm -f $c
       - name: Export digest

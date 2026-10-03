@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             print_pairing(a.url, settings.api_token, a.remote_url)
         elif a.cmd in ("serve", "bridge"):
             import uvicorn
-            uvicorn.run("printshare.api:app", host="0.0.0.0", port=8484)
+            uvicorn.run("printshare.api:app", host="0.0.0.0", port=int(os.environ.get("PRINTSHARE_PORT") or 8484))
     except (FetchError, KeyError, ValueError, RuntimeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

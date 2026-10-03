@@ -154,3 +154,58 @@ export async function discoverPrinters(deps: DiscoverDeps, onFound: (f: Found) =
   await Promise.all([udp, ...Array.from({ length: Math.max(1, deps.concurrency ?? 24) }, worker)]);
   return seen.size;
 }
+
+// ---------- PocketPrint3D bridges on the Wi-Fi (ready-made Raspberry Pi image): found and paired with one tap ----------
+export type FoundBridge = { address: string; name: string; version: string; bridgeId: string | null;
+  paired: boolean; account: string | null; pairable: boolean; bridgeOnly: boolean };
+
+/** `GET /api/bridge/hello` (no token) at one address; only bridges count, not other PocketPrint3D servers. */
+export async function bridgeHello(base: string, f: typeof fetch = fetch, ms = 1500): Promise<FoundBridge | null> {
+  const h = json(await probe(f, `${base}/api/bridge/hello`, ms));
+  if (!h || h.pocketprint3d !== "bridge") return null;
+  return { address: base, name: String(h.name || "PocketPrint3D"), version: String(h.version || ""),
+           bridgeId: typeof h.bridge_id === "string" ? h.bridge_id : null, paired: !!h.paired,
+           account: typeof h.account === "string" ? h.account : null, pairable: !!h.pairable,
+           bridgeOnly: !!h.bridge_only };
+}
+
+/** The pairing code of a found bridge - it hands it out only on its home network (server: /api/bridge/local-code). */
+export async function bridgeLocalCode(base: string, f: typeof fetch = fetch): Promise<string> {
+  const r = await f(`${base}/api/bridge/local-code`, { headers: { Accept: "application/json" } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok || typeof body.code !== "string") throw new Error(String(body.detail || `HTTP ${r.status}`));
+  return body.code;
+}
+
+/** Bridges on the phone's network: the Pi image answers on port 80 (also as pocketprint3d.local), a bridge container on
+ *  8484. `onFound` per bridge as soon as it answers. */
+export async function discoverBridges(deps: Pick<DiscoverDeps, "wifi" | "fetch" | "hosts" | "concurrency" | "timeoutMs"> & { ports?: number[] },
+                                      onFound: (b: FoundBridge) => void,
+                                      cancelled: () => boolean = () => false): Promise<number> {
+  const wifi = deps.hosts ? null : await deps.wifi();
+  if (!wifi && !deps.hosts) throw new NoWifiError();
+  const f = deps.fetch ?? fetch;
+  const ms = deps.timeoutMs ?? 1500;
+  const ports = deps.ports ?? [80, 8484];
+  const seen = new Set<string>();
+  const report = (b: FoundBridge | null) => {
+    if (!b || cancelled()) return;
+    const key = b.bridgeId ?? b.address;
+    if (seen.has(key)) return;
+    seen.add(key);
+    onFound(b);
+  };
+  const hosts = deps.hosts ?? subnetHosts(wifi!.address, wifi!.prefix);
+  let next = 0;
+  const worker = async () => {
+    while (next < hosts.length && !cancelled()) {
+      const host = hosts[next++];
+      for (const port of ports) report(await bridgeHello(`http://${withPort(host, port)}`, f, ms).catch(() => null));
+    }
+  };
+  await Promise.all([
+    deps.hosts ? Promise.resolve() : bridgeHello("http://pocketprint3d.local", f, ms).then(report).catch(() => undefined),
+    ...Array.from({ length: Math.max(1, deps.concurrency ?? 24) }, worker),
+  ]);
+  return seen.size;
+}

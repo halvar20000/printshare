@@ -1,14 +1,18 @@
 // Cloud: bridges at home (docs/BRIDGE.md) - "print from anywhere". A bridge is the user's own PocketPrint3D server
 // (Unraid, Home Assistant, Docker) with "Connect to PocketPrint3D Cloud" on; it shows a code that is entered here.
 // Its printers then appear in the account by themselves; more can be added through the bridge.
+// A ready-made bridge (Raspberry Pi image) on the same Wi-Fi is found by itself and paired with one tap: the app fetches
+// its code from the bridge (only handed out on the home network) and enters it for the user.
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Linking, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Linking, Platform, Text, TextInput, View } from "react-native";
 
 import { Badge, Banner, Button, Card, Divider, Row, Screen, Section, confirmAsync } from "@/components/ui";
 import { errorText, type Bridge } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago } from "@/lib/format";
+import { bridgeLocalCode, discoverBridges, NoWifiError, type FoundBridge } from "@/lib/lan/discover";
+import LanDiscovery from "../../modules/lan-discovery/src/LanDiscoveryModule";
 import { space, useColors } from "@/lib/theme";
 
 /** "k7q4m2zx" / "K7Q4 M2ZX" → "K7Q4-M2ZX" while typing (no 0/O, 1/I in codes) */
@@ -26,6 +30,12 @@ export default function Bridges() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [paired, setPaired] = useState<string | null>(null);
+  // bridges on the Wi-Fi (native app only - a browser can't search the home network)
+  const lanSearch = Platform.OS !== "web";
+  const [lan, setLan] = useState<FoundBridge[]>([]);
+  const [lanState, setLanState] = useState<"searching" | "done" | "nowifi">("searching");
+  const [joining, setJoining] = useState<string | null>(null);
+  const lanRun = useRef(0);
 
   const load = useCallback(() => {
     if (!api) return;
@@ -51,6 +61,42 @@ export default function Bridges() {
     }
   };
 
+  const scan = useCallback(() => {
+    const run = ++lanRun.current;
+    const live = () => lanRun.current === run;
+    discoverBridges({ wifi: () => LanDiscovery.wifiAddressAsync() }, b => { if (live()) setLan(l => [...l, b]); }, () => !live())
+      .then(() => { if (live()) setLanState("done"); })
+      .catch(e => { if (live()) setLanState(e instanceof NoWifiError ? "nowifi" : "done"); });
+  }, []);
+  const search = () => {
+    setLan([]);
+    setLanState("searching");
+    scan();
+  };
+  useEffect(() => {
+    if (!lanSearch) return;
+    scan();
+    const runs = lanRun;
+    return () => { runs.current++; };                        // stop when the screen closes
+  }, [lanSearch, scan]);
+
+  const join = async (b: FoundBridge) => {
+    if (!api) return;
+    setJoining(b.address);
+    setError("");
+    try {
+      const res = await api.pairBridge(await bridgeLocalCode(b.address));
+      setPaired(res.name);
+      setLan(l => l.map(x => (x === b ? { ...x, paired: true, pairable: false } : x)));
+      setTimeout(load, 4000);
+      load();
+    } catch (e) {
+      setError(errorText(t, e));
+    } finally {
+      setJoining(null);
+    }
+  };
+
   const remove = async (b: Bridge) => {
     if (!api || !(await confirmAsync(t("bridgeRemoveQ", { name: b.name }), t("del"), t("cancelBtn")))) return;
     try {
@@ -70,6 +116,30 @@ export default function Bridges() {
         onPress={() => Linking.openURL(t.lang === "de" ? "https://pocketprint3d.com/de/bruecke/" : "https://pocketprint3d.com/bridge/")} />
       {error ? <Banner kind="error" text={error} /> : null}
       {paired ? <Banner kind="ok" text={t("bridgePaired", { name: paired })} /> : null}
+
+      {lanSearch ? (
+        <Section title={t("bridgeLanTitle")}
+          footer={lanState === "nowifi" ? t("bridgeLanNoWifi") : lanState === "done" && !lan.length ? t("bridgeLanNone") : t("bridgeLanHint")}>
+          {lan.map((b, i) => {
+            const mine = !!b.bridgeId && (bridges ?? []).some(x => x.id === b.bridgeId);
+            const sub = mine ? t("bridgeLanMine") : b.paired ? t("bridgeLanOther", { account: b.account ?? "?" })
+              : b.pairable ? t("bridgeLanFree") : b.bridgeOnly ? t("bridgeLanStarting") : t("bridgeLanServer");
+            return (
+              <View key={b.bridgeId ?? b.address}>
+                {i ? <Divider /> : null}
+                <Row icon="hardware-chip-outline" label={b.name} sub={`${sub} · ${b.address.replace(/^https?:\/\//, "")}`}
+                  onPress={b.pairable && !mine && !joining ? () => join(b) : undefined}
+                  right={joining === b.address ? <ActivityIndicator color={c.accent} />
+                    : b.pairable && !mine ? <Badge text={t("bridgeConnectBtn")} kind="accent" />
+                    : mine ? <Badge text={t("connected")} kind="ok" /> : undefined} />
+              </View>
+            );
+          })}
+          {lanState === "searching"
+            ? <Row icon="search-outline" label={t("bridgeLanSearching")} right={<ActivityIndicator color={c.accent} />} />
+            : <Row icon="refresh-outline" label={t("discoverAgain")} onPress={search} />}
+        </Section>
+      ) : null}
 
       <Section title={t("bridgeConnect")} footer={t("bridgeCodeHint")}>
         <TextInput value={code} onChangeText={v => { setCode(formatCode(v)); setError(""); }} placeholder="K7Q4-M2ZX"

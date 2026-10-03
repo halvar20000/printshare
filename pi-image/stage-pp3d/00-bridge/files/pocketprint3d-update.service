@@ -1,0 +1,8 @@
+[Unit]
+Description=PocketPrint3D bridge - update
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pocketprint3d-update

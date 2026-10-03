@@ -1,0 +1,8 @@
+#!/bin/sh
+# Gets a new bridge version if there is one (pocketprint3d-update.timer, every night).
+IMAGE=ghcr.io/halvar20000/printshare-bridge:latest
+old=$(docker image inspect --format '{{.Id}}' $IMAGE 2>/dev/null || true)
+docker pull -q $IMAGE >/dev/null || exit 0
+new=$(docker image inspect --format '{{.Id}}' $IMAGE)
+[ "$old" = "$new" ] && docker ps -q -f name=pocketprint3d-bridge | grep -q . && exit 0
+/usr/local/bin/pocketprint3d-start && docker image prune -f >/dev/null

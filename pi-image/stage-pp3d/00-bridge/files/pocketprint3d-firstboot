@@ -1,0 +1,16 @@
+#!/bin/sh
+# First start of the PocketPrint3D Raspberry Pi image: load the bridge that came with the image, create the access
+# token, start the container. Runs once (pocketprint3d-firstboot.service); the app then finds the bridge on the Wi-Fi.
+set -eu
+DIR=/opt/pocketprint3d-bridge
+if [ ! -s "$DIR/token" ]; then
+  umask 077
+  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$DIR/token"
+fi
+[ -s "$DIR/name" ] || hostname > "$DIR/name"
+if [ -f "$DIR/bridge-image.tar" ]; then
+  docker load -q -i "$DIR/bridge-image.tar" && rm -f "$DIR/bridge-image.tar"
+fi
+# without the preloaded image (or if loading failed) the start pulls it from the internet
+/usr/local/bin/pocketprint3d-start
+touch "$DIR/.installed"

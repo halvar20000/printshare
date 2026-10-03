@@ -1,0 +1,68 @@
+# Ready-made Raspberry Pi image for the PocketPrint3D bridge (pi-image/, docs/BRIDGE.md): Raspberry Pi OS Lite 64-bit
+# (pi-gen) + Docker + the bridge image of this version preloaded. Write it to an SD card, plug in LAN and power, and the
+# app finds the bridge on the Wi-Fi. No default password, SSH off.
+# Started by hand (Actions → Raspberry Pi image → Run workflow) after the bridge image of the version is published, or
+# by a tag pi-image-v<version>. Result: GitHub release pi-image-v<version> with pocketprint3d-bridge-pi.img.xz.
+name: Raspberry Pi image
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["pi-image-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    # native arm64: no QEMU, much faster than an emulated build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_OUTPUT"
+      - name: Bridge image to preload
+        run: |
+          img=ghcr.io/halvar20000/printshare-bridge
+          docker pull --platform linux/arm64 "$img:${{ steps.v.outputs.version }}"
+          docker tag "$img:${{ steps.v.outputs.version }}" "$img:latest"
+          docker save "$img:latest" -o pi-image/stage-pp3d/00-bridge/files/bridge-image.tar
+          ls -la pi-image/stage-pp3d/00-bridge/files/bridge-image.tar
+      - uses: usimd/pi-gen-action@v1
+        id: build
+        with:
+          image-name: pocketprint3d-bridge
+          release: trixie
+          pi-gen-version: arm64
+          stage-list: stage0 stage1 stage2 ./pi-image/stage-pp3d
+          hostname: pocketprint3d
+          # an account without password (locked) and no SSH: nobody can log in with a known default password
+          username: pp3d
+          password: ""
+          disable-first-boot-user-rename: 1
+          enable-ssh: 0
+          locale: en_US.UTF-8
+          timezone: Etc/UTC
+          keyboard-keymap: us
+          keyboard-layout: English (US)
+          compression: xz
+          compression-level: 6
+          increase-runner-disk-size: true
+          github-token: ${{ github.token }}
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="pi-image-v${{ steps.v.outputs.version }}"
+          cp "${{ steps.build.outputs.image-path }}" pocketprint3d-bridge-pi.img.xz
+          sha256sum pocketprint3d-bridge-pi.img.xz > pocketprint3d-bridge-pi.img.xz.sha256
+          ls -la pocketprint3d-bridge-pi.img.xz*
+          notes="PocketPrint3D bridge ${{ steps.v.outputs.version }} for the Raspberry Pi 3, 4, 5 and Zero 2 W (64-bit).
+          Write it to an SD card with Raspberry Pi Imager (Choose OS → Use custom), put the card in the Pi, plug in the network
+          cable and power. After about 3 minutes the PocketPrint3D app finds the bridge: Settings → Advanced → Print from anywhere.
+          Guide: https://pocketprint3d.com/bridge/"
+          gh release view "$tag" >/dev/null 2>&1 \
+            || gh release create "$tag" --title "Raspberry Pi image ${{ steps.v.outputs.version }}" --notes "$notes" --latest
+          gh release upload "$tag" pocketprint3d-bridge-pi.img.xz pocketprint3d-bridge-pi.img.xz.sha256 --clobber

@@ -60,7 +60,7 @@ OctoPrint/Moonraker plugins come later as optional "mini bridges" for exactly on
 | **Existing server** (Unraid template, HA add-on, Docker) + switch "Mit PocketPrint3D Cloud verbinden" | self-hosters (Thomas, Dominique) | full server incl. Orca; local app/web keep working; its printers additionally appear in the cloud account |
 | **Slim image** `ghcr.io/halvar20000/printshare-bridge` | Docker/NAS users who use the cloud | same package without OrcaSlicer (slicing is in the cloud): python:slim, ~100 MB, amd64/arm64/armv7 |
 | **HA add-on option** | Home Assistant users | the existing add-on with `cloud_bridge: true`, or a slim add-on variant |
-| **Raspberry Pi Zero 2 W image** | people without anything running at home | later; pi-gen image, first boot shows the pairing code on a local web page (`http://pocketprint3d.local`) |
+| **Raspberry Pi image** (0.34.0, `pi-image/`) | people without anything running at home | Raspberry Pi OS Lite 64-bit (pi-gen, trixie) + Docker + the bridge image preloaded; LAN cable, no setup; found and paired by the app on the Wi-Fi (section 5a); status page `http://pocketprint3d.local` |
 | OctoPrint plugin / Moonraker component | people who run those already | later; bridge for that one printer |
 
 Start: `printshare serve` with `PRINTSHARE_BRIDGE=1` (or config `bridge: {enabled: true}`) for the full server;
@@ -80,6 +80,30 @@ connection state, log).
    random 32 bytes; the cloud stores only its SHA-256). Stored in `bridge.yaml` (0600).
 5. Unpairing: app "Brücke entfernen" (`DELETE /api/bridges/{id}`, token revoked, live socket closed) or on the bridge
    ("Verbindung trennen" deletes the token).
+
+### 5a. Ready-made bridge on the Wi-Fi (0.34.0)
+
+A **bridge-only** install (`PRINTSHARE_BRIDGE_ONLY=1`: the bridge image and the Raspberry Pi image) can be paired without
+typing anything:
+- `GET /api/bridge/hello` (no token) → `{"pocketprint3d": "bridge", "version", "name", "bridge_id", "state", "paired",
+  "account": "t***@example.org", "bridge_only", "pairable"}`. The app probes every address of the phone's /24 on ports 80
+  and 8484 (plus `pocketprint3d.local`), like the printer search.
+- `GET /api/bridge/local-code` (no token) → `{"code", "expires_in", "name"}`; the app then calls `POST /api/bridges/pair`
+  with it. Handed out only when all of these hold: bridge-only install, not paired, a code is shown; the client is on a
+  private/loopback/link-local address; no `X-Forwarded-For`/`Forwarded`/`X-Real-IP` header (no reverse proxy); and the
+  `Host` header is an IP address, `localhost`, `*.local` or the machine's host name (DNS rebinding: a web page on
+  evil.example pointed at the bridge can't read it). No CORS headers. Someone on the home network could pair an
+  unpaired bridge with their own account – the same as reading the code from its page; the owner sees the bridge isn't
+  in their account and presses "Brücke entfernen"/re-pairs. Full servers (Unraid, HA) never hand the code out without
+  their token.
+- `GET /bridge` (and `/` on a bridge-only install): status page – connected (account masked) or the code under the same
+  rules, reloads every 10 s.
+
+The Pi image (`pi-image/stage-pp3d`, built by `.github/workflows/pi-image.yml` with usimd/pi-gen-action on an arm64
+runner, release `pi-image-v<version>` → `pocketprint3d-bridge-pi.img.xz`): host name `pocketprint3d`, user `pp3d`
+**locked** (no password), SSH off; `pocketprint3d-firstboot.service` loads the preloaded image, creates the token and
+starts the container (host network, `PRINTSHARE_PORT=80`); `pocketprint3d-update.timer` pulls `:latest` nightly;
+unattended-upgrades for the OS; Docker logs capped (SD card).
 
 Rate limits like the login codes: 5 code attempts per account per 15 min, 20 pair starts per IP per hour. Several
 bridges per account are allowed (e.g. home + workshop).

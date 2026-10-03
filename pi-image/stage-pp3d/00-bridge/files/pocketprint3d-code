@@ -1,0 +1,18 @@
+#!/bin/sh
+# Shows the bridge's pairing code (or that it is connected) - for anyone with a keyboard and screen or SSH.
+# Usually not needed: the app finds the bridge on the Wi-Fi, or open http://pocketprint3d.local
+TOKEN=$(sudo cat /opt/pocketprint3d-bridge/token 2>/dev/null || cat /opt/pocketprint3d-bridge/token)
+for i in $(seq 1 60); do
+  J=$(curl -fs -H "Authorization: Bearer $TOKEN" http://127.0.0.1:80/api/bridge 2>/dev/null) && break
+  sleep 2
+done
+[ -n "${J:-}" ] || { echo "The bridge doesn't answer yet - wait a minute and run: pocketprint3d-code"; exit 1; }
+field() { printf '%s' "$J" | sed -n "s/.*\"$1\":\"\([^\"]*\)\".*/\1/p"; }
+STATE=$(field state); CODE=$(field code); ACCOUNT=$(field account)
+if [ "$STATE" = "connected" ]; then
+  echo "The bridge is connected to the account $ACCOUNT. All set."
+elif [ -n "$CODE" ]; then
+  echo "Pairing code: $CODE  (PocketPrint3D app: Settings -> Advanced -> Print from anywhere)"
+else
+  echo "The bridge is starting ($STATE) - run pocketprint3d-code again in a minute."
+fi

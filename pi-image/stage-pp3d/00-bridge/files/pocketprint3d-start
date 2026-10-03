@@ -1,0 +1,11 @@
+#!/bin/sh
+# (Re)creates the bridge container - used on the first start and by the nightly update.
+# Port 80: the bridge's page is http://pocketprint3d.local (only on the home network; nothing is opened to the internet).
+set -e
+DIR=/opt/pocketprint3d-bridge
+IMAGE=ghcr.io/halvar20000/printshare-bridge:latest
+docker image inspect "$IMAGE" >/dev/null 2>&1 || docker pull -q "$IMAGE" >/dev/null
+docker rm -f pocketprint3d-bridge >/dev/null 2>&1 || true
+docker run -d --name pocketprint3d-bridge --restart unless-stopped --network host \
+  -e PRINTSHARE_API_TOKEN="$(cat $DIR/token)" -e PRINTSHARE_NAME="$(cat $DIR/name)" -e PRINTSHARE_PORT=80 \
+  -v $DIR/config:/config -v $DIR/data:/data "$IMAGE" >/dev/null

@@ -823,6 +823,21 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
   /tmp/cloudtest/run_web.py, /tmp/bridgetest/home.py).
 
+## Ready-made Raspberry Pi bridge image (2026-10-03, server 0.34.0)
+- Thomas: "simple setup" = write the image to an SD card, plug in LAN + power, done. `pi-image/stage-pp3d` = pi-gen custom
+  stage after stage0-2 (Raspberry Pi OS Lite 64-bit trixie): docker.io, avahi, unattended-upgrades; bridge image
+  preloaded as `files/bridge-image.tar` (saved by the workflow, gitignored); `pocketprint3d-firstboot.service` (docker
+  load, token, `pocketprint3d-start` with host network + `PRINTSHARE_PORT=80`), `pocketprint3d-update.timer` (nightly
+  pull), `pocketprint3d-code`. Host name `pocketprint3d`, user `pp3d` locked (no password), SSH off - never ship a
+  default password. `.github/workflows/pi-image.yml` (manual or tag `pi-image-v*`, usimd/pi-gen-action@v1 on
+  ubuntu-24.04-arm) → release `pi-image-v<version>` with `pocketprint3d-bridge-pi.img.xz` (+ .sha256), linked from the
+  site as `releases/latest/download/…`. Needs the bridge image of that version on GHCR first.
+- Pair by tap: `PRINTSHARE_BRIDGE_ONLY=1` (Dockerfile.bridge) → `/api/bridge/hello` (no token), `/api/bridge/local-code`
+  (LAN client, no proxy headers, Host = IP/localhost/*.local/hostname, no CORS; rules in docs/BRIDGE.md 5a), status page
+  `/bridge` = `/`. App `discoverBridges()` (ports 80 + 8484, pocketprint3d.local) → bridges screen "Im WLAN gefunden"
+  (native only). Tested: unit tests + node against a real bridge-only server and the local cloud (found → code →
+  paired → online, account masked). **Not yet built in CI, not yet booted on a real Pi** (Thomas' Pi 3B).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

@@ -219,6 +219,7 @@ class Settings:
     # bridge mode (docs/BRIDGE.md): this server connects to PocketPrint3D Cloud for remote access to its printers
     bridge: bool = False
     bridge_url: str = "https://api.pocketprint3d.com"
+    bridge_only: bool = False          # bridge container / Raspberry Pi image: status page at /, pairing code on the LAN
     lan_subnet: str = ""               # printer search when broadcasts don't work (Docker bridge network), e.g. 192.168.1.0/24
     # cloud: the web app (Expo web build, docs/WEB.md) served at / of api./app.pocketprint3d.com
     webapp_dir: str = "/opt/webapp"
@@ -309,6 +310,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
     if os.environ.get("PRINTSHARE_BRIDGE", "").lower() in ("1", "true", "yes"):
         s.bridge = True
     s.bridge_url = os.environ.get("PRINTSHARE_BRIDGE_URL") or s.bridge_url
+    if os.environ.get("PRINTSHARE_BRIDGE_ONLY", "").lower() in ("1", "true", "yes"):
+        s.bridge_only = True
     s.lan_subnet = os.environ.get("PRINTSHARE_LAN_SUBNET") or s.lan_subnet
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)

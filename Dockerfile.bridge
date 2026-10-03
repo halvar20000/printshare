@@ -5,7 +5,8 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PRINTSHARE_CONFIG=/config/config.yaml \
-    PRINTSHARE_BRIDGE=1
+    PRINTSHARE_BRIDGE=1 \
+    PRINTSHARE_BRIDGE_ONLY=1
 
 WORKDIR /app
 COPY pyproject.toml ./

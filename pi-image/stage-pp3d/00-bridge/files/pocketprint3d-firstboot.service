@@ -1,0 +1,16 @@
+[Unit]
+Description=PocketPrint3D bridge - first start
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+ConditionPathExists=!/opt/pocketprint3d-bridge/.installed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pocketprint3d-firstboot
+# no network yet at the very first start without the preloaded image: try again
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

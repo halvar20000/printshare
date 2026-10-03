@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.34.0
+- Ready-made Raspberry Pi image for the bridge: write it to an SD card, plug in the network cable and power - the app
+  finds the bridge on your Wi-Fi and connects it with one tap (Settings → Advanced → Print from anywhere → "Found on
+  your Wi-Fi"). No default password, no SSH. Guide: https://pocketprint3d.com/bridge/
+- Bridge containers show a status page with the pairing code at their own address (only on the home network).
+
 ## 0.33.0
 - Jobs follow their print: "Printing" → "Printed" or "Cancelled" when the printer is done, instead of staying on
   "Started". Printed jobs can be printed again. Also for prints the phone sends on the Wi-Fi.

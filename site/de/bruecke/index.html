@@ -39,66 +39,66 @@
     <p style="color:var(--muted);font-size:15px">Erhältlich bei Elektronikhändlern wie Berrybase, Reichelt oder BuyZero. Außerdem
       einmalig: ein Computer mit Kartenleser (oder ein USB-Kartenleser für ein paar Euro).</p>
     <div class="tip"><strong>Warum mit Kabel?</strong> Dann musst du kein WLAN einrichten, die Verbindung ist zuverlässiger, und die
-      Brücke findet deine Drucker im Heimnetz von selbst. Ein Raspberry Pi Zero 2 W (nur WLAN) geht auch, ist aber schwieriger einzurichten.</div>
+      Brücke findet deine Drucker im Heimnetz von selbst. Ein Raspberry Pi Zero 2 W (nur WLAN) geht auch, braucht aber den Weg unten auf dieser Seite.</div>
   </section>
 
   <section>
-    <h2>2. Einrichten – etwa 20 Minuten</h2>
+    <h2>2. Einrichten – etwa 10 Minuten, ohne Tippen</h2>
+    <p>Wir stellen ein fertiges Karten-Image bereit: Raspberry Pi OS, auf dem die Brücke schon drauf ist.</p>
     <ol class="big">
-      <li><strong>Raspberry Pi Imager installieren</strong>
-        <p>Auf deinem Computer: <a href="https://www.raspberrypi.com/software/">raspberrypi.com/software</a> → herunterladen und
-          installieren (Windows, Mac oder Linux).</p></li>
-      <li><strong>Karte beschreiben</strong>
-        <p>microSD-Karte in den Computer stecken, Imager starten und wählen:
-          <span class="path">Gerät: Raspberry Pi 3</span> (bzw. dein Modell) →
-          <span class="path">Betriebssystem: Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)</span> →
-          <span class="path">Speicher: deine SD-Karte</span>.</p></li>
-      <li><strong>Einstellungen vorab festlegen</strong>
-        <p>Wenn der Imager fragt, ob du Einstellungen anpassen willst: <em>Ja / Einstellungen bearbeiten</em>.
-          <span class="path">Hostname: pocketprint3d</span> · <span class="path">Benutzername: pi</span> + ein Passwort, das du dir
-          merkst · WLAN <strong>nicht</strong> einrichten · unter <em>Dienste</em>: <span class="path">SSH aktivieren</span> mit Passwort.
-          Speichern, dann <em>Schreiben</em> – dauert ein paar Minuten.</p></li>
+      <li><strong>Image herunterladen</strong>
+        <p><a class="btn primary" href="https://github.com/halvar20000/printshare/releases/latest/download/pocketprint3d-bridge-pi.img.xz">PocketPrint3D-Image herunterladen</a>
+          (etwa 600 MB, für Raspberry Pi 3, 4 und 5). Nicht entpacken nötig.</p></li>
+      <li><strong>Auf die Karte schreiben</strong>
+        <p>Installiere den <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> auf deinem Computer (Windows, Mac
+          oder Linux) und stecke die microSD-Karte ein. Im Imager:
+          <span class="path">Gerät: dein Raspberry Pi</span> →
+          <span class="path">Betriebssystem: Eigenes Image (Use custom) → die heruntergeladene Datei</span> →
+          <span class="path">Speicher: deine SD-Karte</span> → <em>Weiter</em>. Fragt er nach Einstellungen anpassen: <em>Nein</em>.
+          Dann <em>Schreiben</em> – dauert ein paar Minuten.</p></li>
       <li><strong>Pi anschließen</strong>
-        <p>Karte in den Pi stecken, Netzwerkkabel zum Router, zuletzt das Netzteil einstecken. Zwei Minuten warten – die grüne
-          Lampe blinkt beim Starten.</p></li>
-      <li><strong>Mit dem Pi verbinden</strong>
-        <p>Am Computer ein Befehlsfenster öffnen – Windows: Start → <em>Eingabeaufforderung</em> eintippen; Mac: Programme →
-          Dienstprogramme → <em>Terminal</em>. Dort eingeben:</p>
-        <code class="cmd">ssh pi@pocketprint3d.local</code>
-        <p>Beim ersten Mal <code>yes</code> eintippen, dann dein Passwort (es wird beim Tippen nicht angezeigt – das ist normal).</p></li>
-      <li><strong>Brücke installieren – ein einziger Befehl</strong>
-        <p>Diese Zeile kopieren, ins Fenster einfügen (Rechtsklick bzw. Strg+V / ⌘V) und Enter drücken:</p>
-        <code class="cmd">curl -fsSL https://pocketprint3d.com/install-bridge.sh | sh</code>
-        <p>Das dauert auf einem Pi 3 etwa 5–10 Minuten. Am Ende erscheint groß dein <strong>Kopplungscode</strong>, z. B.
-          <code>K7Q4-M2ZX</code>.</p></li>
-      <li><strong>Code in der App eingeben</strong>
-        <p>In der PocketPrint3D-App (oder unter app.pocketprint3d.com):
-          <span class="path">Einstellungen → Erweitert → Unterwegs drucken</span> → Code eingeben → <span class="path">Verbinden</span>.
-          Danach <span class="path">Drucker über die Brücke hinzufügen</span> – die Brücke sucht deine Drucker selbst. Fertig!</p></li>
+        <p>Karte in den Pi, Netzwerkkabel zum Router, zuletzt das Netzteil. Der erste Start dauert etwa 3 Minuten.</p></li>
+      <li><strong>In der App verbinden</strong>
+        <p>Handy im WLAN zu Hause, PocketPrint3D-App öffnen:
+          <span class="path">Einstellungen → Erweitert → Unterwegs drucken</span>. Die Brücke erscheint unter
+          <span class="path">Im WLAN gefunden</span> – antippen. Danach <span class="path">Drucker über die Brücke hinzufügen</span> –
+          die Brücke findet deine Drucker selbst. Fertig!</p></li>
     </ol>
     <div class="tip"><strong>Danach musst du dich um nichts kümmern.</strong> Die Brücke startet nach einem Stromausfall von selbst und
-      holt sich nachts neue Versionen. Den Code zeigt jederzeit wieder: <code>pocketprint3d-code</code> (nach Schritt 5).</div>
+      installiert nachts neue Versionen und Sicherheitsupdates.</div>
   </section>
 
   <section>
-    <h3>Ohne Befehlsfenster am Computer</h3>
-    <p>Du kannst den Pi auch direkt bedienen: einen Bildschirm (HDMI) und eine USB-Tastatur anschließen, mit <code>pi</code> und deinem
-      Passwort anmelden und den Befehl aus Schritt 6 eintippen.</p>
+    <h3>Mit dem Browser statt dem Handy</h3>
+    <p>Öffne auf einem Computer im selben Netz <a href="http://pocketprint3d.local">http://pocketprint3d.local</a>. Die Seite zeigt
+      einen <strong>Kopplungscode</strong> (z. B. <code>K7Q4-M2ZX</code>): auf app.pocketprint3d.com unter
+      <span class="path">Einstellungen → Erweitert → Unterwegs drucken</span> eingeben → <span class="path">Verbinden</span>.</p>
 
     <h3>Wenn etwas nicht klappt</h3>
     <dl>
-      <dt>„pocketprint3d.local“ wird nicht gefunden</dt>
-      <dd>Schau in deinem Router nach der Adresse des Pi (bei einer FRITZ!Box: <em>Heimnetz → Netzwerk</em>, Gerät „pocketprint3d“)
-        und verbinde dich mit dieser Adresse, z. B. <code>ssh pi@192.168.178.42</code>. Leuchtet die Lampe an der Netzwerkbuchse?</dd>
-      <dt>„32-bit“-Meldung beim Installieren</dt>
-      <dd>Es wurde das 32-Bit-System geschrieben. Karte im Imager neu beschreiben mit <em>Raspberry Pi OS Lite (64-bit)</em>.</dd>
+      <dt>Die App findet die Brücke nicht</dt>
+      <dd>Ist das Handy im WLAN zu Hause (nicht mobile Daten)? Leuchtet die Lampe an der Netzwerkbuchse des Pi? Nach dem ersten Start
+        3 Minuten warten, dann <em>Erneut suchen</em> antippen. Sonst die Seite der Brücke öffnen (oben) und den Code eingeben.</dd>
+      <dt>„pocketprint3d.local“ öffnet sich nicht</dt>
+      <dd>Schau im Router nach der Adresse des Pi (Gerät „pocketprint3d“) und öffne diese, z. B. <code>http://192.168.1.42</code>.</dd>
       <dt>Der Code ist abgelaufen</dt>
-      <dd>Er gilt 10 Minuten; danach erscheint von selbst ein neuer. Anzeigen mit <code>pocketprint3d-code</code>.</dd>
-      <dt>In der App steht „Brücke offline“</dt>
+      <dd>Er gilt 10 Minuten; die Seite zeigt von selbst einen neuen.</dd>
+      <dt>Die App sagt „Brücke offline“</dt>
       <dd>Hat der Pi Strom und steckt das Netzwerkkabel? Nach dem Einstecken dauert es etwa zwei Minuten.</dd>
     </dl>
-    <p style="color:var(--muted);font-size:15px">Neugierig, was der Befehl macht? Das Skript lässt sich vorher lesen:
-      <a href="/install-bridge.sh">install-bridge.sh</a>. Es installiert Docker und die Brücke nach <code>/opt/pocketprint3d-bridge</code>.
+    <p style="color:var(--muted);font-size:15px">Sicher gebaut: Das Image hat kein Standard-Passwort und keinen Fernzugang (SSH) –
+      niemand kann sich auf dem Pi anmelden. Den Kopplungscode zeigt es nur in deinem Heimnetz. Das Image wird offen auf GitHub aus
+      <a href="https://github.com/halvar20000/printshare/tree/main/pi-image">pi-image/</a> gebaut.</p>
+  </section>
+
+  <section>
+    <h3>Anderer Weg: selbst installieren</h3>
+    <p>Für einen Raspberry Pi Zero 2 W (nur WLAN), einen Pi, den du schon nutzt, oder jeden Debian/Ubuntu-Rechner: installiere wie
+      gewohnt <em>Raspberry Pi OS Lite (64-bit)</em> mit dem Imager (mit WLAN und SSH in seinen Einstellungen), melde dich mit
+      <code>ssh</code> an und gib einen Befehl ein:</p>
+    <code class="cmd">curl -fsSL https://pocketprint3d.com/install-bridge.sh | sh</code>
+    <p>Er installiert Docker und die Brücke nach <code>/opt/pocketprint3d-bridge</code> und zeigt am Ende den Kopplungscode (wieder
+      mit <code>pocketprint3d-code</code>). Vorher lesen: <a href="/install-bridge.sh">install-bridge.sh</a>.
       Fragen oder Probleme: <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
   </section>
 
