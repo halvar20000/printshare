@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help – PocketPrint3D</title>
+<meta name="description" content="How to use PocketPrint3D: getting started in 7 steps, and the advanced features – bridge, browser, OrcaSlicer, spools, multicolour, own server.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/hilfe/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap help">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/">PocketPrint3D</a>
+    <nav><a class="opt" href="#start">Getting started</a><a class="opt" href="#advanced">Advanced</a><a href="/de/hilfe/" hreflang="de">Deutsch</a></nav>
+  </header>
+
+  <h1>Help</h1>
+  <p style="color:var(--muted);margin:0 0 18px">Two guides: start with the first one. The second explains everything you can add later – all of it is optional.</p>
+  <div class="tiles">
+    <a class="tile" href="#start"><span class="tag">Beginners</span><strong>Getting started</strong><span>From installing the app to your first print – 7 steps, about 10 minutes.</span></a>
+    <a class="tile" href="#advanced"><span class="tag">Advanced</span><strong>More possibilities</strong><span>Print from anywhere, on your computer, from OrcaSlicer, spools, multicolour, your own server.</span></a>
+  </div>
+
+  <!-- ================= BEGINNERS ================= -->
+  <section id="start">
+    <h2>Getting started</h2>
+    <div class="tip"><strong>You need:</strong> your 3D printer switched on and connected to your Wi-Fi (Elegoo Centauri Carbon,
+      a Klipper printer, a Prusa with PrusaLink or an OctoPrint setup), your phone on the <strong>same Wi-Fi</strong>, and an
+      e-mail address. Nothing to install at home.</div>
+    <ol class="big">
+      <li><strong>Install the app</strong>
+        <p>Android: currently as a beta test in Google Play. iPhone: coming soon. On a computer you can use
+          <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> with the same account.</p></li>
+      <li><strong>Sign up – just your e-mail</strong>
+        <p>Tap <span class="path">Sign up for free</span>, enter your e-mail and type in the 6-digit code you receive. No password.</p></li>
+      <li><strong>Add your printer</strong>
+        <p>Tap <span class="path">Add printer</span>. The app searches your Wi-Fi and lists your printer – tap it, then
+          <span class="path">Save</span>. Prusa: also enter the PrusaLink password (printer screen → Settings → Network).
+          OctoPrint: an API key (OctoPrint → Settings → Application Keys).</p></li>
+      <li><strong>Find a model</strong>
+        <p>In <span class="path">Discover</span> search Printables or Thingiverse. Or share a model link from your browser with
+          PocketPrint3D, or open a file (STL, 3MF, OBJ, STEP) with <span class="path">Choose a file</span>.</p></li>
+      <li><strong>Prepare the print</strong>
+        <p>Choose material and quality – the defaults fit most models. Supports only for overhangs. Then
+          <span class="path">Prepare print</span>: after about a minute you see print time, filament and a preview.</p></li>
+      <li><strong>Print</strong>
+        <p>Check the preview, tap <span class="path">Print</span> and confirm that the build plate is empty and the right
+          material is loaded. Nothing ever starts without this confirmation.</p></li>
+      <li><strong>Watch it</strong>
+        <p>The <span class="path">Printers</span> tab shows progress, remaining time and temperatures. Pause, resume or cancel there.</p></li>
+    </ol>
+
+    <h3>If something doesn't work</h3>
+    <dl>
+      <dt>The printer isn't found</dt>
+      <dd>Is it switched on and is your phone on the same Wi-Fi (not on mobile data, not on a guest network)? Tap
+        <span class="path">Search again</span>, or <span class="path">Enter the address yourself</span> – the printer shows its IP
+        address in its network menu.</dd>
+      <dt>"Not reachable"</dt>
+      <dd>At home the app talks to the printer directly. Away from home this only works with a bridge (see below).</dd>
+      <dt>The file is on the printer but the print didn't start</dt>
+      <dd>Some printers ignore the start command now and then. Start the file on the printer's screen – it is already there.</dd>
+      <dt>The model is too big or slicing fails</dt>
+      <dd>Try a smaller size (<span class="path">Size</span> in "On the plate") or another file of the model.</dd>
+    </dl>
+  </section>
+
+  <!-- ================= ADVANCED ================= -->
+  <section id="advanced">
+    <h2>For advanced users</h2>
+    <p style="color:var(--muted)">Everything here is optional. Most of it is under <span class="path">Settings → Advanced</span>.</p>
+
+    <h3>Choose your setup</h3>
+    <div class="table-wrap"><table>
+      <tr><th></th><th>Cloud only</th><th>Cloud + bridge</th><th>Own server</th></tr>
+      <tr><td>Install at home</td><td>nothing</td><td>a small bridge (Docker, Home Assistant, Raspberry Pi)</td><td>PocketPrint3D server (Unraid, Home Assistant, Docker)</td></tr>
+      <tr><td>Slicing</td><td>in the cloud</td><td>in the cloud</td><td>at home</td></tr>
+      <tr><td>Printing at home</td><td>✓ phone on the Wi-Fi</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Printing from anywhere</td><td>–</td><td>✓ also from the browser</td><td>✓ with the bridge switch (or Tailscale)</td></tr>
+      <tr><td>Camera, controls</td><td>–</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Extras</td><td></td><td></td><td>model library, AI failure detection, smart plug, exact Klipper times</td></tr>
+    </table></div>
+
+    <h3>Print from anywhere (bridge)</h3>
+    <ol class="steps">
+      <li>Run a bridge at home: on your own PocketPrint3D server switch on <em>Connect to PocketPrint3D Cloud</em> (Unraid
+        template, Home Assistant add-on option, or the server's web page → Settings). Without a server: the small Docker image
+        <code>ghcr.io/halvar20000/printshare-bridge</code>.</li>
+      <li>The bridge shows a code (container log or its web page).</li>
+      <li>In the app: <span class="path">Settings → Advanced → Print from anywhere</span>, enter the code, <span class="path">Connect</span>.</li>
+      <li>The bridge's printers appear in your account, marked "through a bridge". More printers:
+        <span class="path">Add a printer through the bridge</span> – address and password are encrypted so only your bridge can read them.</li>
+    </ol>
+    <p style="color:var(--muted);font-size:15px">Only an outgoing connection: nothing to open in your router, your printers stay off the internet.</p>
+
+    <h3>On your computer</h3>
+    <ul class="plain">
+      <li>Open <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> and log in with the same e-mail – same printers, jobs and spools.</li>
+      <li>Drag a model file onto the page to start.</li>
+      <li>Printing from the browser works for printers behind a bridge. Others are marked "Phone only": start them in the app, or download the G-code.</li>
+    </ul>
+
+    <h3>Send from OrcaSlicer</h3>
+    <ol class="steps">
+      <li>In the app or browser: <span class="path">Settings → your printer → Send from OrcaSlicer on your computer</span> →
+        <span class="path">Create access</span>. You get an address and a key (shown once).</li>
+      <li>In OrcaSlicer: Wi-Fi icon next to the printer (add physical printer) → host type <strong>Octo/Klipper</strong> → enter
+        address and key → <em>Test</em>.</li>
+      <li>After slicing: <em>Upload</em> – the print waits as a job in the app. <em>Upload and print</em> – starts right away on a
+        printer behind a bridge and books the spool used last.</li>
+    </ol>
+
+    <h3>Filament spools</h3>
+    <ul class="plain">
+      <li><span class="path">Settings → Advanced → Filament spools</span>: keep your spools in your PocketPrint3D account, or connect your own Spoolman.</li>
+      <li>When printing, choose the spool per colour. You get a warning if one isn't enough or the material doesn't match.</li>
+      <li>The used filament is booked when the print is finished. With spools in the account this also works when the app is closed (printers behind a bridge).</li>
+      <li>New spools: pick them from the filament database, or hold the phone to an OpenPrintTag NFC spool (Android).</li>
+    </ul>
+
+    <h3>Multicolour (AFC / CANVAS)</h3>
+    <p>For multicolour models choose the slot for every colour before preparing; empty slots are flagged, and the material
+      follows the filament in the slot. Supported on Klipper printers with AFC (e.g. Centauri Carbon with COSMOS + CANVAS).</p>
+
+    <h3>Your own OrcaSlicer profiles</h3>
+    <p><span class="path">Settings → your printer → Printer profile</span>: upload your OrcaSlicer printer, quality and material
+      profiles, or paste the link of a public Orca Cloud bundle. They are used for slicing right away.</p>
+
+    <h3>Extras with your own server</h3>
+    <dl>
+      <dt>Your model library</dt><dd>Manyfold at home shows up as a search source next to Printables.</dd>
+      <dt>AI failure detection</dt><dd>With Obico's ML API, camera pictures are checked while printing; a likely failure can pause the print.</dd>
+      <dt>Printer on/off</dt><dd>A smart plug in Home Assistant switches the printer on and off from the app.</dd>
+      <dt>Exact times for Klipper</dt><dd>Print times recalculated with your printer's own limits (klipper_estimator).</dd>
+    </dl>
+    <p style="color:var(--muted);font-size:15px">Installation and details: <a href="https://github.com/halvar20000/printshare">GitHub</a> (README).
+      Something missing or not working? Open an issue there.</p>
+  </section>
+
+  <footer>
+    <a href="/">Home</a><a href="/privacy/">Privacy</a><a href="/impressum/">Legal notice</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
+  </footer>
+</div>
+</body>
+</html>

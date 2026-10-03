@@ -53,3 +53,32 @@ footer a { color: var(--muted); margin-right: 16px; }
 .legal .muted { color: var(--muted); }
 .lang-note { background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
 @media (max-width: 520px) { header.top nav a.opt { display: none; } }
+/* help pages */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 8px 0 8px; }
+.tile { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px;
+  text-decoration: none; color: var(--fg); }
+.tile:hover { border-color: var(--accent); }
+.tile strong { display: block; font-size: 19px; margin-bottom: 4px; }
+.tile span { color: var(--muted); font-size: 15px; }
+.tile .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 6px; }
+ol.big { list-style: none; counter-reset: step; padding: 0; margin: 0; }
+ol.big > li { counter-increment: step; position: relative; background: var(--card); border: 1px solid var(--line);
+  border-radius: 16px; padding: 16px 18px 16px 64px; margin: 0 0 12px; }
+ol.big > li::before { content: counter(step); position: absolute; left: 16px; top: 14px; width: 34px; height: 34px;
+  border-radius: 50%; background: var(--accent); color: var(--accent-fg); font-weight: 800; display: flex;
+  align-items: center; justify-content: center; font-size: 17px; }
+ol.big > li strong:first-child { display: block; font-size: 18px; margin-bottom: 2px; }
+ol.big > li p { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
+.path { display: inline-block; background: var(--accent-soft); color: var(--fg); border-radius: 8px; padding: 1px 8px;
+  font-size: 14px; font-weight: 600; white-space: nowrap; }
+.tip { background: var(--accent-soft); border-radius: 14px; padding: 12px 16px; font-size: 15px; margin: 12px 0; }
+.help h1 { font-size: clamp(30px, 6vw, 42px); margin: 24px 0 8px; letter-spacing: -0.02em; }
+.help h2 { margin-top: 36px; }
+.help h3 { margin: 26px 0 8px; font-size: 19px; }
+.help dl { margin: 0; }
+.help dt { font-weight: 700; margin-top: 12px; }
+.help dd { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+.help ul.plain { padding-left: 20px; }
+.help ul.plain li { margin: 0 0 6px; }
+@media (max-width: 520px) { ol.big > li { padding-left: 56px; } ol.big > li::before { left: 12px; } .path { white-space: normal; } }

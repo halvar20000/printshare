@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hilfe – PocketPrint3D</title>
+<meta name="description" content="So nutzt du PocketPrint3D: der Einstieg in 7 Schritten und die Möglichkeiten für Fortgeschrittene – Brücke, Browser, OrcaSlicer, Spulen, Mehrfarbdruck, eigener Server.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="alternate" hreflang="en" href="https://pocketprint3d.com/help/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap help">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/de/">PocketPrint3D</a>
+    <nav><a class="opt" href="#start">Einstieg</a><a class="opt" href="#fortgeschritten">Fortgeschritten</a><a href="/help/" hreflang="en">English</a></nav>
+  </header>
+
+  <h1>Hilfe</h1>
+  <p style="color:var(--muted);margin:0 0 18px">Zwei Anleitungen: fang mit der ersten an. Die zweite erklärt alles, was du später dazunehmen kannst – alles davon ist freiwillig.</p>
+  <div class="tiles">
+    <a class="tile" href="#start"><span class="tag">Einsteiger</span><strong>Der Einstieg</strong><span>Von der Installation bis zum ersten Druck – 7 Schritte, etwa 10 Minuten.</span></a>
+    <a class="tile" href="#fortgeschritten"><span class="tag">Fortgeschritten</span><strong>Mehr Möglichkeiten</strong><span>Unterwegs drucken, am Computer, aus OrcaSlicer, Spulen, Mehrfarbdruck, eigener Server.</span></a>
+  </div>
+
+  <!-- ================= EINSTEIGER ================= -->
+  <section id="start">
+    <h2>Der Einstieg</h2>
+    <div class="tip"><strong>Du brauchst:</strong> deinen 3D-Drucker eingeschaltet und im WLAN (Elegoo Centauri Carbon, einen
+      Klipper-Drucker, einen Prusa mit PrusaLink oder OctoPrint), dein Handy im <strong>selben WLAN</strong> und eine
+      E-Mail-Adresse. Zu Hause musst du nichts installieren.</div>
+    <ol class="big">
+      <li><strong>App installieren</strong>
+        <p>Android: zurzeit als Betatest in Google Play. iPhone: folgt bald. Am Computer geht es unter
+          <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> mit demselben Konto.</p></li>
+      <li><strong>Anmelden – nur mit deiner E-Mail</strong>
+        <p><span class="path">Kostenlos anmelden</span> antippen, E-Mail eingeben und den 6-stelligen Code aus der Mail eintippen. Kein Passwort.</p></li>
+      <li><strong>Drucker hinzufügen</strong>
+        <p><span class="path">Drucker hinzufügen</span> antippen. Die App sucht in deinem WLAN und zeigt deinen Drucker – antippen,
+          dann <span class="path">Speichern</span>. Prusa: zusätzlich das PrusaLink-Passwort (Drucker-Display → Einstellungen →
+          Netzwerk). OctoPrint: einen API-Key (OctoPrint → Einstellungen → Application Keys).</p></li>
+      <li><strong>Modell finden</strong>
+        <p>Unter <span class="path">Entdecken</span> auf Printables oder Thingiverse suchen. Oder einen Modell-Link aus dem Browser
+          mit PocketPrint3D teilen, oder eine Datei (STL, 3MF, OBJ, STEP) über <span class="path">Datei auswählen</span> öffnen.</p></li>
+      <li><strong>Druck vorbereiten</strong>
+        <p>Material und Qualität wählen – die Vorgaben passen für die meisten Modelle. Stützen nur bei Überhängen. Dann
+          <span class="path">Druck berechnen</span>: nach etwa einer Minute siehst du Druckzeit, Filament und eine Vorschau.</p></li>
+      <li><strong>Drucken</strong>
+        <p>Vorschau ansehen, <span class="path">Drucken</span> antippen und bestätigen, dass die Druckplatte leer und das richtige
+          Material geladen ist. Ohne diese Bestätigung startet nie etwas.</p></li>
+      <li><strong>Zuschauen</strong>
+        <p>Der Tab <span class="path">Drucker</span> zeigt Fortschritt, Restzeit und Temperaturen. Dort kannst du pausieren,
+          fortsetzen oder abbrechen.</p></li>
+    </ol>
+
+    <h3>Wenn etwas nicht klappt</h3>
+    <dl>
+      <dt>Der Drucker wird nicht gefunden</dt>
+      <dd>Ist er eingeschaltet und dein Handy im selben WLAN (nicht mobile Daten, kein Gäste-WLAN)?
+        <span class="path">Erneut suchen</span> antippen oder <span class="path">Adresse selbst eingeben</span> – der Drucker zeigt
+        seine IP-Adresse im Netzwerk-Menü.</dd>
+      <dt>„Nicht erreichbar“</dt>
+      <dd>Zu Hause spricht die App direkt mit dem Drucker. Unterwegs geht das nur mit einer Brücke (siehe unten).</dd>
+      <dt>Die Datei ist auf dem Drucker, aber der Druck ist nicht gestartet</dt>
+      <dd>Manche Drucker überhören den Startbefehl gelegentlich. Starte die Datei am Display des Druckers – sie ist schon dort.</dd>
+      <dt>Das Modell ist zu groß oder die Berechnung schlägt fehl</dt>
+      <dd>Probiere eine kleinere Größe (<span class="path">Größe</span> unter „Auf der Platte“) oder eine andere Datei des Modells.</dd>
+    </dl>
+  </section>
+
+  <!-- ================= FORTGESCHRITTEN ================= -->
+  <section id="fortgeschritten">
+    <h2>Für Fortgeschrittene</h2>
+    <p style="color:var(--muted)">Alles hier ist freiwillig. Das meiste findest du unter <span class="path">Einstellungen → Erweitert</span>.</p>
+
+    <h3>Welche Einrichtung passt zu dir?</h3>
+    <div class="table-wrap"><table>
+      <tr><th></th><th>Nur Cloud</th><th>Cloud + Brücke</th><th>Eigener Server</th></tr>
+      <tr><td>Zu Hause installieren</td><td>nichts</td><td>eine kleine Brücke (Docker, Home Assistant, Raspberry Pi)</td><td>PocketPrint3D-Server (Unraid, Home Assistant, Docker)</td></tr>
+      <tr><td>Druck berechnen</td><td>in der Cloud</td><td>in der Cloud</td><td>zu Hause</td></tr>
+      <tr><td>Drucken zu Hause</td><td>✓ Handy im WLAN</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Drucken von überall</td><td>–</td><td>✓ auch aus dem Browser</td><td>✓ mit dem Brücken-Schalter (oder Tailscale)</td></tr>
+      <tr><td>Kamera, Steuerung</td><td>–</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Extras</td><td></td><td></td><td>Modell-Bibliothek, KI-Fehlererkennung, smarte Steckdose, genaue Klipper-Zeiten</td></tr>
+    </table></div>
+
+    <h3>Unterwegs drucken (Brücke)</h3>
+    <ol class="steps">
+      <li>Zu Hause eine Brücke laufen lassen: auf deinem eigenen PocketPrint3D-Server <em>Mit PocketPrint3D Cloud verbinden</em>
+        einschalten (Unraid-Vorlage, Option im Home-Assistant-Add-on oder Webseite des Servers → Einstellungen). Ohne Server:
+        das kleine Docker-Image <code>ghcr.io/halvar20000/printshare-bridge</code>.</li>
+      <li>Die Brücke zeigt einen Code (Container-Protokoll oder ihre Webseite).</li>
+      <li>In der App: <span class="path">Einstellungen → Erweitert → Unterwegs drucken</span>, Code eingeben, <span class="path">Verbinden</span>.</li>
+      <li>Die Drucker der Brücke erscheinen in deinem Konto („über Brücke“). Weitere Drucker:
+        <span class="path">Drucker über die Brücke hinzufügen</span> – Adresse und Passwort werden so verschlüsselt, dass nur deine Brücke sie lesen kann.</li>
+    </ol>
+    <p style="color:var(--muted);font-size:15px">Nur eine ausgehende Verbindung: im Router muss nichts freigegeben werden, deine Drucker bleiben unsichtbar im Internet.</p>
+
+    <h3>Am Computer</h3>
+    <ul class="plain">
+      <li><a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> öffnen und mit derselben E-Mail anmelden – dieselben Drucker, Aufträge und Spulen.</li>
+      <li>Eine Modelldatei einfach auf die Seite ziehen.</li>
+      <li>Aus dem Browser drucken geht bei Druckern hinter einer Brücke. Die anderen sind mit „Nur Handy“ markiert: dort in der App starten oder den G-Code herunterladen.</li>
+    </ul>
+
+    <h3>Aus OrcaSlicer senden</h3>
+    <ol class="steps">
+      <li>In der App oder im Browser: <span class="path">Einstellungen → dein Drucker → Aus OrcaSlicer am Computer senden</span> →
+        <span class="path">Zugang erstellen</span>. Du bekommst eine Adresse und einen Key (wird nur einmal angezeigt).</li>
+      <li>In OrcaSlicer: WLAN-Symbol neben dem Drucker (physischen Drucker hinzufügen) → Host-Typ <strong>Octo/Klipper</strong> →
+        Adresse und Key eintragen → <em>Test</em>.</li>
+      <li>Nach dem Slicen: <em>Hochladen</em> – der Druck liegt als Auftrag in der App bereit. <em>Hochladen und drucken</em> –
+        startet sofort bei einem Drucker hinter einer Brücke und bucht die zuletzt benutzte Spule.</li>
+    </ol>
+
+    <h3>Filament-Spulen</h3>
+    <ul class="plain">
+      <li><span class="path">Einstellungen → Erweitert → Filament-Spulen</span>: Spulen in deinem PocketPrint3D-Konto führen oder deinen eigenen Spoolman verbinden.</li>
+      <li>Beim Drucken wählst du die Spule pro Farbe. Du wirst gewarnt, wenn eine nicht reicht oder das Material nicht passt.</li>
+      <li>Das verbrauchte Filament wird gebucht, wenn der Druck fertig ist. Mit Spulen im Konto auch dann, wenn die App geschlossen ist (Drucker hinter einer Brücke).</li>
+      <li>Neue Spulen: aus der Filament-Datenbank wählen oder das Handy an eine OpenPrintTag-NFC-Spule halten (Android).</li>
+    </ul>
+
+    <h3>Mehrfarbdruck (AFC / CANVAS)</h3>
+    <p>Bei mehrfarbigen Modellen wählst du vor dem Berechnen den Slot für jede Farbe; leere Slots werden markiert, und das
+      Material richtet sich nach dem Filament im Slot. Für Klipper-Drucker mit AFC (z. B. Centauri Carbon mit COSMOS + CANVAS).</p>
+
+    <h3>Eigene OrcaSlicer-Profile</h3>
+    <p><span class="path">Einstellungen → dein Drucker → Druckerprofil</span>: deine OrcaSlicer-Profile für Drucker, Qualität und
+      Material hochladen oder den Link eines öffentlichen Orca-Cloud-Bundles einfügen. Sie werden sofort zum Berechnen benutzt.</p>
+
+    <h3>Extras mit eigenem Server</h3>
+    <dl>
+      <dt>Deine Modell-Bibliothek</dt><dd>Manyfold zu Hause erscheint als Suchquelle neben Printables.</dd>
+      <dt>KI-Fehlererkennung</dt><dd>Mit Obicos ML-API werden beim Drucken Kamerabilder geprüft; ein wahrscheinlicher Fehldruck kann den Druck pausieren.</dd>
+      <dt>Drucker ein/aus</dt><dd>Eine smarte Steckdose in Home Assistant schaltet den Drucker aus der App ein und aus.</dd>
+      <dt>Genaue Zeiten für Klipper</dt><dd>Druckzeiten mit den eigenen Grenzwerten deines Druckers neu berechnet (klipper_estimator).</dd>
+    </dl>
+    <p style="color:var(--muted);font-size:15px">Installation und Details: <a href="https://github.com/halvar20000/printshare">GitHub</a> (README).
+      Fehlt etwas oder klappt etwas nicht? Dort ein Issue anlegen.</p>
+  </section>
+
+  <footer>
+    <a href="/de/">Startseite</a><a href="/privacy/">Datenschutz</a><a href="/impressum/">Impressum</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
+  </footer>
+</div>
+</body>
+</html>
