@@ -38,10 +38,11 @@ jobs:
           pi-gen-version: arm64
           stage-list: stage0 stage1 stage2 ./pi-image/stage-pp3d
           hostname: pocketprint3d
-          # an account without password (locked) and no SSH: nobody can log in with a known default password
+          # an account without password (locked) and no SSH: nobody can log in with a known default password. The first-boot
+          # user wizard stays on (pi-gen refuses to switch it off without a password); it only waits on a connected
+          # keyboard/screen and doesn't hold up the bridge, which starts on its own (pocketprint3d-firstboot.service).
           username: pp3d
           password: ""
-          disable-first-boot-user-rename: 1
           enable-ssh: 0
           locale: en_US.UTF-8
           timezone: Etc/UTC

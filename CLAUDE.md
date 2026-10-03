@@ -829,7 +829,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   preloaded as `files/bridge-image.tar` (saved by the workflow, gitignored); `pocketprint3d-firstboot.service` (docker
   load, token, `pocketprint3d-start` with host network + `PRINTSHARE_PORT=80`), `pocketprint3d-update.timer` (nightly
   pull), `pocketprint3d-code`. Host name `pocketprint3d`, user `pp3d` locked (no password), SSH off - never ship a
-  default password. `.github/workflows/pi-image.yml` (manual or tag `pi-image-v*`, usimd/pi-gen-action@v1 on
+  default password. pi-gen refuses `disable-first-boot-user-rename` without a password → the first-boot user
+  wizard stays (console only, doesn't block the bridge). The action's `increase-runner-disk-size` fails on arm64 runners (apt exit 100). `.github/workflows/pi-image.yml` (manual or tag `pi-image-v*`, usimd/pi-gen-action@v1 on
   ubuntu-24.04-arm) → release `pi-image-v<version>` with `pocketprint3d-bridge-pi.img.xz` (+ .sha256), linked from the
   site as `releases/latest/download/…`. Needs the bridge image of that version on GHCR first.
 - Pair by tap: `PRINTSHARE_BRIDGE_ONLY=1` (Dockerfile.bridge) → `/api/bridge/hello` (no token), `/api/bridge/local-code`
