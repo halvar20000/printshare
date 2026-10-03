@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.30.0
+- Jobs survive a restart or an update: sliced models stay in the job list and can still be sent. A job that was being
+  sliced or sent at that moment says so. Old jobs clean up after themselves: at most 50 (per account in the cloud), none
+  older than 14 days, with their G-code.
+
 ## 0.29.0
 - PocketPrint3D Cloud: spool bookings live in the account. With spools kept in the cloud, the used filament is booked when
   the print finishes - also for prints started in the browser, and for printers behind a bridge even when no app is

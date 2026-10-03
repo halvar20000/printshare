@@ -75,6 +75,7 @@ from .cloud import accounts
 from .cloud.spools import Spools
 from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
+from .jobstore import JobStore
 from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient
 from .bridge.dispatch import dispatch as bridge_dispatch
@@ -97,7 +98,9 @@ from .search import Search
 
 WEB = Path(__file__).parent / "web"
 PLATES = ["Textured PEI Plate", "High Temp Plate", "Cool Plate", "Engineering Plate", "Supertack Plate"]
-MAX_JOBS = 50
+MAX_JOBS = 50                 # per account (cloud) / per server (home)
+JOB_MAX_AGE_DAYS = 14         # older jobs and their G-code are deleted (BE-05)
+JOB_SYNC_S = 2
 MAX_UPLOAD = 300 * 1024 * 1024
 UPLOAD_PREFIX = "upload:"
 
@@ -109,15 +112,22 @@ async def _lifespan(_app):
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
+    _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
     yield
     await BRIDGE_CLIENT.stop()
+    await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.29.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.30.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 JOBS: dict[str, dict[str, Any]] = {}
+# jobs survive restarts (every cloud update restarts the server): mirrored into SQLite next to the account database
+# (cloud) or in the work folder (home server)
+JOB_STORE = JobStore(Path(settings.cloud_db).parent / "jobs.db" if settings.cloud else Path(settings.work_dir) / "jobs.db",
+                     keep_per_owner=MAX_JOBS, max_age_days=JOB_MAX_AGE_DAYS)
+JOBS.update(JOB_STORE.load())
 # temperature history for printers that don't keep one (Centauri): filled from status queries
 TEMP_LOG: dict[str, deque] = {}
 TEMP_LOG_SECONDS = 30 * 60
@@ -250,10 +260,8 @@ def _spawn(coro) -> None:
 
 
 def _new_job(kind: str, state: str, request: dict[str, Any], owner: str = "local") -> dict[str, Any]:
-    # forget the oldest finished jobs (in memory only; G-code cleanup is BE-05)
-    for old in sorted(JOBS.values(), key=lambda j: j["created"])[:max(0, len(JOBS) - MAX_JOBS + 1)]:
-        if old["state"] not in ("slicing", "sending", "running"):
-            JOBS.pop(old["id"], None)
+    # at most MAX_JOBS per account and none older than JOB_MAX_AGE_DAYS - with their G-code (BE-05)
+    JOB_STORE.prune(JOBS)
     job = {"id": uuid.uuid4().hex[:10], "kind": kind, "state": state, "log": [], "result": None,
            "error": None, "created": time.time(), "request": request, "owner": owner}
     JOBS[job["id"]] = job
@@ -379,7 +387,7 @@ def admin_stats(acct: Account = Depends(auth)) -> dict[str, Any]:
     if acct.id != "admin":
         raise HTTPException(403, "operator only")
     return {**ACCOUNTS.stats(), "spools": SPOOLS.count(), "bridges": BRIDGES.count(), "bridges_online": HUB.count(),
-            "jobs_in_memory": len(JOBS),
+            "jobs": len(JOBS),
             "slicing_now": sum(1 for j in JOBS.values() if j["state"] == "slicing")}
 
 
@@ -1823,6 +1831,21 @@ def _validate_options(acct: "Account", printer: PrinterConfig, o: OptionsModel) 
     if opts.process and opts.process != s.process and not fits("process", opts.process):
         raise HTTPException(400, f"quality {opts.process!r} does not fit {printer.name or printer.id}")
     return opts
+
+
+async def _jobs_loop() -> None:
+    """Mirror the jobs into the job store every few seconds; clean up old ones once an hour."""
+    last_prune = 0.0
+    while True:
+        await asyncio.sleep(JOB_SYNC_S)
+        try:
+            if time.time() - last_prune > 3600:
+                last_prune = time.time()
+                await asyncio.to_thread(JOB_STORE.prune, JOBS)
+            await asyncio.to_thread(JOB_STORE.sync, JOBS)
+        except Exception:  # noqa: BLE001 - never stop saving
+            import logging
+            logging.getLogger(__name__).exception("job store")
 
 
 @app.post("/api/jobs")

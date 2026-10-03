@@ -344,6 +344,11 @@ Plate options (since 0.14.0; older servers ignore them silently, so check `/api/
 - `scale` 10–1000: size in percent.
 - `orient` `true`/`false`: lay flat automatically (null = printer setting). Not together with `rotate_x/y` (`400`).
 
+**Jobs are kept (0.30.0):** jobs survive restarts and updates (`printshare/jobstore.py`, SQLite next to the cloud database
+or in the home server's work folder). After a restart a job that was `slicing`/`running` is `error` ("Interrupted by a
+server update …"), one that was `sending` is `sliced` again with that note in `error` (send it again). At most 50 jobs per
+account (cloud) / per server, none older than 14 days; older ones disappear together with their G-code.
+
 ### `GET /api/jobs/{job}`
 ```json
 {"id": "843289d5b2", "kind": "prepare", "state": "sliced",

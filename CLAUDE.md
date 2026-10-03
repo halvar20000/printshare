@@ -789,6 +789,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   use the API, else the phone's local bookings (own Spoolman) as before; web app doesn't report "Nur Handy" printers.
   Bridge sends: `job.printer_file` = the file's name on the printer (bug found in the web test: bookings used the server's
   job file name and never matched). Web texts for desktop (`*Web` keys: welcome, login intro, first printer → bridge, about).
+- **Jobs survive restarts, 0.30.0:** `printshare/jobstore.py` mirrors the in-memory `JOBS` into SQLite (`jobs.db` next to
+  `cloud_db`, or `<work_dir>/jobs.db` on home servers): `_jobs_loop` syncs changed jobs every 2 s (hash per job, deletes
+  removed ones), lifespan exit syncs once more, `load()` at import marks interrupted slicing/running → error,
+  sending → sliced. `prune()` (on every new job + hourly): 50 per owner (was 50 for the whole server!), 14 days, removes the
+  job's own G-code folder `<gcode>/<printer>/<job id>`. Still not cleaned: uploads and the download cache per user.
 - Web 404 handling: the web app is served from the 404 handler (`_http_errors`, only for "Not Found" outside api/ static/
   spoolman/), not a catch-all route - routes added later (tests, harnesses) win.
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
