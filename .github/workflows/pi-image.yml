@@ -49,7 +49,8 @@ jobs:
           keyboard-layout: English (US)
           compression: xz
           compression-level: 6
-          increase-runner-disk-size: true
+          # not on arm64: its `apt purge` names packages the arm runner image lacks → apt exits 100; the arm runner has room
+          increase-runner-disk-size: false
           github-token: ${{ github.token }}
       - name: Release
         env:
