@@ -879,6 +879,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   credentials to unconfirmed hosts.
   Also Thomas' Wyze cam with the official Wyze RTSP firmware (LIVE555, digest auth before any path check, `rtsp://user:pass@
   192.168.86.220/live`, URL in `.secrets/camera-wyze-url`): 1920x1080, ~70 KB, ~2 s. Test pictures show people → delete them.
+  **End to end 2026-10-04:** app build 41 + Tower 0.36.0: the Wyze set as own camera of P1S .20 in the app → its picture shows on
+  the printers tab (through the bridge).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
