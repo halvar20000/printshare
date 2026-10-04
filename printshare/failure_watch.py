@@ -185,7 +185,7 @@ class FailureWatcher:
         if w.muted or w.alerted_at:
             return
         try:
-            source = await adapter.camera() if hasattr(adapter, "camera") else None
+            source = await cam.source_for(printer, adapter)
             if source is None:
                 w.error = "no camera"
                 return

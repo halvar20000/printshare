@@ -127,7 +127,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.35.2", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.36.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1796,7 +1796,7 @@ async def _camera(acct: "Account", printer_id: str) -> cam.Camera:
     printer = _printer(acct, printer_id)
     adapter = get_adapter(printer)
     try:
-        source = await adapter.camera() if hasattr(adapter, "camera") else None
+        source = await cam.source_for(printer, adapter)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"camera not reachable: {e}")
     if source is None:

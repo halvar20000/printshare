@@ -184,6 +184,7 @@ class PrinterConfig:
     username: str = "maker"       # prusalink (HTTP digest), shown on the printer's screen
     password: str | None = None   # prusalink; bambu_lan: the access code shown on the printer
     serial: str | None = None     # bambu_lan; read from the printer's TLS certificate when not set
+    camera_url: str | None = None # own camera instead of the built-in one: rtsp://user:pass@ip:554/stream1 or http(s)://…
     auto_leveling: bool = True    # elegoo_sdcp
     mainboard_id: str | None = None  # elegoo_sdcp; looked up via UDP discovery if not set
     bridge: str | None = None     # cloud: the printer sits behind this bridge (docs/BRIDGE.md) …

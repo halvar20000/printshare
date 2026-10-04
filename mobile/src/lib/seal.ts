@@ -37,7 +37,8 @@ export function fromBase64(text: string): Uint8Array {
   return out.subarray(0, j);
 }
 
-export type SealSecrets = { address?: string; password?: string; api_key?: string; access_code?: string };
+export type SealSecrets = { address?: string; password?: string; api_key?: string; access_code?: string;
+  camera_url?: string };          // own camera (RTSP / HTTP); "" removes it
 
 /** Seal `data` for the bridge with this public key (base64, 32 bytes). `random(n)` must be cryptographically secure. */
 export function seal(publicKeyB64: string, data: SealSecrets, random: (n: number) => Uint8Array): string {

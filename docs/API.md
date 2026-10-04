@@ -558,7 +558,8 @@ On the user's own server (not in the cloud), with the server's token:
 - `POST /api/bridge {"enabled": bool}` – switch bridge mode on/off (kept in `bridge.yaml`; else config `bridge: true` /
   env `PRINTSHARE_BRIDGE=1`). `POST /api/bridge/reset` – forget the pairing, show a new code.
 - Methods the bridge answers: docs/BRIDGE.md section 6. `printer.add {"printer": {"name", "type", "machine"?, "cosmos"?},
-  "sealed": "<pp3d-seal-v1 blob of {address, password?, api_key?}>"}` → the printer as in `printers.list`;
+  "sealed": "<pp3d-seal-v1 blob of {address, password?, api_key?, camera_url?}>"}` (camera_url since 0.36.0: own RTSP/HTTP camera
+  instead of the built-in one, "" removes it) → the printer as in `printers.list`;
   `printer.update {"printer": id, …}` (address/secrets kept unless sealed again), `printer.remove {"printer"}` (only
   printers added this way); `job.send {"printer", "job", "start", "confirm", "leveling"?, "lanes"?, "spool_id"?}` →
   `{"state": "started|uploaded", "file"}`, errors `confirm_required`, `busy`, `download_failed`, `send_failed`;

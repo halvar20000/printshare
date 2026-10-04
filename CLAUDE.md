@@ -859,12 +859,22 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   "fail" reply to project_file) and else raises a clear "switch on LAN-only mode" error instead of a silent "started".
 - Camera (0.35.2): `grab_frame()` = TLS to port 6000, login `<IIII 0x40,0x3000,0,0>` + "bblp" + access code (32 bytes each,
   zero-padded), frames = 16-byte header (size LE) + JPEG; cached 2 s; `Camera(grab=…)` in camera.py (stills only). P1S .53:
-  1280x720, ~85 KB, ~2.5 s. P1S .20 refused port 6000 (connection refused) - to be checked on the printer.
+  1280x720, ~85 KB, ~2.5 s. P1S .20 refused port 6000: its camera has been broken for a while (Thomas) - not our bug.
 - **Through the app 2026-10-04** (Android build 39/40, Tower 0.35.0 as bridge, `PRINTSHARE_LAN_SUBNET=192.168.86.0/24` added
   by hand - old Unraid templates don't get new fields): both P1S added via the bridge, a print from the app (cloud slicing
   → bridge → P1S .53) worked perfectly. Without the LAN setting the bridge (Docker bridge network 172.17.0.6) found
   nothing → 0.35.1: the app sends its Wi-Fi subnet as a hint, SDCP runs in parallel, discover timeout 60 s.
 - Local Orca in this container needs the /tmp/u24 rootfs via proot for slicing (missing WebKitGTK libs on the host).
+
+## Own camera per printer (2026-10-04, server 0.36.0)
+- Thomas: the camera of P1S .20 is broken → an IP camera (RTSP) instead. `PrinterConfig.camera_url` (rtsp(s)/http(s),
+  `camera.check_url`); `camera.source_for(printer, adapter)` = own camera first, else the adapter's (used by the camera
+  endpoints, time-lapse, failure detection, bridge). RTSP: one frame per request with the imageio-ffmpeg binary
+  (`-rtsp_transport tcp`, cached 2 s, passwords masked in errors); HTTP: MJPEG stream if the URL looks like one, else a
+  snapshot address. Bridge printers: `camera_url` goes in the sealed secrets (`registry.build`, "" removes); app field
+  "Eigene Kamera" in `cloud-printer/[id]` for bridge printers + "Eigene Kamera entfernen". Own servers: `camera_url:` in
+  config.yaml. Thomas' camera at .141 (URL in `.secrets/camera-p1s-20-url`) refused every port when tested - RTSP probably
+  not switched on in its app yet; **not yet tested with a real RTSP camera**.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

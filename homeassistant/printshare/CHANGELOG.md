@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.36.0
+- Own camera per printer: use an IP camera (RTSP, e.g. Tapo or Reolink) or a webcam address instead of the printer's
+  built-in camera - for the picture in the app, time-lapse and failure detection. In the app for printers behind a
+  bridge (sent encrypted to it), on your own server as `camera_url` in config.yaml.
+
 ## 0.35.2
 - Bambu Lab: camera pictures (P1S/P1P/A1) on the printers tab, full screen and for time-lapse.
 - Bambu Lab: a print the printer doesn't take (e.g. without LAN-only mode) now shows a clear message instead of

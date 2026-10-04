@@ -6,7 +6,12 @@ Where a camera comes from is decided by the printer adapter (`adapter.camera()` 
 """
 from __future__ import annotations
 
+import asyncio
 import io
+import re
+import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable
 
@@ -111,3 +116,76 @@ async def open_stream(cam: Camera) -> tuple[str, AsyncIterator[bytes], Any]:
         await client.aclose()
 
     return r.headers.get("content-type", "multipart/x-mixed-replace"), r.aiter_raw(), close
+
+
+# ---------- own camera per printer (camera_url): RTSP IP cameras or an HTTP webcam instead of the built-in one ----------
+URL_SCHEMES = ("rtsp", "rtsps", "http", "https")
+RTSP_TIMEOUT_S = 20
+_RTSP_CACHE_S = 2.0
+_rtsp_frames: dict[str, tuple[float, bytes]] = {}
+_rtsp_locks: dict[str, threading.Lock] = {}
+
+
+def check_url(url: str) -> str:
+    """A camera address the server may open: rtsp(s)://… or http(s)://… with a host. Raises ValueError otherwise."""
+    url = (url or "").strip()
+    m = re.match(r"^([a-z]+)://([^/?#]+)", url, re.I)
+    if not m or m.group(1).lower() not in URL_SCHEMES or len(url) > 500 or any(c in url for c in " \n\r\t"):
+        raise ValueError("the camera address must start with rtsp://, rtsps://, http:// or https://")
+    return url
+
+
+def masked(url: str) -> str:
+    """The address without user and password, for messages and logs."""
+    return re.sub(r"//[^/@]*@", "//", url)
+
+
+def ffmpeg_frame(source: str, rtsp: bool = True, timeout_s: float = RTSP_TIMEOUT_S) -> bytes:
+    """One JPEG from a video source with ffmpeg (the one shipped for time-lapse, imageio-ffmpeg)."""
+    from .timelapse import ffmpeg_exe
+    exe = ffmpeg_exe()
+    if not exe:
+        raise CameraError("ffmpeg is missing on the server")
+    cmd = [exe, "-hide_banner", "-loglevel", "error"]
+    if rtsp:
+        cmd += ["-rtsp_transport", "tcp", "-timeout", str(int(timeout_s * 1_000_000))]
+    cmd += ["-i", source, "-frames:v", "1", "-q:v", "4", "-f", "image2", "-c:v", "mjpeg", "pipe:1"]
+    try:
+        p = subprocess.run(cmd, capture_output=True, timeout=timeout_s + 5)
+    except subprocess.TimeoutExpired as e:
+        raise CameraError("the camera didn't send a picture in time") from e
+    if p.returncode != 0 or p.stdout[:2] != SOI:
+        err = p.stderr.decode("utf-8", "replace").replace(source, masked(source)).strip().splitlines()
+        reason = (err[-1] if err else f"exit {p.returncode}")[:200]
+        raise CameraError(f"camera not reachable: {reason}")
+    return p.stdout
+
+
+def rtsp_frame(url: str) -> bytes:
+    """Cached for 2 s: thumbnails, time-lapse and failure detection share one connection."""
+    lock = _rtsp_locks.setdefault(url, threading.Lock())
+    with lock:
+        hit = _rtsp_frames.get(url)
+        if hit and time.time() - hit[0] < _RTSP_CACHE_S:
+            return hit[1]
+        jpeg = ffmpeg_frame(url)
+        _rtsp_frames[url] = (time.time(), jpeg)
+        return jpeg
+
+
+def external(url: str) -> Camera:
+    url = check_url(url)
+    if url.lower().startswith("rtsp"):
+        return Camera(name="RTSP", grab=lambda: asyncio.to_thread(rtsp_frame, url))
+    # HTTP: an MJPEG stream (…/stream, ?action=stream, .mjpg) or a single picture (snapshot address)
+    if re.search(r"stream|mjpe?g|video", url, re.I):
+        return Camera(stream_url=url, name="Webcam")
+    return Camera(snapshot_url=url, name="Webcam")
+
+
+async def source_for(printer: Any, adapter: Any) -> Camera | None:
+    """The camera of a printer: its own camera address if set, else the printer's built-in one."""
+    url = getattr(printer, "camera_url", None)
+    if url:
+        return external(url)
+    return await adapter.camera() if hasattr(adapter, "camera") else None

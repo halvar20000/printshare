@@ -40,6 +40,9 @@ export default function CloudPrinter() {
   const [address, setAddress] = useState("");
   const [password, setPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
+  // own camera (RTSP / HTTP webcam) instead of the built-in one - bridge printers only, sealed like a password
+  const [cameraUrl, setCameraUrl] = useState("");
+  const [cameraMsg, setCameraMsg] = useState("");
   const [models, setModels] = useState<{ name: string; vendor: string }[] | null>(null);
   const [sheet, setSheet] = useState<"type" | "model" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -175,6 +178,7 @@ export default function CloudPrinter() {
       if (viaBridge) {
         // address and secrets go sealed to the bridge; the cloud and this phone don't keep them
         const secrets = { ...(address.trim() ? { address: address.trim() } : {}),
+                          ...(cameraUrl.trim() ? { camera_url: cameraUrl.trim() } : {}),
                           ...(access.password ? { password: access.password } : {}),
                           ...(access.apiKey?.trim() ? { api_key: access.apiKey.trim() } : {}) };
         const sealed = () => {
@@ -199,6 +203,17 @@ export default function CloudPrinter() {
     }
   };
 
+  const removeCamera = async () => {
+    if (!api || !viaBridge || !bridgeInfo?.key) return;
+    try {
+      await api.bridgePrinterAccess(id, seal(bridgeInfo.key, { camera_url: "" }, n => Crypto.getRandomBytes(n)));
+      setCameraUrl("");
+      setCameraMsg(t("ownCameraRemoved"));
+    } catch (e) {
+      setError(errorText(t, e));
+    }
+  };
+
   const remove = async () => {
     if (!api || !server || !(await confirmAsync(t("deletePrinterQ", { name }), t("del"), t("cancelBtn")))) return;
     try {
@@ -216,12 +231,13 @@ export default function CloudPrinter() {
   // a name is optional: without one the printer is called after its model or type
   const autoName = (machine && (needsModel(type) || type === "moonraker") ? machine.replace(/\s+[\d.]+\s*nozzle$/i, "") : "")
     || (type === "moonraker" && cosmos ? "Centauri Carbon" : typeLabel(type));
+  const badCamera = !!cameraUrl.trim() && !/^(rtsps?|https?):\/\/[^\s/]+/i.test(cameraUrl.trim());
   const missingCreds = (type === "prusalink" && !password && !apiKey) || (type === "octoprint" && !apiKey)
     || (type === "bambu_lan" && !password);
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
-      disabled={missingModel || (isNew && !webOnly && !address.trim()) || (isNew && !!viaBridge && missingCreds)} />}>
+      disabled={missingModel || badCamera || (isNew && !webOnly && !address.trim()) || (isNew && !!viaBridge && missingCreds)} />}>
       <Stack.Screen options={{ title: isNew ? t("addPrinter") : name || t("printer") }} />
       {error ? <Banner kind="error" text={error} /> : null}
       {viaBridge ? <Banner kind="info" icon="git-network-outline"
@@ -329,6 +345,16 @@ export default function CloudPrinter() {
         {t("prusaHint")}</Text> : null}
       {type === "bambu_lan" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("bambuHint")}</Text> : null}
+
+      {viaBridge ? (
+        <Section title={t("ownCamera")} footer={badCamera ? t("ownCameraBad") : cameraMsg || t(isNew ? "ownCameraHint" : "ownCameraEditHint")}>
+          <TextInput value={cameraUrl} onChangeText={v => { setCameraUrl(v); setCameraMsg(""); }}
+            placeholder="rtsp://benutzer:passwort@192.168.1.60:554/stream1" placeholderTextColor={c.sub}
+            autoCapitalize="none" autoCorrect={false} keyboardType="url" secureTextEntry={false}
+            accessibilityLabel={t("ownCamera")} style={input} />
+          {!isNew ? <><Divider /><Row icon="close-circle-outline" label={t("ownCameraRemove")} onPress={removeCamera} /></> : null}
+        </Section>
+      ) : null}
       {type === "octoprint" && !(WEB_APP && !viaBridge) ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("octoHint")}</Text> : null}
 

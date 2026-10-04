@@ -73,6 +73,11 @@ def build(fields: dict[str, Any], secrets: dict[str, Any], pid: str, old: dict[s
         value = secrets.get(src, old.get(key))
         if value:
             cfg[key] = str(value)
+    # own camera (RTSP / HTTP) - sealed like a password (it often carries the camera's login); "" removes it
+    camera = secrets.get("camera_url", old.get("camera_url"))
+    if camera:
+        from ..camera import check_url
+        cfg["camera_url"] = check_url(str(camera))
     slicing = dict(old.get("slicing") or {})
     if fields.get("machine"):
         slicing["machine"] = str(fields["machine"])

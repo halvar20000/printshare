@@ -52,3 +52,14 @@ printers:
   #   api_key: 0123456789ABCDEF
   #   slicing:
   #     machine: Creality Ender-3 V2 0.4 nozzle
+
+  # Bambu Lab (P1S, P1P, X1, A1) in LAN-only mode (+ developer mode on newer firmware). password = the access code shown
+  # on the printer (Settings > WLAN); the serial number is read from the printer.
+  # - id: p1s
+  #   name: Bambu Lab P1S
+  #   type: bambu_lan
+  #   host: 192.168.1.80
+  #   password: "12345678"
+  #   # camera_url: rtsp://user:pass@192.168.1.81:554/stream1   # optional, any printer: own IP camera instead of the built-in one
+  #   slicing:
+  #     machine: Bambu Lab P1S 0.4 nozzle
