@@ -850,13 +850,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (`maps_tools` → pipeline doesn't rewrite T codes), `subtask_name` = G-code stem (job tracking matches). Serial from the
   TLS cert CN (`read_serial`), model from the serial prefix (01P = P1S …) → machine preset. Bridge discovery: port 8883
   + cert issuer "BBL CA" (also answers in cloud mode). App: type "Bambu Lab (LAN-Modus)" only via a bridge, access code
-  field, model prefilled from discovery. Camera (port 6000) not yet.
+  field, model prefilled from discovery.
 - **Verified live 2026-10-04** on Thomas' P1S .53 (FW 01.09.01.00, LAN-only + developer mode): discovery, status, AMS,
   upload, and a **real print** (20 mm cube, PLA from tray 2 via ams_mapping [1], 50 layers, ~13 min incl. heat/levelling;
   job tracking → finished). Second P1S .20 (FW 01.08.01.00, cloud mode, BigTreeTech Panda Touch, Thomas won't update it):
   status/AMS and the chamber light work in cloud mode, but the **print start is ignored without LAN-only mode** (Thomas had
-  to switch .20 to LAN mode, then it printed). → 0.35.2: `send` waits up to 45 s for gcode_state PREPARE/RUNNING (or a
+  to switch .20 to LAN mode, then it printed; FW 01.08.01.00 has no developer mode - LAN-only alone is enough there). → 0.35.2: `send` waits up to 45 s for gcode_state PREPARE/RUNNING (or a
   "fail" reply to project_file) and else raises a clear "switch on LAN-only mode" error instead of a silent "started".
+- Camera (0.35.2): `grab_frame()` = TLS to port 6000, login `<IIII 0x40,0x3000,0,0>` + "bblp" + access code (32 bytes each,
+  zero-padded), frames = 16-byte header (size LE) + JPEG; cached 2 s; `Camera(grab=…)` in camera.py (stills only). P1S .53:
+  1280x720, ~85 KB, ~2.5 s. P1S .20 refused port 6000 (connection refused) - to be checked on the printer.
 - **Through the app 2026-10-04** (Android build 39/40, Tower 0.35.0 as bridge, `PRINTSHARE_LAN_SUBNET=192.168.86.0/24` added
   by hand - old Unraid templates don't get new fields): both P1S added via the bridge, a print from the app (cloud slicing
   → bridge → P1S .53) worked perfectly. Without the LAN setting the bridge (Docker bridge network 172.17.0.6) found

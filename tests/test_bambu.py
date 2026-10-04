@@ -172,3 +172,64 @@ def test_a_start_the_printer_ignores_is_an_error(fake, tmp_path, monkeypatch):
     link.replies["project_file"] = {"result": "fail", "reason": "busy", "_at": 9e12}
     with pytest.raises(bambu.BambuError, match="busy"):
         asyncio.run(a.send(CONE, start=True))
+
+
+def _self_signed(tmp_path: Path) -> tuple[Path, Path]:
+    import datetime
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "01P00C0000000")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "BBL CA")]))
+            .public_key(key.public_key()).serial_number(1).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256()))
+    c, k = tmp_path / "c.pem", tmp_path / "k.pem"
+    c.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    k.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    return c, k
+
+
+def test_camera_frames_over_tls(tmp_path, monkeypatch):
+    """A fake P1S camera: checks the 80-byte login, then sends one frame (16-byte header + JPEG)."""
+    import socket
+    import ssl
+    import struct
+    from printshare import camera
+    cert, key = _self_signed(tmp_path)
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cert, key)
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(4)
+    port = srv.getsockname()[1]
+    jpeg = b"\xff\xd8" + b"x" * 1000 + b"\xff\xd9"
+    logins: list[bytes] = []
+
+    def serve():
+        for _ in range(2):
+            conn, _ = srv.accept()
+            with ctx.wrap_socket(conn, server_side=True) as s:
+                login = b""
+                while len(login) < 80:
+                    chunk = s.recv(80 - len(login))
+                    if not chunk:                     # read_serial only does the handshake
+                        break
+                    login += chunk
+                logins.append(login)
+                s.sendall(struct.pack("<IIII", len(jpeg), 0, 1, 0) + jpeg)
+    threading.Thread(target=serve, daemon=True).start()
+    monkeypatch.setattr(bambu, "CAMERA_PORT", port)
+    a = get_adapter(PrinterConfig(id="p1s", type="bambu_lan", host="127.0.0.1", password="12345678"))
+    src = asyncio.run(a.camera())
+    assert src.info()["snapshot"] and not src.info()["stream"]
+    assert asyncio.run(camera.snapshot(src)) == jpeg
+    assert asyncio.run(camera.snapshot(src)) == jpeg          # within 2 s: the same frame, no 2nd connection
+    assert len(logins) == 1 and logins[0][:16] == struct.pack("<IIII", 0x40, 0x3000, 0, 0)
+    assert logins[0][16:48].rstrip(b"\0") == b"bblp" and logins[0][48:80].rstrip(b"\0") == b"12345678"
+    # serial from the certificate (what the adapter reads on port 8883)
+    monkeypatch.setattr(bambu, "MQTT_PORT", port)
+    assert bambu.read_serial("127.0.0.1") == ("01P00C0000000", True)
+    srv.close()

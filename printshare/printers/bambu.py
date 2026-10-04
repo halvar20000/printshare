@@ -23,19 +23,20 @@ import logging
 import re
 import socket
 import ssl
+import struct
 import threading
 import time
 import zipfile
 from pathlib import Path
 from typing import Any
 
-from ..camera import Camera
+from ..camera import Camera, CameraError
 from ..config import PrinterConfig
 from .. import gcode_info
 
 log = logging.getLogger(__name__)
 
-MQTT_PORT, FTPS_PORT = 8883, 990
+MQTT_PORT, FTPS_PORT, CAMERA_PORT = 8883, 990, 6000
 USER = "bblp"
 READY_TIMEOUT_S = 8.0
 # after "project_file": the printer must start preparing within this time (seen: ~1-5 s on a P1S). Without LAN-only
@@ -385,6 +386,52 @@ def upload(host: str, code: str, name: str, data: bytes) -> None:
             ftp.close()
 
 
+# ---------- camera (P1, A1: JPEG frames over TLS on port 6000; X1 has RTSPS on 322 instead) ----------
+_FRAME_MAX = 4 * 1024 * 1024
+_FRAME_CACHE_S = 2.0           # thumbnails, time-lapse and failure detection may ask at once: one connection
+_frames: dict[str, tuple[float, bytes]] = {}
+_frame_locks: dict[str, threading.Lock] = {}
+
+
+def _recv_exact(s: ssl.SSLSocket, n: int) -> bytes:
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = s.recv(n - len(buf))
+        if not chunk:
+            raise CameraError("the printer closed the camera connection")
+        buf += chunk
+    return bytes(buf)
+
+
+def grab_frame(host: str, code: str, timeout: float = 12.0) -> bytes:
+    """One JPEG: log in with an 80-byte packet (0x40, 0x3000, 0, 0, user, access code), then each frame comes as a
+    16-byte header (little-endian size, …) and the JPEG. Checked on a P1S: 1280x720, ~85 KB, first frame after ~2 s."""
+    lock = _frame_locks.setdefault(host, threading.Lock())
+    with lock:
+        cached = _frames.get(host)
+        if cached and time.time() - cached[0] < _FRAME_CACHE_S:
+            return cached[1]
+        login = struct.pack("<IIII", 0x40, 0x3000, 0, 0) + USER.encode().ljust(32, b"\0") + code.encode()[:32].ljust(32, b"\0")
+        try:
+            with socket.create_connection((host, CAMERA_PORT), timeout=timeout) as raw:
+                with tls_context().wrap_socket(raw) as s:
+                    s.settimeout(timeout)
+                    s.sendall(login)
+                    size = struct.unpack("<I", _recv_exact(s, 16)[:4])[0]
+                    if not 0 < size <= _FRAME_MAX:
+                        raise CameraError("the printer sent no camera image (wrong access code?)")
+                    jpeg = _recv_exact(s, size)
+        except ConnectionRefusedError as e:
+            raise CameraError("the printer's camera doesn't answer (port 6000) - is its camera / liveview switched on "
+                              "on the printer?") from e
+        except (OSError, ssl.SSLError) as e:
+            raise CameraError(f"camera not reachable: {e.__class__.__name__}") from e
+        if jpeg[:2] != b"\xff\xd8":
+            raise CameraError("the printer sent something that isn't a JPEG")
+        _frames[host] = (time.time(), jpeg)
+        return jpeg
+
+
 class Bambu:
     maps_tools = True          # lanes go into ams_mapping, the G-code stays as sliced (pipeline.send_job)
 
@@ -447,13 +494,15 @@ class Bambu:
             reply = lk.replies.get("project_file")
             if reply and reply.get("_at", 0) >= sent_at and str(reply.get("result", "")).lower() in ("fail", "failed", "error"):
                 reason = reply.get("reason") or reply.get("err_code") or "refused"
-                raise BambuError(f"The printer refused the print ({reason}) - is LAN-only mode with developer mode on?")
+                raise BambuError(f"The printer refused the print ({reason}) - is LAN-only mode on (and developer mode, "
+                                 "where the firmware has it)?")
             st = lk.snapshot()
             if str(st.get("gcode_state") or "").upper() in _STARTING and st.get("subtask_name") in (task, None, ""):
                 return
             await asyncio.sleep(1)
-        raise BambuError("The printer didn't start the print. Switch on LAN-only mode and developer mode on the printer "
-                         "(Settings → WLAN) - without them Bambu printers take no print jobs from other apps.")
+        raise BambuError("The printer didn't start the print. Switch on LAN-only mode on the printer (Settings → WLAN), "
+                         "with newer firmware also developer mode - without it Bambu printers take no print jobs from "
+                         "other apps.")
 
     async def control(self, action: str) -> None:
         if action not in ("pause", "resume", "cancel"):
@@ -486,4 +535,6 @@ class Bambu:
             raise ValueError(f"can't adjust {kind} {target!r}")
 
     async def camera(self) -> Camera | None:
-        return None            # port 6000 (JPEG over TLS) comes with the next step
+        """Still pictures only (about one every 2 s) - the app's thumbnails, full screen "still", time-lapse."""
+        host, code = self.host, self.code
+        return Camera(name="Bambu Lab", grab=lambda: asyncio.to_thread(grab_frame, host, code))

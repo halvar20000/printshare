@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Awaitable, Callable
 
 import httpx
 
@@ -28,6 +28,7 @@ class Camera:
     headers: dict[str, str] = field(default_factory=dict)
     auth: Any = None                       # httpx auth (PrusaLink digest)
     name: str | None = None
+    grab: Callable[[], Awaitable[bytes]] | None = None   # cameras without HTTP (Bambu P1/A1: JPEG over TLS on port 6000)
 
     def info(self) -> dict[str, Any]:
         return {"available": True, "stream": bool(self.stream_url), "snapshot": True, "name": self.name}
@@ -59,6 +60,8 @@ async def first_frame(cam: Camera) -> bytes:
 
 
 async def snapshot(cam: Camera) -> bytes:
+    if cam.grab is not None:
+        return await cam.grab()
     try:
         if cam.snapshot_url:
             async with _client(cam) as client:

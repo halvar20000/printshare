@@ -1,6 +1,7 @@
 # Changelog
 
 ## 0.35.2
+- Bambu Lab: camera pictures (P1S/P1P/A1) on the printers tab, full screen and for time-lapse.
 - Bambu Lab: a print the printer doesn't take (e.g. without LAN-only mode) now shows a clear message instead of
   "started".
 
