@@ -839,7 +839,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (native only). Tested: unit tests + node against a real bridge-only server and the local cloud (found → code →
   paired → online, account masked). **Not yet built in CI, not yet booted on a real Pi** (Thomas' Pi 3B).
 
-## Bambu Lab adapter (2026-10-04, server 0.35.0, not pushed yet at the time of writing)
+## Bambu Lab adapter (2026-10-04, server 0.35.0/0.35.1)
 - `printers/bambu.py` (`bambu_lan`): one paho-mqtt connection per printer (`link()`, P1 sends deltas → `merge()` by id,
   pushall once on connect), `status_from()` (gcode_state, mc_percent, mc_remaining_time min, layer_num, subtask_name as
   file), AMS trays as lanes (ids A1..A4, B1.., tool = unit*4+tray, `tray_exist_bits`, `tray_now`), controls via
@@ -854,7 +854,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - **Verified live 2026-10-04** on Thomas' P1S .53 (FW 01.09.01.00, LAN-only + developer mode): discovery, status, AMS,
   upload, and a **real print** (20 mm cube, PLA from tray 2 via ams_mapping [1], 50 layers, ~13 min incl. heat/levelling;
   job tracking → finished). Second P1S .20 (FW 01.08.01.00, cloud mode, BigTreeTech Panda Touch, Thomas won't update it):
-  status/AMS and the chamber light work in cloud mode; print start there not tested yet.
+  status/AMS and the chamber light work in cloud mode, but the **print start is ignored without LAN-only mode** (Thomas had
+  to switch .20 to LAN mode, then it printed). → 0.35.2: `send` waits up to 45 s for gcode_state PREPARE/RUNNING (or a
+  "fail" reply to project_file) and else raises a clear "switch on LAN-only mode" error instead of a silent "started".
+- **Through the app 2026-10-04** (Android build 39/40, Tower 0.35.0 as bridge, `PRINTSHARE_LAN_SUBNET=192.168.86.0/24` added
+  by hand - old Unraid templates don't get new fields): both P1S added via the bridge, a print from the app (cloud slicing
+  → bridge → P1S .53) worked perfectly. Without the LAN setting the bridge (Docker bridge network 172.17.0.6) found
+  nothing → 0.35.1: the app sends its Wi-Fi subnet as a hint, SDCP runs in parallel, discover timeout 60 s.
 - Local Orca in this container needs the /tmp/u24 rootfs via proot for slicing (missing WebKitGTK libs on the host).
 
 ## Local Android builds on Tower (2026-10-01)

@@ -193,8 +193,10 @@ need another native module.
 
 **Built (0.35.0):** `printshare/printers/bambu.py`, type `bambu_lan` (host + access code as `password`; serial read from
 the TLS certificate). Verified on a P1S in LAN-only + developer mode (FW 01.09.01.00): status, AMS lanes, upload and a
-real print with `ams_mapping`. A P1S on FW 01.08.01.00 in cloud mode answers status and the light command too; print
-start in cloud mode not tested yet. Camera (port 6000) still open.
+real print with `ams_mapping`. A P1S on FW 01.08.01.00 in cloud mode answers status and the light command too, but
+**ignores the print start** (silently) - only in LAN-only mode it printed. So: LAN-only (+ developer mode where the firmware
+has it) is required for printing. Since 0.35.2 the adapter waits for the printer to start preparing and reports a clear
+error otherwise. Camera (port 6000) still open.
 
 ## 9. Discovery on the bridge
 

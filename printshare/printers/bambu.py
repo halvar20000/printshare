@@ -38,6 +38,10 @@ log = logging.getLogger(__name__)
 MQTT_PORT, FTPS_PORT = 8883, 990
 USER = "bblp"
 READY_TIMEOUT_S = 8.0
+# after "project_file": the printer must start preparing within this time (seen: ~1-5 s on a P1S). Without LAN-only
+# mode it ignores the command silently (P1S FW 01.08.01.00 and 01.09.01.00, 2026-10-04) - the app must not show "started"
+START_TIMEOUT_S = 45.0
+_STARTING = ("PREPARE", "SLICING", "RUNNING")
 
 # gcode_state → the names the rest of PocketPrint3D understands (api.printer_kind)
 _STATES = {"IDLE": "standby", "PREPARE": "printing", "SLICING": "printing", "RUNNING": "printing",
@@ -258,6 +262,7 @@ class BambuLink:
         self.error: str | None = None
         self.last_message = 0.0
         self.lock = threading.Lock()
+        self.replies: dict[str, dict[str, Any]] = {}       # last answer per command, e.g. "project_file"
         self._seq = 0
         c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"pp3d-{serial[-6:]}-{int(time.time()) % 100000}")
         c.username_pw_set(USER, code)
@@ -288,6 +293,9 @@ class BambuLink:
             return
         self.last_message = time.time()
         if isinstance(data.get("print"), dict):
+            cmd = data["print"].get("command")
+            if cmd and cmd not in ("push_status",):
+                self.replies[str(cmd)] = {**data["print"], "_at": time.time()}
             with self.lock:
                 merge(self.report, data["print"])
             if "gcode_state" in self.report:
@@ -421,6 +429,7 @@ class Bambu:
         report = lk.snapshot()
         mapping = ams_mapping(gcode, tools, report)
         has_ams = int(str((report.get("ams") or {}).get("ams_exist_bits") or "0"), 16) > 0
+        sent_at = time.time()
         lk.publish({"print": {
             "command": "project_file", "param": "Metadata/plate_1.gcode", "url": f"file:///sdcard/{name}",
             "file": name, "md5": "", "subtask_name": gcode.stem, "project_id": "0", "profile_id": "0", "task_id": "0",
@@ -428,7 +437,23 @@ class Bambu:
             "bed_levelling": leveling is not False, "flow_cali": False, "vibration_cali": False, "layer_inspect": False,
             "use_ams": has_ams, "ams_mapping": mapping if has_ams else [],
         }})
+        await self._await_start(lk, gcode.stem, sent_at)
         return {**out, "started": True, "ams_mapping": mapping if has_ams else []}
+
+    async def _await_start(self, lk: BambuLink, task: str, sent_at: float) -> None:
+        """The printer has to show that it starts this print; a refusal or silence becomes a clear error."""
+        deadline = sent_at + START_TIMEOUT_S
+        while time.time() < deadline:
+            reply = lk.replies.get("project_file")
+            if reply and reply.get("_at", 0) >= sent_at and str(reply.get("result", "")).lower() in ("fail", "failed", "error"):
+                reason = reply.get("reason") or reply.get("err_code") or "refused"
+                raise BambuError(f"The printer refused the print ({reason}) - is LAN-only mode with developer mode on?")
+            st = lk.snapshot()
+            if str(st.get("gcode_state") or "").upper() in _STARTING and st.get("subtask_name") in (task, None, ""):
+                return
+            await asyncio.sleep(1)
+        raise BambuError("The printer didn't start the print. Switch on LAN-only mode and developer mode on the printer "
+                         "(Settings → WLAN) - without them Bambu printers take no print jobs from other apps.")
 
     async def control(self, action: str) -> None:
         if action not in ("pause", "resume", "cancel"):

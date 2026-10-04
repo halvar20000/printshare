@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.2
+- Bambu Lab: a print the printer doesn't take (e.g. without LAN-only mode) now shows a clear message instead of
+  "started".
+
 ## 0.35.1
 - Printer search through a bridge: finds printers also when the server runs in Docker's bridge network without the
   "LAN for the printer search" setting (the app tells it the home Wi-Fi), and is faster.

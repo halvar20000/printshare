@@ -74,17 +74,25 @@ def test_wrapped_3mf_and_mapping(tmp_path):
 
 
 class FakeLink:
+    """Accepts a print like the P1S in LAN-only mode (gcode_state → PREPARE); refuse=True: ignores it (cloud mode)."""
+
     def __init__(self) -> None:
         self.ready = threading.Event()
         self.ready.set()
         self.error = None
         self.sent: list[dict] = []
+        self.replies: dict = {}
+        self.report = json.loads(json.dumps(REPORT))
+        self.refuse = False
 
     def snapshot(self):
-        return json.loads(json.dumps(REPORT))
+        return json.loads(json.dumps(self.report))
 
     def publish(self, payload):
         self.sent.append(payload)
+        cmd = payload.get("print") or {}
+        if cmd.get("command") == "project_file" and not self.refuse:
+            self.report.update(gcode_state="PREPARE", subtask_name=cmd["subtask_name"])
 
 
 @pytest.fixture
@@ -151,3 +159,16 @@ def test_subnet_hint_from_the_app():
     assert subnet_hint("10.0.0.0/8") is None          # too big to scan
     assert subnet_hint("8.8.8.0/24") is None          # not a home network
     assert subnet_hint("nonsense") is None and subnet_hint(None) is None
+
+
+def test_a_start_the_printer_ignores_is_an_error(fake, tmp_path, monkeypatch):
+    link, _ = fake
+    link.refuse = True                                # cloud mode: the command is dropped silently
+    monkeypatch.setattr(bambu, "START_TIMEOUT_S", 1.5)
+    a = get_adapter(PrinterConfig(id="p1s", type="bambu_lan", host="192.168.1.53", password="12345678"))
+    with pytest.raises(bambu.BambuError, match="LAN-only"):
+        asyncio.run(a.send(CONE, start=True))
+    link.refuse = False
+    link.replies["project_file"] = {"result": "fail", "reason": "busy", "_at": 9e12}
+    with pytest.raises(bambu.BambuError, match="busy"):
+        asyncio.run(a.send(CONE, start=True))
