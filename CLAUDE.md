@@ -877,6 +877,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `.secrets/camera-p1s-20-url`; its IP had moved from .141, and the first login was wrong → 401) → 1920x1080, ~180 KB,
   2-3 s per picture. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
+  Also Thomas' Wyze cam with the official Wyze RTSP firmware (LIVE555, digest auth before any path check, `rtsp://user:pass@
+  192.168.86.220/live`, URL in `.secrets/camera-wyze-url`): 1920x1080, ~70 KB, ~2 s. Test pictures show people → delete them.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
