@@ -873,8 +873,10 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (`-rtsp_transport tcp`, cached 2 s, passwords masked in errors); HTTP: MJPEG stream if the URL looks like one, else a
   snapshot address. Bridge printers: `camera_url` goes in the sealed secrets (`registry.build`, "" removes); app field
   "Eigene Kamera" in `cloud-printer/[id]` for bridge printers + "Eigene Kamera entfernen". Own servers: `camera_url:` in
-  config.yaml. Thomas' camera at .141 (URL in `.secrets/camera-p1s-20-url`) refused every port when tested - RTSP probably
-  not switched on in its app yet; **not yet tested with a real RTSP camera**.
+  config.yaml. **Tested with a real camera 2026-10-04:** Thomas' Eufy cam (RTSP `rtsp://user:pass@192.168.86.154/live0`, URL in
+  `.secrets/camera-p1s-20-url`; its IP had moved from .141, and the first login was wrong → 401) → 1920x1080, ~180 KB,
+  2-3 s per picture. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
+  credentials to unconfirmed hosts.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
