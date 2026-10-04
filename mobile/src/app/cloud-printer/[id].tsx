@@ -12,7 +12,7 @@ import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsyn
 import { errorText, WEB_APP, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { lanPrinter } from "@/lib/lan";
-import { discoverPrinters, NoWifiError, type Found } from "@/lib/lan/discover";
+import { discoverPrinters, NoWifiError, wifiSubnet, type Found } from "@/lib/lan/discover";
 import LanDiscovery from "../../../modules/lan-discovery/src/LanDiscoveryModule";
 import { loadAccess, saveAccess } from "@/lib/printerAccess";
 import { seal } from "@/lib/seal";
@@ -68,8 +68,9 @@ export default function CloudPrinter() {
     const run = ++scanRun.current;
     const live = () => scanRun.current === run;
     if (bridgeParam && api) {
-      // the bridge searches its own network (no progress steps: one request)
-      api.bridgeDiscover(bridgeParam)
+      // the bridge searches its own network (no progress steps: one request); the phone's Wi-Fi goes along as a hint
+      LanDiscovery.wifiAddressAsync().catch(() => null)
+        .then(w => api.bridgeDiscover(bridgeParam, w ? wifiSubnet(w) : null))
         .then(list => {
           if (!live()) return;
           setFound(list.map(f => ({ type: f.type as Found["type"], address: f.address, name: f.name, cosmos: f.cosmos,

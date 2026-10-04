@@ -457,8 +457,10 @@ export class Api {
     this.request<Bridge>(`/api/bridges/${encodeURIComponent(id)}`, { method: "PATCH", body: { name } });
   deleteBridge = (id: string) =>
     this.request<{ deleted: string }>(`/api/bridges/${encodeURIComponent(id)}`, { method: "DELETE" });
-  bridgeDiscover = (id: string) =>
-    this.request<BridgeFound[]>(`/api/bridges/${encodeURIComponent(id)}/discover`, { method: "POST", timeout: 40000 });
+  /** subnet: the phone's Wi-Fi when it is at home - a bridge in Docker's bridge network searches there */
+  bridgeDiscover = (id: string, subnet?: string | null) =>
+    this.request<BridgeFound[]>(`/api/bridges/${encodeURIComponent(id)}/discover`,
+      { method: "POST", timeout: 75000, ...(subnet ? { body: { subnet } } : {}) });
   bridgeAddPrinter = (id: string, printer: { name: string; type: string; machine?: string; cosmos?: boolean }, sealed: string) =>
     this.request<Printer>(`/api/bridges/${encodeURIComponent(id)}/printers`, { method: "POST", body: { printer, sealed }, timeout: 40000 });
   bridgePrinterAccess = (printerId: string, sealed: string) =>

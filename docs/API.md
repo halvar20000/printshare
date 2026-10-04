@@ -541,7 +541,9 @@ by the bridge; upload steps appear in the job's `log`). `camera` says `"stream":
 bridge). Bridge offline → 503 with a clear text, no answer → 504. Name and slicing model come from the bridge; a name
 changed with `PATCH /api/printers/{id}` stays. `DELETE /api/printers/{id}` removes a printer on the bridge too (only
 printers added through the app; others → 400).
-- `POST /api/bridges/{id}/discover` → printers the bridge finds at home (type `bambu_lan` since 0.35.0 with
+- `POST /api/bridges/{id}/discover` (optional body `{"subnet": "192.168.1.0/24"}` = the phone's Wi-Fi when at home,
+  since 0.35.1: a bridge in Docker's bridge network without its own LAN setting searches there) → printers the bridge
+  finds at home (type `bambu_lan` since 0.35.0 with
   `"machine"`: the OrcaSlicer preset from the serial number) (`[{"type", "address", "name", "cosmos"?,
   "detail"?, "added"}]`; the address is only for display/sealing, it never needs to be sent back in plain text).
 - `POST /api/bridges/{id}/printers {"printer": {"name", "type", "machine"?, "cosmos"?}, "sealed": "<pp3d-seal-v1 of

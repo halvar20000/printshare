@@ -171,7 +171,9 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
     if method == "discover":
         from . import discovery
         try:
-            found = await discovery.discover(getattr(api.settings, "lan_subnet", "") or None)
+            # a bridge in Docker's bridge network only sees its own network: then the phone's Wi-Fi (sent along by the
+            # app at home) tells where to look
+            found = await discovery.discover(getattr(api.settings, "lan_subnet", "") or discovery.subnet_hint(params.get("subnet")))
         except ValueError as e:
             raise MethodError("invalid", str(e)) from None
         known = {(p.host or (p.url or "").removeprefix("http://").removeprefix("https://").rstrip("/")) for p in api.settings.printers}

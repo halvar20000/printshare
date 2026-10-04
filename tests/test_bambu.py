@@ -142,3 +142,12 @@ def test_bridge_registry_entry():
     assert cfg["slicing"]["machine"] == "Bambu Lab P1S 0.4 nozzle"
     with pytest.raises(ValueError):
         get_adapter(PrinterConfig(id="x", type="bambu_lan", host="192.168.1.53"))       # no access code
+
+
+def test_subnet_hint_from_the_app():
+    from printshare.bridge.discovery import subnet_hint
+    assert subnet_hint("192.168.86.0/24") == "192.168.86.0/24"
+    assert subnet_hint("192.168.86.23/24") == "192.168.86.0/24"
+    assert subnet_hint("10.0.0.0/8") is None          # too big to scan
+    assert subnet_hint("8.8.8.0/24") is None          # not a home network
+    assert subnet_hint("nonsense") is None and subnet_hint(None) is None

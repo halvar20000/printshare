@@ -45,6 +45,14 @@ export function subnetHosts(address: string, prefix: number): string[] {
   return out;
 }
 
+/** "192.168.86.0/24" - the phone's Wi-Fi as a network, for a bridge in Docker's bridge network that can't see it */
+export function wifiSubnet(w: WifiAddress): string | null {
+  if (!IPV4.test(w.address)) return null;
+  const p = Math.max(24, Math.min(30, w.prefix || 24));
+  const own = ip2n(w.address);
+  return `${n2ip(own - (own % 2 ** (32 - p)))}/${p}`;
+}
+
 export function broadcastAddress(address: string, prefix: number): string {
   const size = 2 ** (32 - Math.max(8, Math.min(30, prefix || 24)));
   const own = ip2n(address);

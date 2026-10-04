@@ -127,7 +127,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.35.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.35.1", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1030,13 +1030,20 @@ class BridgePrinterAdd(BaseModel):
     sealed: str | None = None         # pp3d-seal-v1 blob of {"address", "password"?, "api_key"?} for this bridge
 
 
+class BridgeDiscover(BaseModel):
+    subnet: str | None = None          # the phone's Wi-Fi, e.g. "192.168.1.0/24" (when it is at home)
+
+
 @app.post("/api/bridges/{bridge_id}/discover")
-async def bridges_discover(bridge_id: str, acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+async def bridges_discover(bridge_id: str, req: BridgeDiscover | None = None,
+                           acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     """Printers the bridge finds on its home network (to add them with one tap)."""
     if not acct.cloud:
         raise HTTPException(404, "unknown bridge")
     _bridge_call(_bridges().get, acct.id, bridge_id)
-    return await bridge_call(acct, bridge_id, "discover")
+    from .bridge.discovery import subnet_hint
+    hint = subnet_hint(req.subnet) if req and req.subnet else None
+    return await bridge_call(acct, bridge_id, "discover", {"subnet": hint} if hint else {})
 
 
 @app.post("/api/bridges/{bridge_id}/printers")

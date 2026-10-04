@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.35.1
+- Printer search through a bridge: finds printers also when the server runs in Docker's bridge network without the
+  "LAN for the printer search" setting (the app tells it the home Wi-Fi), and is faster.
+
 ## 0.35.0
 - Bambu Lab printers (P1S, P1P, X1, A1) in LAN-only mode with developer mode: status, AMS trays as slots (choose the
   tray per colour), pause/resume/cancel, temperatures, fans, light, speed, and printing (upload + start). Your server or

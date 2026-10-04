@@ -136,9 +136,9 @@ async def _sdcp(subnet: str | None) -> list[dict[str, Any]]:
 async def discover(subnet: str | None = None, host_list: list[str] | None = None,
                    web_port: int = 80, mr_port: int = 7125, bambu_port: int = 8883) -> list[dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
-    for p in await _sdcp(subnet) if host_list is None else []:
-        found.setdefault(p["address"], p)
-    todo = [h for h in (host_list if host_list is not None else hosts(subnet)) if h not in found]
+    todo = host_list if host_list is not None else hosts(subnet)
+    # the Centauri's UDP discovery runs while the addresses are probed (one after the other took > 30 s with a LAN set)
+    sdcp = asyncio.ensure_future(_sdcp(subnet) if host_list is None else asyncio.sleep(0, result=[]))
     queue: asyncio.Queue[str] = asyncio.Queue()
     for h in todo:
         queue.put_nowait(h)
@@ -151,4 +151,15 @@ async def discover(subnet: str | None = None, host_list: list[str] | None = None
                 if p and h not in found:
                     found[h] = p
         await asyncio.gather(*(worker() for _ in range(WORKERS)))
+    for p in await sdcp:                        # SDCP knows the Centauri better than the HTTP probe
+        found[p["address"]] = p
     return list(found.values())
+
+
+def subnet_hint(value: Any) -> str | None:
+    """A home network the app suggests (its own Wi-Fi), e.g. "192.168.86.0/24": private IPv4, /22 or smaller."""
+    try:
+        net = ipaddress.ip_network(str(value), strict=False)
+    except ValueError:
+        return None
+    return str(net) if net.version == 4 and net.is_private and 22 <= net.prefixlen <= 30 else None
