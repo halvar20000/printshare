@@ -14,7 +14,7 @@ from typing import Any
 import yaml
 
 FILE = "printers-added.yaml"
-TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint")
+TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint", "bambu_lan")
 MAX_ADDED = 20
 
 
@@ -61,7 +61,7 @@ def build(fields: dict[str, Any], secrets: dict[str, Any], pid: str, old: dict[s
         host = re.sub(r"^https?://", "", address).split("/")[0]
         if not re.fullmatch(r"[A-Za-z0-9.\-]+(:\d{1,5})?", host):
             raise ValueError("the address must be a host name or IP address, optionally with :port")
-        if ptype == "elegoo_sdcp":
+        if ptype in ("elegoo_sdcp", "bambu_lan"):
             cfg["host"] = host.split(":")[0]
         else:
             cfg["url"] = f"http://{host}"

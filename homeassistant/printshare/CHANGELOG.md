@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.35.0
+- Bambu Lab printers (P1S, P1P, X1, A1) in LAN-only mode with developer mode: status, AMS trays as slots (choose the
+  tray per colour), pause/resume/cancel, temperatures, fans, light, speed, and printing (upload + start). Your server or
+  bridge finds them on the network; enter the access code shown on the printer. Camera follows later.
+
 ## 0.34.0
 - Ready-made Raspberry Pi image for the bridge: write it to an SD card, plug in the network cable and power - the app
   finds the bridge on your Wi-Fi and connects it with one tap (Settings → Advanced → Print from anywhere → "Found on

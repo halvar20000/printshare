@@ -191,6 +191,11 @@ need another native module.
   8883 + 990 open whose TLS certificate is issued by "BBL CA" – the certificate CN is the serial number (checked on
   Thomas' network 2026-10-02: 192.168.86.20 and .53, serials `01P0…`).
 
+**Built (0.35.0):** `printshare/printers/bambu.py`, type `bambu_lan` (host + access code as `password`; serial read from
+the TLS certificate). Verified on a P1S in LAN-only + developer mode (FW 01.09.01.00): status, AMS lanes, upload and a
+real print with `ams_mapping`. A P1S on FW 01.08.01.00 in cloud mode answers status and the light command too; print
+start in cloud mode not tested yet. Camera (port 6000) still open.
+
 ## 9. Discovery on the bridge
 
 `printshare/discovery.py`, a Python port of `mobile/src/lib/lan/discover.ts` plus Bambu: SDCP `M99999` broadcast

@@ -176,13 +176,14 @@ class JobOptions:
 @dataclass
 class PrinterConfig:
     id: str
-    type: str                     # "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint"
+    type: str                     # "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint" | "bambu_lan"
     name: str = ""
-    host: str | None = None       # elegoo_sdcp
+    host: str | None = None       # elegoo_sdcp, bambu_lan
     url: str | None = None        # moonraker / prusalink / octoprint, e.g. http://192.168.1.60
     api_key: str | None = None    # moonraker (optional), octoprint (required), prusalink (older firmware)
     username: str = "maker"       # prusalink (HTTP digest), shown on the printer's screen
-    password: str | None = None   # prusalink
+    password: str | None = None   # prusalink; bambu_lan: the access code shown on the printer
+    serial: str | None = None     # bambu_lan; read from the printer's TLS certificate when not set
     auto_leveling: bool = True    # elegoo_sdcp
     mainboard_id: str | None = None  # elegoo_sdcp; looked up via UDP discovery if not set
     bridge: str | None = None     # cloud: the printer sits behind this bridge (docs/BRIDGE.md) …

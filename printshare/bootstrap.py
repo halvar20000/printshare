@@ -53,7 +53,8 @@ def simple_printer(p: Mapping[str, Any], taken: set[str]) -> dict[str, Any]:
     if not address:
         raise ValueError(f"printer {name!r}: address (IP) is missing")
     machine = str(p.get("printer_profile") or "").strip()
-    if kind in ("prusalink", "octoprint") and (not machine or machine == DEFAULT_MACHINE):
+    from .printers import NEEDS_MACHINE
+    if kind in NEEDS_MACHINE and (not machine or machine == DEFAULT_MACHINE):
         # never fall back to the Centauri profile for another printer
         raise ValueError(f"printer {name!r}: printer_profile is required for {kind} - the OrcaSlicer printer "
                          "name, e.g. 'Prusa MK4S 0.4 nozzle' or 'Creality Ender-3 V2 0.4 nozzle'")
@@ -70,7 +71,7 @@ def simple_printer(p: Mapping[str, Any], taken: set[str]) -> dict[str, Any]:
     if slicing["bed_type"] not in PLATES:
         raise ValueError(f"build plate must be one of {', '.join(PLATES)}")
     entry: dict[str, Any] = {"id": _slug(name, taken), "name": name, "type": kind}
-    if kind == "elegoo_sdcp":
+    if kind in ("elegoo_sdcp", "bambu_lan"):
         entry["host"] = re.sub(r"^https?://", "", address).split("/")[0]
     else:
         entry["url"] = address if re.match(r"^https?://", address) else f"http://{address}"
@@ -86,6 +87,11 @@ def simple_printer(p: Mapping[str, Any], taken: set[str]) -> dict[str, Any]:
         if not (entry.get("password") or entry.get("api_key")):
             raise ValueError(f"printer {name!r}: PrusaLink needs the password shown on the printer "
                              "(Settings > Network > PrusaLink)")
+    if kind == "bambu_lan":
+        if not p.get("password"):
+            raise ValueError(f"printer {name!r}: Bambu Lab needs the access code shown on the printer "
+                             "(LAN-only mode and developer mode on)")
+        entry["password"] = p["password"]
     if kind == "octoprint" and not entry.get("api_key"):
         raise ValueError(f"printer {name!r}: OctoPrint needs an API key (OctoPrint Settings > Application keys)")
     entry["slicing"] = slicing

@@ -96,7 +96,7 @@ from . import camera as cam
 from . import gcode_preview
 from .fetch import SLICEABLE, FetchError, Fetcher
 from .pipeline import JobResult, fetch_model, inspect_model, prepare_job, run_job, send_job
-from .printers import CONTROL_ACTIONS, LEVELING_TYPES, PRINTER_TYPES, get_adapter
+from .printers import CONTROL_ACTIONS, LEVELING_TYPES, NEEDS_MACHINE, PRINTER_TYPES, get_adapter
 from . import lanes as lane_map
 from . import power as plug
 from . import user_profiles
@@ -127,7 +127,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.34.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.35.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1115,8 +1115,8 @@ MAX_PRINTERS = 10
 
 class PrinterSettings(BaseModel):
     name: str | None = None
-    type: str | None = None             # elegoo_sdcp | moonraker | prusalink | octoprint
-    machine: str | None = None          # OrcaSlicer printer preset; required for Prusa/OctoPrint
+    type: str | None = None             # elegoo_sdcp | moonraker | prusalink | octoprint | bambu_lan
+    machine: str | None = None          # OrcaSlicer printer preset; required for Prusa/OctoPrint/Bambu
     cosmos: bool | None = None          # Centauri Carbon with OpenCentauri COSMOS (Klipper)
     auto_leveling: bool | None = None
 
@@ -1137,7 +1137,7 @@ def _printer_config(pid: str, req: PrinterSettings, old: dict[str, Any] | None =
             sl["machine_preset"] = "cosmos"
         else:
             sl.pop("machine_preset", None)
-    if ptype in ("prusalink", "octoprint") and not sl.get("machine"):
+    if ptype in NEEDS_MACHINE and not sl.get("machine"):
         raise HTTPException(400, "choose the printer model (OrcaSlicer printer profile) for this printer")
     if sl.get("machine"):
         try:

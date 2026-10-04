@@ -6,8 +6,9 @@
 //    → 401 with digest realm "Printer API", OctoPrint's web page. COSMOS by its macros (`_COSMOS_SETTINGS`).
 // Platform-independent: the UDP socket and the phone's address come in as `deps` (Android: modules/lan-discovery).
 
-export type FoundType = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint";
-export type Found = { type: FoundType; address: string; name: string; cosmos?: boolean; detail?: string };
+export type FoundType = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint" | "bambu_lan";
+/** machine: OrcaSlicer printer preset when the printer tells its model (Bambu, found by a bridge) */
+export type Found = { type: FoundType; address: string; name: string; cosmos?: boolean; detail?: string; machine?: string };
 export type WifiAddress = { address: string; prefix: number };
 export type UdpAnswer = { address: string; data: string };
 

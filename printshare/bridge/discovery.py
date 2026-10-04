@@ -1,6 +1,7 @@
 """Printers on the bridge's LAN (docs/BRIDGE.md section 9) - the rules of the app's `lib/lan/discover.ts`:
 Centauri Carbon by SDCP UDP discovery, Klipper/Moonraker (COSMOS by its macros), PrusaLink and OctoPrint by a short
-HTTP probe of the /24 around the bridge's address (or `lan_subnet`, e.g. when the container runs in a Docker bridge
+HTTP probe of the /24 around the bridge's address, Bambu Lab printers by their TLS certificate on port 8883 (issuer
+"BBL CA", CN = serial; only in LAN-only mode) (or `lan_subnet`, e.g. when the container runs in a Docker bridge
 network: broadcasts don't leave it, set PRINTSHARE_LAN_SUBNET=192.168.1.0/24 or use host networking)."""
 from __future__ import annotations
 
@@ -59,10 +60,36 @@ def _is_moonraker(r: httpx.Response | None) -> bool:
     return isinstance(res, dict) and any(k in res for k in ("klippy_state", "moonraker_version", "klippy_connected"))
 
 
-async def identify(c: httpx.AsyncClient, host: str, web_port: int = 80, mr_port: int = 7125) -> dict[str, Any] | None:
+async def _port_open(host: str, port: int) -> bool:
+    try:
+        _, w = await asyncio.wait_for(asyncio.open_connection(host, port), TIMEOUT_S)
+    except (OSError, asyncio.TimeoutError):
+        return False
+    w.close()
+    return True
+
+
+async def bambu(host: str, port: int = 8883) -> dict[str, Any] | None:
+    """A Bambu Lab printer in LAN-only mode? Its serial stays on the bridge - the app gets the model only."""
+    if not await _port_open(host, port):
+        return None
+    from ..printers.bambu import machine_for, model_for, read_serial
+    serial, is_bambu = await asyncio.to_thread(read_serial, host, 3.0)
+    if not is_bambu:
+        return None
+    model = model_for(serial)
+    return {"type": "bambu_lan", "address": host, "name": f"Bambu Lab {model}" if model else "Bambu Lab",
+            "detail": None, "machine": machine_for(serial)}
+
+
+async def identify(c: httpx.AsyncClient, host: str, web_port: int = 80, mr_port: int = 7125,
+                   bambu_port: int = 8883) -> dict[str, Any] | None:
     hp = host if web_port == 80 else f"{host}:{web_port}"
     web = f"http://{hp}"
-    on_web, on_mr = await asyncio.gather(_probe(c, f"{web}/server/info"), _probe(c, f"http://{host}:{mr_port}/server/info"))
+    on_web, on_mr, bbl = await asyncio.gather(_probe(c, f"{web}/server/info"), _probe(c, f"http://{host}:{mr_port}/server/info"),
+                                              bambu(host, bambu_port))
+    if bbl:
+        return bbl
     base = web if _is_moonraker(on_web) else f"http://{host}:{mr_port}" if _is_moonraker(on_mr) else None
     if base:
         objs, info = await asyncio.gather(_probe(c, f"{base}/printer/objects/list"), _probe(c, f"{base}/printer/info"))
@@ -107,7 +134,7 @@ async def _sdcp(subnet: str | None) -> list[dict[str, Any]]:
 
 
 async def discover(subnet: str | None = None, host_list: list[str] | None = None,
-                   web_port: int = 80, mr_port: int = 7125) -> list[dict[str, Any]]:
+                   web_port: int = 80, mr_port: int = 7125, bambu_port: int = 8883) -> list[dict[str, Any]]:
     found: dict[str, dict[str, Any]] = {}
     for p in await _sdcp(subnet) if host_list is None else []:
         found.setdefault(p["address"], p)
@@ -120,7 +147,7 @@ async def discover(subnet: str | None = None, host_list: list[str] | None = None
         async def worker() -> None:
             while not queue.empty():
                 h = queue.get_nowait()
-                p = await identify(c, h, web_port, mr_port)
+                p = await identify(c, h, web_port, mr_port, bambu_port)
                 if p and h not in found:
                     found[h] = p
         await asyncio.gather(*(worker() for _ in range(WORKERS)))

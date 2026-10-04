@@ -179,7 +179,7 @@ def masked(report: dict, serial: str) -> dict:
     """The report for test data: serial numbers, network and camera addresses removed."""
     def walk(x):
         if isinstance(x, dict):
-            return {k: ("<masked>" if k in ("sn", "net", "ipcam", "ip", "mac", "rtsp_url", "wifi_signal") else walk(v))
+            return {k: ("<masked>" if k in ("sn", "net", "ipcam", "ip", "mac", "rtsp_url", "wifi_signal", "chip_id") else walk(v))
                     for k, v in x.items()}
         if isinstance(x, list):
             return [walk(v) for v in x]

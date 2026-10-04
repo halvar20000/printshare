@@ -26,7 +26,9 @@ class PrinterAdapter(Protocol):
 
 
 CONTROL_ACTIONS = ("pause", "resume", "cancel")
-PRINTER_TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint")
+PRINTER_TYPES = ("elegoo_sdcp", "moonraker", "prusalink", "octoprint", "bambu_lan")
+# printer types that need an explicit OrcaSlicer printer model (never the Centauri default)
+NEEDS_MACHINE = ("prusalink", "octoprint", "bambu_lan")
 # printer types that can switch bed leveling per print (DO-01). Klipper/Prusa/OctoPrint do it in their
 # start G-code; COSMOS' PRINT_START parameter for it is still an open question.
 LEVELING_TYPES = ("elegoo_sdcp",)
@@ -45,4 +47,7 @@ def get_adapter(cfg: PrinterConfig) -> PrinterAdapter:
     if cfg.type == "octoprint":
         from .octoprint import OctoPrint
         return OctoPrint(cfg)
+    if cfg.type == "bambu_lan":
+        from .bambu import Bambu
+        return Bambu(cfg)
     raise ValueError(f"Unknown printer type {cfg.type!r} (use {', '.join(PRINTER_TYPES)})")

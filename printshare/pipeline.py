@@ -161,16 +161,21 @@ async def send_job(settings: Settings, result: JobResult, start: bool,
     say("Sending to printer" + (" and starting" if start else ""))
     gcode = Path(result.gcode)
     tmp = None
-    if tools and any(k != v for k, v in tools.items()):
+    adapter = get_adapter(settings.printer(result.printer))
+    # Bambu: the tray per filament goes to the printer as ams_mapping; others get the tool numbers rewritten
+    maps_tools = getattr(adapter, "maps_tools", False)
+    if tools and not maps_tools and any(k != v for k, v in tools.items()):
         tmp = Path(tempfile.mkdtemp(prefix="lanes-", dir=settings.work_dir))
         gcode = await asyncio.to_thread(lane_map.remap_tools, gcode, tools, tmp)
-    adapter = get_adapter(settings.printer(result.printer))
     if spool_id is not None:
         if not hasattr(adapter, "set_spool"):
             raise ValueError("this printer can't track a Spoolman spool itself")
         await adapter.set_spool(spool_id)
     try:
-        sent = await adapter.send(gcode, start=start, leveling=leveling)
+        if maps_tools:
+            sent = await adapter.send(gcode, start=start, leveling=leveling, tools=tools)
+        else:
+            sent = await adapter.send(gcode, start=start, leveling=leveling)
     finally:
         if tmp:
             shutil.rmtree(tmp, ignore_errors=True)

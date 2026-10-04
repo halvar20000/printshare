@@ -53,7 +53,8 @@ export type ServerBooking = {
 };
 export type ServerBookings = { waiting: ServerBooking[]; open: ServerBooking[]; booked: ServerBooking[] };
 /** A printer a bridge found on its home network. */
-export type BridgeFound = { type: string; address: string; name: string; cosmos?: boolean; detail?: string; added: boolean };
+export type BridgeFound = { type: string; address: string; name: string; cosmos?: boolean; detail?: string; machine?: string | null;
+  added: boolean };
 /** Layer data for the G-code viewer; paths are [typeIndex, tool, x0, y0, x1, y1, ...] in 1/unit mm
  * (version 1 without the tool). */
 export type Preview = {

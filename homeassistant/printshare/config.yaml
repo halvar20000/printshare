@@ -1,5 +1,5 @@
 name: PocketPrint3D
-version: "0.34.0"
+version: "0.35.0"
 slug: printshare
 description: >-
   Print Printables and Thingiverse models from your phone. Slices with OrcaSlicer and sends the
@@ -30,7 +30,7 @@ options:
 schema:
   printers:
     - name: str
-      type: list(elegoo_sdcp|moonraker|prusalink|octoprint)
+      type: list(elegoo_sdcp|moonraker|prusalink|octoprint|bambu_lan)
       address: str
       cosmos: bool?
       api_key: password?

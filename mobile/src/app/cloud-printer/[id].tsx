@@ -18,9 +18,11 @@ import { loadAccess, saveAccess } from "@/lib/printerAccess";
 import { seal } from "@/lib/seal";
 import { space, useColors } from "@/lib/theme";
 
-type Kind = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint";
+type Kind = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint" | "bambu_lan";
 const KINDS: Kind[] = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint"];
-const needsModel = (k: Kind) => k === "prusalink" || k === "octoprint";
+// Bambu Lab (LAN-only mode) is driven by the bridge (MQTT + FTPS), not by the phone
+const BRIDGE_KINDS: Kind[] = [...KINDS, "bambu_lan"];
+const needsModel = (k: Kind) => k === "prusalink" || k === "octoprint" || k === "bambu_lan";
 
 export default function CloudPrinter() {
   const { id, bridge: bridgeParam } = useLocalSearchParams<{ id: string; bridge?: string }>();
@@ -70,7 +72,8 @@ export default function CloudPrinter() {
       api.bridgeDiscover(bridgeParam)
         .then(list => {
           if (!live()) return;
-          setFound(list.map(f => ({ type: f.type as Found["type"], address: f.address, name: f.name, cosmos: f.cosmos, detail: f.detail })));
+          setFound(list.map(f => ({ type: f.type as Found["type"], address: f.address, name: f.name, cosmos: f.cosmos,
+                                    detail: f.detail, machine: f.machine ?? undefined })));
           setKnown(list.filter(f => f.added).map(f => f.address));
           setScan("done");
         })
@@ -103,7 +106,8 @@ export default function CloudPrinter() {
     setType(f.type);
     setAddress(f.address);
     setCosmos(!!f.cosmos);
-    // Centauri / Klipper report a real name; for Prusa and OctoPrint the model (chosen below) names the printer
+    if (f.machine) setMachine(f.machine);          // Bambu: the model comes from the serial number
+    // Centauri / Klipper report a real name; for Prusa, OctoPrint and Bambu the model (chosen below) names the printer
     setName(f.type === "elegoo_sdcp" || f.type === "moonraker" ? f.name : "");
     setTest(null);
     setError("");
@@ -117,7 +121,7 @@ export default function CloudPrinter() {
       const p = ps.find(x => x.id === id);
       if (p) {
         setName(p.name);
-        setType((KINDS as string[]).includes(p.type) ? p.type as Kind : "elegoo_sdcp");
+        setType((BRIDGE_KINDS as string[]).includes(p.type) ? p.type as Kind : "elegoo_sdcp");
         setCosmos(!!p.cosmos);
         setMachine(p.machine);
         if (p.bridge) setViaBridge(p.bridge);
@@ -138,7 +142,7 @@ export default function CloudPrinter() {
   }, [api, sheet, models]);
   const modelChoices = useMemo(() => (models ?? []).map(m => ({ value: m.name, label: m.name, group: m.vendor })), [models]);
 
-  const access = { address, password: type === "prusalink" ? password : undefined,
+  const access = { address, password: type === "prusalink" || type === "bambu_lan" ? password : undefined,
                    apiKey: type === "prusalink" || type === "octoprint" || type === "moonraker" ? apiKey : undefined };
 
   const testConnection = async () => {
@@ -211,7 +215,8 @@ export default function CloudPrinter() {
   // a name is optional: without one the printer is called after its model or type
   const autoName = (machine && (needsModel(type) || type === "moonraker") ? machine.replace(/\s+[\d.]+\s*nozzle$/i, "") : "")
     || (type === "moonraker" && cosmos ? "Centauri Carbon" : typeLabel(type));
-  const missingCreds = (type === "prusalink" && !password && !apiKey) || (type === "octoprint" && !apiKey);
+  const missingCreds = (type === "prusalink" && !password && !apiKey) || (type === "octoprint" && !apiKey)
+    || (type === "bambu_lan" && !password);
   if (!loaded) return <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />;
   return (
     <Screen footer={<Button title={t("save")} icon="checkmark" onPress={save} loading={busy}
@@ -290,7 +295,15 @@ export default function CloudPrinter() {
               accessibilityLabel={t("prusaPassword")} style={input} />
           </>
         ) : null}
-        {type !== "elegoo_sdcp" ? (
+        {type === "bambu_lan" ? (
+          <>
+            <Divider />
+            <TextInput value={password} onChangeText={v => { setPassword(v.trim()); setTest(null); }} placeholder={t("bambuCode")}
+              placeholderTextColor={c.sub} autoCapitalize="none" autoCorrect={false} secureTextEntry
+              accessibilityLabel={t("bambuCode")} style={input} />
+          </>
+        ) : null}
+        {type !== "elegoo_sdcp" && type !== "bambu_lan" ? (
           <>
             <Divider />
             <TextInput value={apiKey} onChangeText={v => { setApiKey(v); setTest(null); }}
@@ -313,6 +326,8 @@ export default function CloudPrinter() {
       ) : null}
       {type === "prusalink" && !(WEB_APP && !viaBridge) ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("prusaHint")}</Text> : null}
+      {type === "bambu_lan" ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
+        {t("bambuHint")}</Text> : null}
       {type === "octoprint" && !(WEB_APP && !viaBridge) ? <Text style={{ color: c.sub, fontSize: 13, marginTop: -12, marginBottom: 20, marginHorizontal: 16 }}>
         {t("octoHint")}</Text> : null}
 
@@ -336,7 +351,7 @@ export default function CloudPrinter() {
       ) : null}
 
       <PickerSheet visible={sheet === "type"} title={t("printerType")} value={type} searchLabel={t("search")} closeLabel="OK"
-        choices={KINDS.map(k => ({ value: k, label: typeLabel(k) }))}
+        choices={(viaBridge ? BRIDGE_KINDS : KINDS).map(k => ({ value: k, label: typeLabel(k) }))}
         onPick={v => { setType(v as Kind); setTest(null); }} onClose={() => setSheet(null)} />
       <PickerSheet visible={sheet === "model"} title={t("printerModel")} value={machine} searchLabel={t("search")} closeLabel="OK"
         choices={modelChoices} onPick={setMachine} onClose={() => setSheet(null)} />

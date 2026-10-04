@@ -4,8 +4,9 @@ configuration:
     description: >-
       Ein Eintrag pro Drucker. type: elegoo_sdcp (Elegoo-Originalfirmware), moonraker (Klipper, z. B.
       OpenCentauri COSMOS), prusalink (Prusa MK4/CORE One/MINI/XL; Passwort vom Druckerdisplay) oder
-      octoprint (api_key). address: IP-Adresse des Druckers. printer_profile: OrcaSlicer-Druckername,
-      Pflicht bei prusalink/octoprint (z. B. Prusa MK4S 0.4 nozzle); Standard Centauri Carbon.
+      octoprint (api_key) oder bambu_lan (Bambu Lab im LAN-Modus mit Developer Mode; password = Access Code).
+      address: IP-Adresse des Druckers. printer_profile: OrcaSlicer-Druckername, Pflicht bei
+      prusalink/octoprint/bambu_lan (z. B. Prusa MK4S 0.4 nozzle); Standard Centauri Carbon.
   server_url:
     name: Server-Adresse für die App
     description: >-

@@ -712,8 +712,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   the /24 (24 workers, 1.5 s): Moonraker `/server/info` on 80 then 7125 (+ `/printer/objects/list`: a `*cosmos*` macro =
   COSMOS, `/printer/info` hostname), PrusaLink `/api/v1/info` 401 digest realm "Printer API", OctoPrint web page.
   Real network from this container (2026-10-02): Thomas' CC answered in 2.5 s (`Data.Name/MachineName/BrandName/MainboardIP/
-  FirmwareVersion`), whole /24 scanned in 12.9 s, no false positives. Node test against the fakes (all four types). **Not yet
-  on a real phone** (needs the next build).
+  FirmwareVersion`), whole /24 scanned in 12.9 s, no false positives. Node test against the fakes (all four types).
+  **Confirmed on a real phone 2026-10-04** (Thomas, Galaxy S24 Ultra, app build 38): the Centauri was found in ~2 s.
 
 ## Bridge concept (2026-10-02)
 - Decision (Thomas asked: OctoPrint or own?): **own bridge = the existing server package in bridge mode** (OctoPrint & co.
@@ -838,6 +838,24 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `/bridge` = `/`. App `discoverBridges()` (ports 80 + 8484, pocketprint3d.local) → bridges screen "Im WLAN gefunden"
   (native only). Tested: unit tests + node against a real bridge-only server and the local cloud (found → code →
   paired → online, account masked). **Not yet built in CI, not yet booted on a real Pi** (Thomas' Pi 3B).
+
+## Bambu Lab adapter (2026-10-04, server 0.35.0, not pushed yet at the time of writing)
+- `printers/bambu.py` (`bambu_lan`): one paho-mqtt connection per printer (`link()`, P1 sends deltas → `merge()` by id,
+  pushall once on connect), `status_from()` (gcode_state, mc_percent, mc_remaining_time min, layer_num, subtask_name as
+  file), AMS trays as lanes (ids A1..A4, B1.., tool = unit*4+tray, `tray_exist_bits`, `tray_now`), controls via
+  gcode_line (M104/M140/M106 P1-3), `ledctrl` chamber_light, `print_speed` 1-4 = 50/100/124/166 %. Send: G-code wrapped
+  in a minimal `.gcode.3mf` (`wrap_3mf`: plate_1.gcode + md5 + slice_info), FTPS upload (implicit TLS :990; **the
+  printer never answers the TLS shutdown of the data channel → own `storbinary` without unwrap**, else timeout although
+  the file arrived), start `project_file` with `url file:///sdcard/<name>`, `ams_mapping` from the app's lanes
+  (`maps_tools` → pipeline doesn't rewrite T codes), `subtask_name` = G-code stem (job tracking matches). Serial from the
+  TLS cert CN (`read_serial`), model from the serial prefix (01P = P1S …) → machine preset. Bridge discovery: port 8883
+  + cert issuer "BBL CA" (also answers in cloud mode). App: type "Bambu Lab (LAN-Modus)" only via a bridge, access code
+  field, model prefilled from discovery. Camera (port 6000) not yet.
+- **Verified live 2026-10-04** on Thomas' P1S .53 (FW 01.09.01.00, LAN-only + developer mode): discovery, status, AMS,
+  upload, and a **real print** (20 mm cube, PLA from tray 2 via ams_mapping [1], 50 layers, ~13 min incl. heat/levelling;
+  job tracking → finished). Second P1S .20 (FW 01.08.01.00, cloud mode, BigTreeTech Panda Touch, Thomas won't update it):
+  status/AMS and the chamber light work in cloud mode; print start there not tested yet.
+- Local Orca in this container needs the /tmp/u24 rootfs via proot for slicing (missing WebKitGTK libs on the host).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
