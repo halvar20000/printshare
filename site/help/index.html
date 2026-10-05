@@ -147,6 +147,26 @@
         with <span class="path">Download the video</span>. It is deleted with the job after 14 days.</li>
     </ul>
 
+    <h3>Bambu Lab printers (P1S, P1P, X1, A1)</h3>
+    <ol class="steps">
+      <li><strong>On the printer:</strong> <span class="path">Settings → WLAN</span>, switch on <span class="path">LAN Only Mode</span>;
+        with newer firmware also <span class="path">Developer Mode</span> (shown below it). The 8-character
+        <strong>access code</strong> is on the same screen. Without LAN mode the printer shows its status but ignores print jobs
+        from other apps. In LAN mode it is no longer connected to the Bambu cloud (Bambu Handy).</li>
+      <li><strong>In the app:</strong> <span class="path">Add printer</span> – the printer shows up as “Bambu Lab P1S” (Android,
+        at home) or through <span class="path">Add a printer through the bridge</span>. Enter the access code; the printer model is
+        chosen for you.</li>
+      <li><strong>Printing:</strong> choose the AMS tray for every colour; the camera picture, time-lapse and the light work as
+        with other printers.</li>
+    </ol>
+
+    <h3>Your own camera (RTSP / webcam)</h3>
+    <p>For printers behind a bridge: <span class="path">Settings → your printer → Own camera</span>, enter e.g.
+      <code>rtsp://user:password@192.168.1.60/live</code> (Eufy: <code>…/live0</code>, Wyze: <code>…/live</code>, a Raspberry Pi with
+      mediamtx: <code>rtsp://IP:8554/cam</code>) or a webcam address (<code>http://IP/capture</code> for an ESP32-CAM). It replaces the
+      built-in camera for the picture, time-lapse and AI failure detection. The address is sent encrypted to the bridge.
+      Own server: <code>camera_url:</code> in config.yaml.</p>
+
     <h3>Multicolour (AFC / CANVAS)</h3>
     <p>For multicolour models choose the slot for every colour before preparing; empty slots are flagged, and the material
       follows the filament in the slot. Supported on Klipper printers with AFC (e.g. Centauri Carbon with COSMOS + CANVAS).</p>

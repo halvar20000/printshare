@@ -882,6 +882,21 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   **End to end 2026-10-04:** app build 41 + Tower 0.36.0: the Wyze set as own camera of P1S .20 in the app → its picture shows on
   the printers tab (through the bridge).
 
+## Bambu without a bridge in the Android app (2026-10-05, app build 42)
+- Native module `mobile/modules/bambu-lan`: protocol code in plain Java (`BambuCore.java`: cert CN/issuer, probe of a host
+  list (port 8883 + "BBL CA", 32 threads, /24 in ~5 s), `wrap3mf` (plate_1.gcode + md5 + slice_info from the G-code footer),
+  own FTPS client: implicit TLS :990, PASV to the control host, **data socket = `createSocket(raw, host, 990, true)` so the
+  control channel's TLS session is resumed**, no TLS close on the data channel; `BambuMqtt.java` = Eclipse Paho 1.2.5
+  (gradle dep), subscribe/pushall on a separate thread - **a blocking subscribe inside Paho's connectComplete callback
+  deadlocks (no message ever arrived)**). `BambuLanModule.kt` only passes calls through (events onMessage/onState); iOS/web
+  stubs reject. Java core tested with the JDK from `/mnt/user/AI/tools/jdk-17` against P1S .53 (probe found .20 + .53,
+  MQTT report incl. AMS, upload 2 s, wrong code detected) - javac needs `-encoding UTF-8`.
+- JS: `lib/lan/bambuState.ts` (pure port of status_from/lanes/merge/ams_mapping, node-tested with the recorded P1S report),
+  `lib/lan/bambu.ts` (`BambuPrinter`: one connection per host kept open - `close()` is a no-op; upload via `file.uri`, start
+  with project_file, waits up to 45 s for PREPARE/RUNNING else a "switch on LAN-only mode" error). `relayJob` sends no lanes
+  to the server for Bambu (no G-code rewrite) but `opts.tools` → ams_mapping. Discovery: `deps.bambu` = `BambuLan.probeAsync`.
+  Printer type `bambu_lan` offered without a bridge on Android only. **Not yet tried on a real phone.**
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

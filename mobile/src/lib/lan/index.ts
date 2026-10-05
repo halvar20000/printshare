@@ -1,5 +1,6 @@
 // Printers the app reaches itself on the home Wi-Fi (cloud mode, docs/CLOUD.md step 1).
 import { lanIo } from "./io";
+import { BambuPrinter } from "./bambu";
 import { MoonrakerPrinter } from "./moonraker";
 import { OctoPrintPrinter } from "./octoprint";
 import { PrusaLinkPrinter } from "./prusalink";
@@ -10,10 +11,10 @@ export { LanError, type Lan, type SendOptions, type SendStep } from "./types";
 export { lanIo } from "./io";
 
 /** Printer types the app can talk to directly. */
-export const LAN_TYPES = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint"] as const;
+export const LAN_TYPES = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint", "bambu_lan"] as const;
 export const canRelay = (type: string) => (LAN_TYPES as readonly string[]).includes(type);
 
-/** How the app reaches one printer; stored only on the phone. */
+/** How the app reaches one printer; stored only on the phone (Bambu: password = access code). */
 export type LanAccess = { address: string; password?: string; apiKey?: string };
 
 export function lanPrinter(type: string, access: LanAccess | string): Lan {
@@ -23,5 +24,6 @@ export function lanPrinter(type: string, access: LanAccess | string): Lan {
   if (type === "moonraker") return new MoonrakerPrinter(a.address, a.apiKey);
   if (type === "prusalink") return new PrusaLinkPrinter(a.address, { password: a.password, apiKey: a.apiKey });
   if (type === "octoprint") return new OctoPrintPrinter(a.address, a.apiKey ?? "");
+  if (type === "bambu_lan") return new BambuPrinter(host.replace(/:\d+$/, ""), a.password ?? "");
   throw new Error(`printer type ${type} can't be reached from the app yet`);
 }

@@ -4,7 +4,9 @@
 //  - Klipper/Moonraker, PrusaLink, OctoPrint: a short HTTP probe of every address of the phone's /24 network:
 //    Moonraker `GET /server/info` (port 80 behind Mainsail/Fluidd/COSMOS, else 7125), PrusaLink `GET /api/v1/info`
 //    → 401 with digest realm "Printer API", OctoPrint's web page. COSMOS by its macros (`_COSMOS_SETTINGS`).
+//  - Bambu Lab: port 8883 with a certificate from "BBL CA" (native, `bambu` dep); the model from the serial number.
 // Platform-independent: the UDP socket and the phone's address come in as `deps` (Android: modules/lan-discovery).
+import { machineFor, modelFor } from "./bambuState";
 
 export type FoundType = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint" | "bambu_lan";
 /** machine: OrcaSlicer printer preset when the printer tells its model (Bambu, found by a bridge) */
@@ -15,6 +17,8 @@ export type UdpAnswer = { address: string; data: string };
 export type DiscoverDeps = {
   wifi: () => Promise<WifiAddress | null>;
   udp: (message: string, port: number, targets: string[], timeoutMs: number) => Promise<UdpAnswer[]>;
+  /** Bambu printers among the hosts (TLS certificate on port 8883); Android only */
+  bambu?: (hosts: string[], timeoutMs: number) => Promise<{ address: string; serial: string }[]>;
   fetch?: typeof fetch;
   /** tests: other ports than the printers' real ones, and fixed host lists */
   webPort?: number;
@@ -160,7 +164,15 @@ export async function discoverPrinters(deps: DiscoverDeps, onFound: (f: Found) =
       onProgress?.(++done, hosts.length);
     }
   };
-  await Promise.all([udp, ...Array.from({ length: Math.max(1, deps.concurrency ?? 24) }, worker)]);
+  const bambu = (async () => {
+    if (!deps.bambu) return;
+    for (const b of await deps.bambu(hosts, 1000).catch(() => [])) {
+      const model = modelFor(b.serial);
+      report({ type: "bambu_lan", address: b.address, name: model ? `Bambu Lab ${model}` : "Bambu Lab",
+               machine: machineFor(b.serial) ?? undefined });
+    }
+  })();
+  await Promise.all([udp, bambu, ...Array.from({ length: Math.max(1, deps.concurrency ?? 24) }, worker)]);
   return seen.size;
 }
 

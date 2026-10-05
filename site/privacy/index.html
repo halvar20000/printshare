@@ -40,7 +40,7 @@
     <li><strong>Auf deinem Gerät gespeichert:</strong> die Adresse(n) deines Servers und dessen Zugangs-Token (im sicheren
       Speicher des Geräts, iOS-Schlüsselbund bzw. Android Keystore) sowie Einstellungen wie Sprache und zuletzt gewählte
       Drucker/Materialien. Mit der Cloud außerdem: die Adressen und Zugangsdaten deiner Drucker (PrusaLink-Passwort,
-      OctoPrint-API-Key) und die Adresse eines eigenen Spoolman – diese bleiben <strong>nur auf deinem Gerät</strong>, die App
+      OctoPrint-API-Key, Bambu-Access-Code) und die Adresse eines eigenen Spoolman – diese bleiben <strong>nur auf deinem Gerät</strong>, die App
       spricht damit direkt im Heimnetz mit dem Drucker.</li>
     <li><strong>Verbindungen:</strong> Die App verbindet sich mit deinem eigenen Server. Vorschaubilder von Modellen lädt sie
       direkt von den Servern von Printables (Prusa Research a.s., Tschechien) bzw. Thingiverse (UltiMaker, USA/Niederlande);
@@ -107,7 +107,7 @@
       Brücken-Schlüssel nur als Prüfsumme. Beim Anfordern eines Kopplungscodes die IP-Adresse der Brücke (Missbrauchsschutz,
       Art. 6 Abs. 1 lit. f DSGVO), die mit dem Code gelöscht wird. Status, Kamerabilder und Steuerbefehle werden über die
       Cloud nur durchgereicht, nicht gespeichert. Adressen und Passwörter von Druckern, die du über eine Brücke hinzufügst,
-      verschlüsselt die App für deine Brücke – die Cloud kann sie nicht lesen; gespeichert werden sie nur auf deinem Server.</li>
+      und die Adresse einer eigenen Kamera (samt deren Zugangsdaten) verschlüsselt die App für deine Brücke – die Cloud kann sie nicht lesen; gespeichert werden sie nur auf deinem Server.</li>
   </ul>
   <p><strong>Empfänger / Auftragsverarbeiter:</strong> Hetzner Online GmbH, Gunzenhausen, Deutschland (Server in Nürnberg)
     und Sendinblue SAS (Brevo), Paris, Frankreich – nur für den Versand der Anmelde-Codes per E-Mail. Die Daten bleiben in der EU.
@@ -146,7 +146,7 @@
   <ul>
     <li><strong>Stored on your device:</strong> your server's address(es) and access token (in the device's secure storage,
       iOS Keychain / Android Keystore) and settings such as language and recently used printers/materials. With the cloud
-      also: your printers' addresses and access data (PrusaLink password, OctoPrint API key) and the address of your own
+      also: your printers' addresses and access data (PrusaLink password, OctoPrint API key, Bambu access code) and the address of your own
       Spoolman – these stay <strong>only on your device</strong>; the app uses them to talk to the printer on your home network.</li>
     <li><strong>Connections:</strong> the app connects to your own server. Model preview images are loaded directly from the
       servers of Printables (Prusa Research a.s., Czech Republic) and Thingiverse (UltiMaker, USA/Netherlands), which receive
@@ -204,7 +204,8 @@
       connection, its public key and the name, type and model of its printers; the bridge key only as a hash. When a pairing
       code is requested, the bridge's IP address (abuse protection, Art. 6(1)(f) GDPR), deleted with the code. Status,
       camera pictures and control commands are only passed through the cloud, not stored. Addresses and passwords of
-      printers you add through a bridge are encrypted by the app for your bridge – the cloud can't read them; they are
+      printers you add through a bridge, and the address of an own camera (with its login), are encrypted by the app for your
+      bridge – the cloud can't read them; they are
       stored only on your server.</li>
   </ul>
   <p><strong>Recipients / processors:</strong> Hetzner Online GmbH, Gunzenhausen, Germany (server in Nuremberg) and

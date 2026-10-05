@@ -7,6 +7,7 @@ export type SendOptions = {
   start: boolean;
   leveling?: boolean | null;
   spoolId?: number;                         // Klipper: Spoolman spool Moonraker books the print on
+  tools?: Record<number, number>;           // Bambu: AMS tray per filament (ams_mapping; the G-code isn't rewritten)
   onStep?: (step: SendStep) => void;
   onProgress?: (part: number) => void;      // 0..1 of the upload
 };

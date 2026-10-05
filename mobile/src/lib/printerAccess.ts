@@ -70,7 +70,10 @@ export async function relayJob(api: Api, server: Server, printer: Printer, jobId
                                lanes: Record<number, number> | undefined, opts: SendOptions): Promise<void> {
   const lan = await lanFor(server, printer);
   opts.onStep?.("download");
-  const { url, headers } = await api.gcodeDownload(jobId, lanes);
+  // Bambu: the trays go to the printer as ams_mapping; others get the tool numbers rewritten by the server
+  const bambu = printer.type === "bambu_lan";
+  if (bambu && lanes) opts = { ...opts, tools: lanes };
+  const { url, headers } = await api.gcodeDownload(jobId, bambu ? undefined : lanes);
   const file = await lanIo.download(url, headers, fileName);
   try {
     await lan.send(file, opts);

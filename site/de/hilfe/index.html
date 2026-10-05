@@ -147,6 +147,26 @@
         <span class="path">Video herunterladen</span>. Es wird nach 14 Tagen mit dem Auftrag gelöscht.</li>
     </ul>
 
+    <h3>Bambu-Lab-Drucker (P1S, P1P, X1, A1)</h3>
+    <ol class="steps">
+      <li><strong>Am Drucker:</strong> <span class="path">Einstellungen → WLAN</span>, <span class="path">LAN Only Mode</span> einschalten;
+        bei neuerer Firmware zusätzlich <span class="path">Developer Mode</span> (erscheint darunter). Der 8-stellige
+        <strong>Access Code</strong> steht auf derselben Seite. Ohne LAN-Modus zeigt der Drucker zwar seinen Status, nimmt aber keine
+        Druckaufträge von anderen Apps an. Im LAN-Modus ist er nicht mehr mit der Bambu-Cloud (Bambu Handy) verbunden.</li>
+      <li><strong>In der App:</strong> <span class="path">Drucker hinzufügen</span> – der Drucker erscheint als „Bambu Lab P1S“
+        (Android, zu Hause) oder über <span class="path">Drucker über die Brücke hinzufügen</span>. Access Code eingeben; das
+        Druckermodell wird automatisch gewählt.</li>
+      <li><strong>Drucken:</strong> für jede Farbe das AMS-Fach wählen; Kamerabild, Zeitraffer und Licht funktionieren wie bei
+        anderen Druckern.</li>
+    </ol>
+
+    <h3>Eigene Kamera (RTSP / Webcam)</h3>
+    <p>Für Drucker hinter einer Brücke: <span class="path">Einstellungen → dein Drucker → Eigene Kamera</span>, z. B.
+      <code>rtsp://benutzer:passwort@192.168.1.60/live</code> eintragen (Eufy: <code>…/live0</code>, Wyze: <code>…/live</code>, Raspberry Pi
+      mit mediamtx: <code>rtsp://IP:8554/cam</code>) oder eine Webcam-Adresse (<code>http://IP/capture</code> für eine ESP32-CAM). Sie
+      ersetzt die eingebaute Kamera für Bild, Zeitraffer und KI-Fehlererkennung. Die Adresse geht verschlüsselt an die Brücke.
+      Eigener Server: <code>camera_url:</code> in config.yaml.</p>
+
     <h3>Mehrfarbdruck (AFC / CANVAS)</h3>
     <p>Bei mehrfarbigen Modellen wählst du vor dem Berechnen den Slot für jede Farbe; leere Slots werden markiert, und das
       Material richtet sich nach dem Filament im Slot. Für Klipper-Drucker mit AFC (z. B. Centauri Carbon mit COSMOS + CANVAS).</p>

@@ -84,3 +84,6 @@ ol.big > li p { margin: 4px 0 0; color: var(--muted); font-size: 15px; }
 @media (max-width: 520px) { ol.big > li { padding-left: 56px; } ol.big > li::before { left: 12px; } .path { white-space: normal; } }
 code.cmd { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
   margin: 6px 0; font-size: 14px; overflow-x: auto; white-space: pre; user-select: all; -webkit-user-select: all; color: var(--fg); }
+
+/* long addresses (RTSP / camera URLs) wrap instead of widening the page on phones */
+p code, dd code, li code { overflow-wrap: anywhere; }

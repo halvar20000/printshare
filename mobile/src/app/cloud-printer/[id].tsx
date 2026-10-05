@@ -6,7 +6,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Crypto from "expo-crypto";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Switch, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync } from "@/components/ui";
 import { errorText, WEB_APP, type Printer } from "@/lib/api";
@@ -14,14 +14,15 @@ import { useApp } from "@/lib/app";
 import { lanPrinter } from "@/lib/lan";
 import { discoverPrinters, NoWifiError, wifiSubnet, type Found } from "@/lib/lan/discover";
 import LanDiscovery from "../../../modules/lan-discovery/src/LanDiscoveryModule";
+import BambuLan from "../../../modules/bambu-lan/src/BambuLanModule";
 import { loadAccess, saveAccess } from "@/lib/printerAccess";
 import { seal } from "@/lib/seal";
 import { space, useColors } from "@/lib/theme";
 
 type Kind = "elegoo_sdcp" | "moonraker" | "prusalink" | "octoprint" | "bambu_lan";
-const KINDS: Kind[] = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint"];
-// Bambu Lab (LAN-only mode) is driven by the bridge (MQTT + FTPS), not by the phone
-const BRIDGE_KINDS: Kind[] = [...KINDS, "bambu_lan"];
+// Bambu Lab (LAN-only mode): through a bridge, or by the Android app itself (native MQTT + FTPS, modules/bambu-lan)
+const BRIDGE_KINDS: Kind[] = ["elegoo_sdcp", "moonraker", "prusalink", "octoprint", "bambu_lan"];
+const KINDS: Kind[] = Platform.OS === "android" ? BRIDGE_KINDS : BRIDGE_KINDS.filter(k => k !== "bambu_lan");
 const needsModel = (k: Kind) => k === "prusalink" || k === "octoprint" || k === "bambu_lan";
 
 export default function CloudPrinter() {
@@ -84,7 +85,8 @@ export default function CloudPrinter() {
         .catch(e => { if (live()) { setScan("done"); setError(errorText(t, e)); } });
       return;
     }
-    discoverPrinters({ wifi: () => LanDiscovery.wifiAddressAsync(), udp: (m, p, ts, ms) => LanDiscovery.udpProbeAsync(m, p, ts, ms) },
+    discoverPrinters({ wifi: () => LanDiscovery.wifiAddressAsync(), udp: (m, p, ts, ms) => LanDiscovery.udpProbeAsync(m, p, ts, ms),
+                       bambu: Platform.OS === "android" ? (hs, ms) => BambuLan.probeAsync(hs, ms) : undefined },
       f => { if (live()) setFound(l => [...l, f]); }, () => !live(),
       (done, total) => { if (live() && (done % 8 === 0 || done === total)) setScan({ pct: Math.round(done * 100 / total) }); })
       .then(() => { if (live()) setScan("done"); })

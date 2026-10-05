@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'io.github.halvar20000.bambulan'
+version = '0.1.0'
+
+android {
+  namespace "io.github.halvar20000.bambulan"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // MQTT over TLS to Bambu printers (pure Java, no Android service needed)
+  implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+}

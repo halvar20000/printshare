@@ -1,0 +1,9 @@
+{
+  "platforms": ["android", "apple"],
+  "apple": {
+    "modules": ["BambuLanModule"]
+  },
+  "android": {
+    "modules": ["io.github.halvar20000.bambulan.BambuLanModule"]
+  }
+}

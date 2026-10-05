@@ -4,6 +4,8 @@
 export type GcodeFile = {
   name: string;
   size: number;
+  /** file:// address on the phone (native code that reads the file itself, e.g. the Bambu upload) */
+  uri?: string;
   bytes(): Promise<Uint8Array>;
   /** multipart POST of the whole file (Moonraker, OctoPrint); the phone streams it from disk */
   upload(url: string, fieldName: string, fields: Record<string, string>,

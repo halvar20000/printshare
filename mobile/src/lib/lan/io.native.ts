@@ -16,7 +16,7 @@ export const lanIo: LanIo = {
   async download(url, headers, name) {
     const file = await File.downloadFileAsync(url, new File(dir(), name), { headers, idempotent: true });
     return {
-      name, size: file.size ?? 0,
+      name, size: file.size ?? 0, uri: file.uri,
       bytes: () => file.bytes(),
       upload: async (u, fieldName, fields, onProgress, headers) => {
         const r = await file.upload(u, { httpMethod: "POST", uploadType: UploadType.MULTIPART, fieldName,
