@@ -875,7 +875,13 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   "Eigene Kamera" in `cloud-printer/[id]` for bridge printers + "Eigene Kamera entfernen". Own servers: `camera_url:` in
   config.yaml. **Tested with a real camera 2026-10-04:** Thomas' Eufy cam (RTSP `rtsp://user:pass@192.168.86.154/live0`, URL in
   `.secrets/camera-p1s-20-url`; its IP had moved from .141, and the first login was wrong → 401) → 1920x1080, ~180 KB,
-  2-3 s per picture. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
+  2-3 s per picture.
+  ESP32-CAM (AI Thinker, for P1S .20 because its own camera cable was found unplugged at the AP board): ESPHome firmware built
+  here (`pip install esphome` in /tmp/esphvenv, py3.11 → ESPHome 2026.6.5; the first `compile` fails on a 60 s uv timeout,
+  the 2nd works) without secrets - Wi-Fi via Improv on web.esphome.io; `esp32_camera` + `esp32_camera_web_server` (8080
+  stream, 8081 snapshot), `wifi: output_power: 8.5dB` (at full power it browned out/rebooted on connect), `web_server` :80
+  for logs. Files `releases/esp32cam-p1s-links*.{bin,yaml}`. At 192.168.86.193: `http://IP:8081/` 1024x768 ~27 KB in 0.25 s.
+  Thomas' Home Assistant (192.168.86.173) ESPHome add-on couldn't build: no DNS inside HA. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
   Also Thomas' Wyze cam with the official Wyze RTSP firmware (LIVE555, digest auth before any path check, `rtsp://user:pass@
   192.168.86.220/live`, URL in `.secrets/camera-wyze-url`): 1920x1080, ~70 KB, ~2 s. Test pictures show people → delete them.
