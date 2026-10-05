@@ -164,7 +164,8 @@
     <p>Für Drucker hinter einer Brücke: <span class="path">Einstellungen → dein Drucker → Eigene Kamera</span>, z. B.
       <code>rtsp://benutzer:passwort@192.168.1.60/live</code> eintragen (Eufy: <code>…/live0</code>, Wyze: <code>…/live</code>, Raspberry Pi
       mit mediamtx: <code>rtsp://IP:8554/cam</code>) oder eine Webcam-Adresse (<code>http://IP/capture</code> für eine ESP32-CAM). Sie
-      ersetzt die eingebaute Kamera für Bild, Zeitraffer und KI-Fehlererkennung. Die Adresse geht verschlüsselt an die Brücke.
+      ersetzt die eingebaute Kamera für Bild, Zeitraffer und KI-Fehlererkennung. Kamera seitlich montiert? Hänge
+      <code>#rotate=90</code> (oder 180, 270) an die Adresse an – PocketPrint3D dreht das Bild im Uhrzeigersinn; das geht nie an die Kamera. Die Adresse geht verschlüsselt an die Brücke.
       Eigener Server: <code>camera_url:</code> in config.yaml.</p>
 
     <h3>Mehrfarbdruck (AFC / CANVAS)</h3>

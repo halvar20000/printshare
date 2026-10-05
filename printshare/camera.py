@@ -34,9 +34,12 @@ class Camera:
     auth: Any = None                       # httpx auth (PrusaLink digest)
     name: str | None = None
     grab: Callable[[], Awaitable[bytes]] | None = None   # cameras without HTTP (Bambu P1/A1: JPEG over TLS on port 6000)
+    rotate: int = 0                        # degrees clockwise (own cameras: "…#rotate=90")
 
     def info(self) -> dict[str, Any]:
-        return {"available": True, "stream": bool(self.stream_url), "snapshot": True, "name": self.name}
+        # a turned picture exists only as stills (the live MJPEG stream is passed through as it is)
+        return {"available": True, "stream": bool(self.stream_url) and not self.rotate, "snapshot": True,
+                "name": self.name}
 
 
 def _client(cam: Camera, timeout: float | None = TIMEOUT) -> httpx.AsyncClient:
@@ -65,6 +68,23 @@ async def first_frame(cam: Camera) -> bytes:
 
 
 async def snapshot(cam: Camera) -> bytes:
+    jpeg = await _snapshot(cam)
+    return await asyncio.to_thread(rotated, jpeg, cam.rotate) if cam.rotate else jpeg
+
+
+def rotated(jpeg: bytes, degrees: int, quality: int = 85) -> bytes:
+    """The picture turned clockwise by 90/180/270 degrees (cameras mounted on their side)."""
+    from PIL import Image
+    turn = {90: Image.Transpose.ROTATE_270, 180: Image.Transpose.ROTATE_180, 270: Image.Transpose.ROTATE_90}.get(degrees)
+    if turn is None:
+        return jpeg
+    with Image.open(io.BytesIO(jpeg)) as im:
+        out = io.BytesIO()
+        im.convert("RGB").transpose(turn).save(out, "JPEG", quality=quality)
+        return out.getvalue()
+
+
+async def _snapshot(cam: Camera) -> bytes:
     if cam.grab is not None:
         return await cam.grab()
     try:
@@ -174,13 +194,17 @@ def rtsp_frame(url: str) -> bytes:
 
 
 def external(url: str) -> Camera:
-    url = check_url(url)
+    """An own camera from its address. Options after "#" stay with PocketPrint3D (never sent to the camera):
+    "#rotate=90" (or 180, 270) turns the picture clockwise - for a camera mounted on its side."""
+    url, _, options = check_url(url).partition("#")
+    m = re.search(r"(?:^|&)rotate=(90|180|270)(?:&|$)", options)
+    rotate = int(m.group(1)) if m else 0
     if url.lower().startswith("rtsp"):
-        return Camera(name="RTSP", grab=lambda: asyncio.to_thread(rtsp_frame, url))
+        return Camera(name="RTSP", grab=lambda: asyncio.to_thread(rtsp_frame, url), rotate=rotate)
     # HTTP: an MJPEG stream (…/stream, ?action=stream, .mjpg) or a single picture (snapshot address)
     if re.search(r"stream|mjpe?g|video", url, re.I):
-        return Camera(stream_url=url, name="Webcam")
-    return Camera(snapshot_url=url, name="Webcam")
+        return Camera(stream_url=url, name="Webcam", rotate=rotate)
+    return Camera(snapshot_url=url, name="Webcam", rotate=rotate)
 
 
 async def source_for(printer: Any, adapter: Any) -> Camera | None:

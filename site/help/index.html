@@ -164,7 +164,8 @@
     <p>For printers behind a bridge: <span class="path">Settings → your printer → Own camera</span>, enter e.g.
       <code>rtsp://user:password@192.168.1.60/live</code> (Eufy: <code>…/live0</code>, Wyze: <code>…/live</code>, a Raspberry Pi with
       mediamtx: <code>rtsp://IP:8554/cam</code>) or a webcam address (<code>http://IP/capture</code> for an ESP32-CAM). It replaces the
-      built-in camera for the picture, time-lapse and AI failure detection. The address is sent encrypted to the bridge.
+      built-in camera for the picture, time-lapse and AI failure detection. Camera mounted on its side? Add
+      <code>#rotate=90</code> (or 180, 270) to the address – PocketPrint3D turns the picture clockwise; it is never sent to the camera. The address is sent encrypted to the bridge.
       Own server: <code>camera_url:</code> in config.yaml.</p>
 
     <h3>Multicolour (AFC / CANVAS)</h3>

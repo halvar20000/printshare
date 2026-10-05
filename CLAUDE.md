@@ -881,7 +881,9 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   the 2nd works) without secrets - Wi-Fi via Improv on web.esphome.io; `esp32_camera` + `esp32_camera_web_server` (8080
   stream, 8081 snapshot), `wifi: output_power: 8.5dB` (at full power it browned out/rebooted on connect), `web_server` :80
   for logs. Files `releases/esp32cam-p1s-links*.{bin,yaml}`. At 192.168.86.193: `http://IP:8081/` 1024x768 ~27 KB in 0.25 s.
-  Thomas' Home Assistant (192.168.86.173) ESPHome add-on couldn't build: no DNS inside HA. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
+  Thomas' Home Assistant (192.168.86.173) ESPHome add-on couldn't build: no DNS inside HA.
+- 0.36.1: own camera address option `#rotate=90|180|270` (fragment, never sent to the camera; `Camera.rotate`, Pillow
+  transpose in `camera.snapshot`, a turned camera reports `stream: false`). For the ESP32-CAM mounted on its side in .20. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
   Also Thomas' Wyze cam with the official Wyze RTSP firmware (LIVE555, digest auth before any path check, `rtsp://user:pass@
   192.168.86.220/live`, URL in `.secrets/camera-wyze-url`): 1920x1080, ~70 KB, ~2 s. Test pictures show people → delete them.

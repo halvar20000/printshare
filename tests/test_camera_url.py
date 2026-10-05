@@ -63,3 +63,31 @@ def test_bridge_keeps_the_camera_sealed_like_a_password():
     assert "camera_url" not in removed
     with pytest.raises(ValueError):
         registry.build({}, {"camera_url": "file:///etc/passwd"}, "p1s", base)
+
+
+def test_rotation_option_stays_with_us(tmp_path):
+    import io
+    from PIL import Image
+    cam_ = cam.external("http://10.0.0.2:8081/#rotate=90")
+    assert cam_.snapshot_url == "http://10.0.0.2:8081/" and cam_.rotate == 90       # "#…" is never sent to the camera
+    assert cam.external("rtsp://10.0.0.2/s1#rotate=270").rotate == 270
+    assert cam.external("http://10.0.0.2/snap.jpg#rotate=45").rotate == 0            # only quarter turns
+    assert not cam.external("http://10.0.0.2/stream#rotate=180").info()["stream"]    # turned: stills only
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 20), "red").save(buf, "JPEG")
+    out = cam.rotated(buf.getvalue(), 90)
+    assert Image.open(io.BytesIO(out)).size == (20, 40)
+
+
+def test_snapshot_is_turned(monkeypatch):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 20), "blue").save(buf, "JPEG")
+    jpeg = buf.getvalue()
+
+    async def grab():
+        return jpeg
+    c = cam.Camera(grab=grab, rotate=270)
+    assert Image.open(io.BytesIO(asyncio.run(cam.snapshot(c)))).size == (20, 40)
+    assert asyncio.run(cam.snapshot(cam.Camera(grab=grab))) == jpeg

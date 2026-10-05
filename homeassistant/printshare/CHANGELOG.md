@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.36.1
+- Own camera: add `#rotate=90` (or 180, 270) to the camera address to turn the picture - for a camera mounted on its side.
+
 ## 0.36.0
 - Own camera per printer: use an IP camera (RTSP, e.g. Tapo or Reolink) or a webcam address instead of the printer's
   built-in camera - for the picture in the app, time-lapse and failure detection. In the app for printers behind a
