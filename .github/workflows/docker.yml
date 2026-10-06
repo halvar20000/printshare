@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     # mobile/ counts: the web app (app.pocketprint3d.com) is built from it into the image
-    paths-ignore: ["mobile/README.md", "mobile/scripts/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "pi-image/**", ".github/workflows/pi-image.yml", ".github/workflows/pi-camera-image.yml", "**.md"]
+    paths-ignore: ["mobile/README.md", "mobile/scripts/**", "docs/**", "homeassistant/**", "unraid/**", "site/**", "deploy/**", "dns/**", "pi-image/**", ".github/workflows/pi-image.yml", "**.md"]
   workflow_dispatch:
 
 permissions:

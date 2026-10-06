@@ -882,13 +882,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   stream, 8081 snapshot), `wifi: output_power: 8.5dB` (at full power it browned out/rebooted on connect), `web_server` :80
   for logs. Files `releases/esp32cam-p1s-links*.{bin,yaml}`. At 192.168.86.193: `http://IP:8081/` 1024x768 ~27 KB in 0.25 s.
   Thomas' Home Assistant (192.168.86.173) ESPHome add-on couldn't build: no DNS inside HA.
-- Ready-made **camera image** (2026-10-06): `pi-image/stage-camera` + `.github/workflows/pi-camera-image.yml` (tag
-  `pi-camera-v*`): Raspberry Pi OS Lite 64-bit + mediamtx v1.21.1 (arm64 tarball checksum-checked against the release's
-  checksums.sha256 in the workflow) as `pocketprint3d-camera.service` (user `mediamtx`, group video), config
-  `/etc/pocketprint3d-camera/mediamtx.yml`: only RTSP/TCP :8554, path `cam` = rpiCamera 1640x1232 @15 fps (full FOV of
-  the V2/OV5647), no password (LAN). Hostname `pocketprint3d-cam`, user pp3d locked, SSH off. Release asset
-  `pocketprint3d-camera-pi.img.xz`, created with `--latest=false` so `releases/latest` stays the bridge image (the website
-  links it). For Thomas' P1S .20 (camera cable torn): Pi 4 + Pi Camera V2 in the MakerWorld holder (model 1740878).
+- **Pi camera in the bridge image** (2026-10-06, Thomas: test bridge + camera on the same Pi 4): `pi-image/stage-pp3d/01-camera`
+  installs mediamtx v1.21.1 (arm64 tarball checksum-checked against the release's checksums.sha256 in pi-image.yml) as
+  `pocketprint3d-camera.service` (user `mediamtx`, group video), config `/etc/pocketprint3d-camera/mediamtx.yml`: only
+  RTSP/TCP :8554, path `cam` = rpiCamera 1640x1232 @15 fps (full FOV of V2/OV5647), `sourceOnDemand: true` (no camera,
+  no cost), no password (LAN). Own camera address: `rtsp://<Pi IP>:8554/cam`. A separate camera image was built first
+  and dropped for this. For Thomas' P1S .20 (camera cable torn): Pi 4 + Pi Camera V2 in the MakerWorld holder (1740878).
 - 0.36.1: own camera address option `#rotate=90|180|270` (fragment, never sent to the camera; `Camera.rotate`, Pillow
   transpose in `camera.snapshot`, a turned camera reports `stream: false`). For the ESP32-CAM mounted on its side in .20. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.

@@ -1,5 +1,0 @@
-
-PocketPrint3D camera - https://pocketprint3d.com/help/
-  Picture (RTSP):  rtsp://<this Pi's IP>:8554/cam   (PocketPrint3D app: printer settings → Own camera)
-  Settings:        /etc/pocketprint3d-camera/mediamtx.yml
-

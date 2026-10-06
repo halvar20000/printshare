@@ -2,4 +2,5 @@
 PocketPrint3D bridge - https://pocketprint3d.com/bridge/
   Status and pairing code:  http://pocketprint3d.local  (or:  pocketprint3d-code)
   Update now:               sudo pocketprint3d-update
+  Pi camera (if connected): rtsp://<this Pi's IP>:8554/cam   (app: printer settings → Own camera)
 

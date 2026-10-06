@@ -1,6 +1,7 @@
 # Ready-made Raspberry Pi image for the PocketPrint3D bridge (pi-image/, docs/BRIDGE.md): Raspberry Pi OS Lite 64-bit
 # (pi-gen) + Docker + the bridge image of this version preloaded. Write it to an SD card, plug in LAN and power, and the
-# app finds the bridge on the Wi-Fi. No default password, SSH off.
+# app finds the bridge on the Wi-Fi. No default password, SSH off. A Pi camera module on the same Pi is offered as
+# rtsp://<IP>:8554/cam (mediamtx, opened only on demand) for PocketPrint3D's "Own camera".
 # Started by hand (Actions → Raspberry Pi image → Run workflow) after the bridge image of the version is published, or
 # by a tag pi-image-v<version>. Result: GitHub release pi-image-v<version> with pocketprint3d-bridge-pi.img.xz.
 name: Raspberry Pi image
@@ -12,6 +13,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  MEDIAMTX: v1.21.1          # optional Pi camera on the bridge: rtsp://<IP>:8554/cam (pi-image/stage-pp3d/01-camera)
 
 jobs:
   image:
@@ -30,6 +34,15 @@ jobs:
           docker tag "$img:${{ steps.v.outputs.version }}" "$img:latest"
           docker save "$img:latest" -o pi-image/stage-pp3d/00-bridge/files/bridge-image.tar
           ls -la pi-image/stage-pp3d/00-bridge/files/bridge-image.tar
+      - name: mediamtx for the optional Pi camera (checksum checked)
+        run: |
+          cd /tmp
+          base="https://github.com/bluenviron/mediamtx/releases/download/$MEDIAMTX"
+          curl -fsSLO "$base/mediamtx_${MEDIAMTX}_linux_arm64.tar.gz"
+          curl -fsSLO "$base/checksums.sha256"
+          grep "mediamtx_${MEDIAMTX}_linux_arm64.tar.gz" checksums.sha256 | sha256sum -c -
+          tar xzf "mediamtx_${MEDIAMTX}_linux_arm64.tar.gz" mediamtx
+          install -m 755 mediamtx "$GITHUB_WORKSPACE/pi-image/stage-pp3d/01-camera/files/mediamtx"
       - uses: usimd/pi-gen-action@v1
         id: build
         with:
@@ -62,6 +75,8 @@ jobs:
           sha256sum pocketprint3d-bridge-pi.img.xz > pocketprint3d-bridge-pi.img.xz.sha256
           ls -la pocketprint3d-bridge-pi.img.xz*
           notes="PocketPrint3D bridge ${{ steps.v.outputs.version }} for the Raspberry Pi 3, 4, 5 and Zero 2 W (64-bit).
+          With a Pi camera module (V2, V3, OV5647) connected, the Pi also offers it as rtsp://<IP>:8554/cam (app: printer
+          settings → Own camera).
           Write it to an SD card with Raspberry Pi Imager (Choose OS → Use custom), put the card in the Pi, plug in the network
           cable and power. After about 3 minutes the PocketPrint3D app finds the bridge: Settings → Advanced → Print from anywhere.
           Guide: https://pocketprint3d.com/bridge/"
