@@ -168,3 +168,47 @@ def test_bridge_uploads_to_the_cloud_job(cloud, tmp_path):  # noqa: F811
         got = c.get("/api/jobs/cj1/timelapse", headers=h)
         assert got.status_code == 200 and got.content == video.read_bytes()
         assert c.get("/api/jobs/cj1/timelapse", headers=login(api, c, "ben@example.com")).status_code == 404
+
+
+def test_always_setting_and_external_prints(tmp_path, monkeypatch):
+    import importlib
+    import yaml
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump({"api_token": "t", "work_dir": str(tmp_path / "w"), "gcode_dir": str(tmp_path / "g"),
+                                   "printers": [{"id": "cc", "type": "elegoo_sdcp", "host": "127.0.0.1"}]}))
+    monkeypatch.setenv("PRINTSHARE_CONFIG", str(cfg))
+    api = importlib.reload(importlib.import_module("printshare.api"))
+    h = {"Authorization": "Bearer t"}
+    status = {"state": "printing", "file": "orca.gcode", "progress": 3, "layer": 1}
+
+    async def printing(self):
+        return status
+    monkeypatch.setattr(type(api.get_adapter(api.settings.printer("cc"))), "status", printing)
+
+    async def camera(acct, pid):
+        return object()
+    monkeypatch.setattr(api, "_camera", camera)
+    with TestClient(api.app) as c:
+        assert c.get("/api/timelapse/config", headers=h).json() == {"always": False}
+        assert not api._timelapse_wanted(None) and api._timelapse_wanted(True)
+        # off: the print shows up as a job, without a recording
+        asyncio.run(api._track_printer("local", "cc"))
+        (job,) = [j for j in api.JOBS.values() if j["kind"] == "external"]
+        assert job["state"] == "started" and "timelapse" not in job and api.TIMELAPSE.get(job["id"]) is None
+        assert c.post(f"/api/jobs/{job['id']}/send", json={"start": True, "confirm": True}, headers=h).status_code == 409
+        api.JOBS.clear()
+        # on: stored next to config.yaml, and prints started elsewhere are recorded
+        assert c.put("/api/timelapse/config", json={"always": True}, headers=h).json() == {"always": True}
+        assert yaml.safe_load((tmp_path / "timelapse.yaml").read_text())["always"] is True
+        assert api._timelapse_wanted(None) and not api._timelapse_wanted(False)
+
+        async def track():
+            await api._track_printer("local", "cc")
+            await asyncio.sleep(0.05)              # the recording is started by a task
+        asyncio.run(track())
+        (job,) = [j for j in api.JOBS.values() if j["kind"] == "external"]
+        rec = api.TIMELAPSE.get(job["id"])
+        assert job["timelapse"]["state"] == "recording" and rec.file == "orca.gcode" and rec.seen_active
+        assert rec.out == str(tmp_path / "g" / "cc" / job["id"] / "timelapse.mp4")
+        asyncio.run(api._track_printer("local", "cc"))
+        assert len(api.JOBS) == 1, "seen again: no second job"

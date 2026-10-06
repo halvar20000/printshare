@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.37.0
+- Prints started elsewhere (e.g. sent from OrcaSlicer straight to the printer) now show up in the app's job list and
+  are followed until they finish.
+- Time-lapse "always": record every print where the printer has a camera, including prints started elsewhere (setting
+  in the app; own servers and bridges).
+
 ## 0.36.1
 - Own camera: add `#rotate=90` (or 180, 270) to the camera address to turn the picture - for a camera mounted on its side.
 

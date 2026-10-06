@@ -372,7 +372,9 @@ export default function JobScreen() {
   }
 
   const r = job.result;
-  const name = jobName(r?.source_file, job.request.link);
+  // started on the printer (OrcaSlicer straight to the printer …, server 0.37.0): nothing to send again
+  const external = job.kind === "external";
+  const name = jobName(r?.source_file ?? job.printer_file, job.request.link);
 
   // ---------- slicing ----------
   if (job.state === "slicing" || job.state === "running") {
@@ -451,7 +453,7 @@ export default function JobScreen() {
 
   const footer = done ? (
     <>
-      {over ? <Button title={t("printAgain")} icon="refresh" onPress={() => { setRelayed(null); setAgain(true); }} />
+      {over && !external ? <Button title={t("printAgain")} icon="refresh" onPress={() => { setRelayed(null); setAgain(true); }} />
         : <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />}
       {!cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
         onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}

@@ -378,7 +378,8 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
 - `result.sent` after sending: `{"uploaded": "cube.gcode", "started": false, "tools": {"0": 0}}`.
 
 `GET /api/jobs` – recent jobs (newest first, in memory, max. 50):
-`[{"id", "kind", "state", "error", "created", "printer", "link", "file", "print_time", "filament_g"}]`.
+`[{"id", "kind", "state", "error", "created", "printer", "link", "file", "print_time", "filament_g", "progress"}]`
+(`progress` since 0.37.0: % of a started print, else null).
 `DELETE /api/jobs/{job}` removes a job and its G-code (`409` while it runs).
 
 ### `POST /api/jobs/{job}/send` – after the review and the user's confirmation
@@ -500,6 +501,19 @@ Recorded where the camera is reachable: on an own server, or on the bridge for p
 - `GET /api/jobs/{id}/timelapse` → the MP4 (`Content-Disposition: inline`, `?token=` works for video players); 404 until ready.
   Stored in the job's folder, so it goes with the job (14 days).
 - The apps show the switch only for printers with a camera that the server reaches (own server, bridge printers).
+- "Always" (0.37.0, own servers and bridges): `GET|PUT /api/timelapse/config {"always": bool}` (cloud: 409), stored in
+  `<config dir>/timelapse.yaml`. `timelapse` in `/send` is optional now: left out (null) = this setting; an explicit
+  `true`/`false` wins. With `always` on, prints started elsewhere (see below) are recorded too when the printer has a camera.
+
+## Prints started elsewhere (0.37.0)
+A print the server sees on a printer that no job of the account stands for (OrcaSlicer straight to the printer, the
+printer's screen, Mainsail …) becomes a job of its own: `kind: "external"`, `state: "started"`, `result: null`,
+`request.link: null`, `printer_file` = the file on the printer (also as `file` in `GET /api/jobs`), `progress`. It is
+then followed like any started job (`finished` / `cancelled`). Who sees the printer: the home server looks at all its
+printers every 30 s, the cloud at every printer behind an online bridge every 60 s, the app reports Wi-Fi printers via
+`POST /api/observe`. Not counted as external: a file a started job of the printer already has, any job still `sending`/
+`uploading`, and anything while a start of our own hasn't been seen printing yet (20 min - the printer may name the file
+differently). External jobs have no G-code: `send` / `relayed` answer 409, no preview, no "print again".
 
 ## Bridges (0.24.0, cloud only – docs/BRIDGE.md)
 A bridge is a PocketPrint3D server at home that keeps one outgoing WebSocket to the cloud. Step 2 (cloud side) is

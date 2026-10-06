@@ -905,6 +905,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   to the server for Bambu (no G-code rewrite) but `opts.tools` → ams_mapping. Discovery: `deps.bambu` = `BambuLan.probeAsync`.
   Printer type `bambu_lan` offered without a bridge on Android only. **Not yet tried on a real phone.**
 
+## Prints started elsewhere + time-lapse "always" (2026-10-06, server 0.37.0, Dominique)
+- `jobtrack.external()`: a printer seen printing a file no job of the account stands for → job `kind: "external"`
+  (`result: null`, `printer_file`, `progress`), then followed like any started job. Not external: a started job with the
+  same file, any `sending`/`uploading` job of the printer, an own start not yet seen printing (< 20 min, names may differ).
+  Fed by `_track_jobs`: home loop now polls **all** printers every 30 s (`_track_printer`, 15 s timeout, in parallel),
+  cloud loop every printer on an online bridge (`_bridge_printers`), app `/api/observe`. `send`/`relayed` → 409 for them.
+- `GET|PUT /api/timelapse/config {"always"}` (`<config dir>/timelapse.yaml`, own servers/bridges); `/send` `timelapse`
+  null = this setting (bridge `job.send` passes null on); external prints are recorded with "always" when `_camera` finds
+  one (`_external_timelapse`). Not in the cloud: external prints on bridge printers get no time-lapse yet.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

@@ -7,6 +7,10 @@ reports it - the home server for its printers, the cloud for printers behind a b
   cancelled / error                → "cancelled"
   idle / another file afterwards   → "finished" when it got to ≥ 99 %, else "cancelled" (only once it was seen printing)
   never seen printing for 6 hours  → left as "started" (the printer may have been off; nothing is guessed)
+
+Prints started elsewhere (0.37.0: OrcaSlicer straight to the printer, the printer's screen, Mainsail …) become jobs of
+their own, kind "external", as soon as a printer is seen printing a file no job of the account stands for; from then on
+they are followed by the same rules.
 """
 from __future__ import annotations
 
@@ -18,6 +22,9 @@ from .cloud.bookings import same_file
 
 TRACKED = ("started",)
 STALE_DONE_S = 10 * 60
+SENDING = ("sending", "uploading")   # a send of our own is under way: what the printer starts now is ours
+OWN_START_S = 20 * 60                # a start of our own not seen printing yet may carry another name on the printer
+EXTERNAL = "external"
 
 
 def printer_file(job: dict[str, Any]) -> str | None:
@@ -61,3 +68,28 @@ def _end(job: dict[str, Any], state: str, now: float) -> bool:
     if state == "finished":
         job["progress"] = 100.0
     return True
+
+
+def external(jobs: list[dict[str, Any]], printer_id: str, status: dict[str, Any] | None, kind: str | None,
+             now: float | None = None) -> dict[str, Any] | None:
+    """A print on this printer that none of these jobs (the account's jobs of this printer, already tracked with this
+    status) stands for: the fields of a new "external" job, else None."""
+    if not status or kind not in ("active", "paused"):
+        return None
+    name = status.get("file")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    now = now or time.time()
+    for job in jobs:
+        state = job.get("state")
+        if state in SENDING:
+            return None
+        if state in TRACKED and (same_file(name, printer_file(job) or "")
+                                 or (not job.get("seen_printing")
+                                     and now - float(job.get("started_at") or 0) < OWN_START_S)):
+            return None
+    progress = status.get("progress")
+    return {"kind": EXTERNAL, "state": "started", "printer": printer_id, "printer_file": Path(name).name,
+            "started_at": now, "seen_printing": True,
+            "progress": round(float(progress), 1) if isinstance(progress, (int, float)) else None,
+            "request": {"link": None, "printer": printer_id, "source": "printer"}}
