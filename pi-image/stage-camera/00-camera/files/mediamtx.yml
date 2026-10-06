@@ -1,0 +1,24 @@
+# PocketPrint3D camera (Raspberry Pi + camera module): the picture as RTSP for PocketPrint3D ("Own camera").
+#   rtsp://<IP of the Pi>:8554/cam
+# Only RTSP over TCP on port 8554; everything else of mediamtx is off. Home network only - no password.
+logLevel: warn
+rtsp: yes
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+moq: no
+api: no
+metrics: no
+pprof: no
+playback: no
+paths:
+  cam:
+    source: rpiCamera
+    sourceOnDemand: false
+    # full field of view of the Camera Module V2 (IMX219, binned mode) and OV5647 cameras, scaled to 1640x1232
+    rpiCameraWidth: 1640
+    rpiCameraHeight: 1232
+    rpiCameraFPS: 15

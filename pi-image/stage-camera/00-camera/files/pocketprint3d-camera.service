@@ -1,0 +1,14 @@
+[Unit]
+Description=PocketPrint3D camera (mediamtx RTSP server)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=mediamtx
+Group=video
+ExecStart=/usr/local/bin/mediamtx /etc/pocketprint3d-camera/mediamtx.yml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

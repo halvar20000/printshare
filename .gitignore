@@ -10,3 +10,4 @@ releases/
 .secrets/
 # saved by .github/workflows/pi-image.yml
 pi-image/stage-pp3d/00-bridge/files/bridge-image.tar
+pi-image/stage-camera/00-camera/files/mediamtx
