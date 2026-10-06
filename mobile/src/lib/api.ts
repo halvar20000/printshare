@@ -74,6 +74,13 @@ export type Lane = {
   /** server 0.16.0: Spoolman spool assigned to the lane in AFC */
   spool_id?: number | null;
 };
+/** Filament menu of a printer (server 0.37.0): slots incl. Bambu's external spool (tool 254), materials to choose. */
+export type FilamentInfo = {
+  supported: boolean; load: boolean; unload: boolean; set: boolean; external?: boolean; busy?: boolean;
+  slots: Lane[]; materials: { name: string; type: string; temp_min: number; temp_max: number; load_temp: number }[];
+};
+export type FilamentAction = { action: "load" | "unload" | "set"; slot?: number; material?: string; color?: string;
+  temp?: number; confirm?: boolean };
 export type PrinterStatus = {
   state: string | null; kind: PrinterKind; file?: string | null; progress?: number;
   layer?: number | null; layers?: number | null; print_duration_s?: number | null; time_remaining_s?: number | null;
@@ -479,6 +486,11 @@ export class Api {
   setPower = (printer: string, on: boolean) =>
     this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/power`,
       { method: "POST", body: { on }, timeout: 20000 });
+  filamentInfo = (printer: string) =>
+    this.request<FilamentInfo>(`/api/printers/${encodeURIComponent(printer)}/filament`, { timeout: 25000 });
+  filamentAction = (printer: string, body: FilamentAction) =>
+    this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/filament`,
+      { method: "POST", body, timeout: 35000 });
   controls = (printer: string) =>
     this.request<Controls>(`/api/printers/${encodeURIComponent(printer)}/controls`, { timeout: 20000 });
   adjust = (printer: string, kind: "heater" | "fan" | "light" | "speed", id: string, value: number | boolean,

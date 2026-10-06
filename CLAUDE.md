@@ -915,6 +915,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   to the server for Bambu (no G-code rewrite) but `opts.tools` → ams_mapping. Discovery: `deps.bambu` = `BambuLan.probeAsync`.
   Printer type `bambu_lan` offered without a bridge on Android only. **Not yet tried on a real phone.**
 
+## Filament menu (2026-10-06, server 0.37.0, app build 43)
+- `printshare/filament.py`: materials with Bambu generic `tray_info_idx` (read from Orca's BBL "Generic … @base": PLA GFL99,
+  PLA Silk GFL96, PLA-CF GFL98, PETG GFG99, PETG-CF GFG98, ABS GFB99, ASA GFB98, TPU GFU99, PA GFN99, PA-CF GFN98, PC GFC99,
+  PVA GFS99), temp range + load temperature. Bambu adapter: `filament_caps()`, `filament(action, slot, material, colour,
+  temp)`: `ams_filament_setting` (ams_id = tool//4, tray_id = tool%4; external spool ams_id 255 / tray_id 254; colour
+  "RRGGBBFF") and `ams_change_filament` (target 0-15 / 254 external, 255 = unload; curr_temp = tar_temp = material's load
+  temperature). Status has `external` (vt_tray). API `GET/POST /api/printers/{id}/filament` (load/unload refused while
+  printing and without confirm), bridge methods `printer.filament.info` / `printer.filament`. App: `filament/[id].tsx`
+  (slots with colour dot, Load/Unload/Edit, material picker + colour swatches/hex), row "Filament" in the control screen
+  (only when the server answers `supported`).
+- **Live 2026-10-06:** `set` on P1S .53 tray 2 → PLA red, the printer replied `result: success`, the report showed GFL99 /
+  E02020FF / 190-240. P1S generic PLA range is 190-240, PETG 220-270 (as the printer reports its own trays). Load/unload not
+  yet tried on the real printer. Klipper/AFC next.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

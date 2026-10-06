@@ -218,6 +218,8 @@ def test_camera_frames_over_tls(tmp_path, monkeypatch):
                     if not chunk:                     # read_serial only does the handshake
                         break
                     login += chunk
+                if len(login) < 80:                       # read_serial: handshake only
+                    continue
                 logins.append(login)
                 s.sendall(struct.pack("<IIII", len(jpeg), 0, 1, 0) + jpeg)
     threading.Thread(target=serve, daemon=True).start()
@@ -233,3 +235,57 @@ def test_camera_frames_over_tls(tmp_path, monkeypatch):
     monkeypatch.setattr(bambu, "MQTT_PORT", port)
     assert bambu.read_serial("127.0.0.1") == ("01P00C0000000", True)
     srv.close()
+
+
+def test_filament_commands(fake):
+    link, _ = fake
+    a = get_adapter(PrinterConfig(id="p1s", type="bambu_lan", host="192.168.1.53", password="12345678"))
+    assert asyncio.run(a.filament("set", 2, "PETG", "#00ff00")) == {"slot": 2, "material": "PETG", "color": "#00FF00"}
+    cmd = link.sent[-1]["print"]
+    assert cmd["command"] == "ams_filament_setting" and (cmd["ams_id"], cmd["tray_id"]) == (0, 2)
+    assert cmd["tray_info_idx"] == "GFG99" and cmd["tray_type"] == "PETG" and cmd["tray_color"] == "00FF00FF"
+    assert (cmd["nozzle_temp_min"], cmd["nozzle_temp_max"]) == (220, 270)
+    asyncio.run(a.filament("set", 254, "PLA", "FFFFFF"))
+    assert (link.sent[-1]["print"]["ams_id"], link.sent[-1]["print"]["tray_id"]) == (255, 254)     # external spool
+    asyncio.run(a.filament("load", 0))                       # A1 holds PETG in the recorded report → 250 °C
+    assert link.sent[-1]["print"] == {"command": "ams_change_filament", "target": 0, "curr_temp": 250, "tar_temp": 250}
+    asyncio.run(a.filament("unload"))                        # tray_now 1 (no material known) → PLA's 220 °C
+    assert link.sent[-1]["print"]["target"] == 255 and link.sent[-1]["print"]["tar_temp"] == 220
+    with pytest.raises(ValueError):
+        asyncio.run(a.filament("set", 1, "unobtainium", "#000000"))
+    ext = bambu.external(REPORT)
+    assert ext is not None and ext["tool"] == 254 and ext["id"] == "Ext"
+
+
+@pytest.fixture
+def bambu_api(tmp_path, monkeypatch, fake):
+    import importlib
+    from fastapi.testclient import TestClient
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(f"api_token: t\nwork_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\norca_profiles_dir: {tmp_path / 'none'}\n"
+                   "printers:\n  - id: p1s\n    type: bambu_lan\n    host: 192.168.1.53\n    password: '12345678'\n"
+                   "    slicing:\n      machine: Bambu Lab P1S 0.4 nozzle\n      process: x\n      filament: y\n")
+    monkeypatch.setenv("PRINTSHARE_CONFIG", str(cfg))
+    api = importlib.reload(importlib.import_module("printshare.api"))
+    return TestClient(api.app), fake[0]
+
+
+def test_filament_endpoints(bambu_api):
+    c, link = bambu_api
+    h = {"Authorization": "Bearer t"}
+    info = c.get("/api/printers/p1s/filament", headers=h).json()
+    assert info["supported"] and info["load"] and not info["busy"]
+    assert [s["id"] for s in info["slots"]] == ["A1", "A2", "A3", "A4", "Ext"]
+    assert any(m["name"] == "PETG" for m in info["materials"])
+    r = c.post("/api/printers/p1s/filament", headers=h, json={"action": "load", "slot": 0})
+    assert r.status_code == 409 and "confirm" in r.json()["detail"]                       # heats the nozzle
+    r = c.post("/api/printers/p1s/filament", headers=h, json={"action": "load", "slot": 0, "confirm": True})
+    assert r.status_code == 200 and link.sent[-1]["print"]["command"] == "ams_change_filament"
+    assert c.post("/api/printers/p1s/filament", headers=h, json={"action": "load", "slot": 9, "confirm": True}).status_code == 400
+    assert c.post("/api/printers/p1s/filament", headers=h,
+                  json={"action": "set", "slot": 1, "material": "PLA", "color": "red"}).status_code == 400
+    r = c.post("/api/printers/p1s/filament", headers=h, json={"action": "set", "slot": 1, "material": "PLA", "color": "#ff0000"})
+    assert r.status_code == 200 and link.sent[-1]["print"]["tray_color"] == "FF0000FF"
+    link.report["gcode_state"] = "RUNNING"                    # never while printing
+    r = c.post("/api/printers/p1s/filament", headers=h, json={"action": "unload", "confirm": True})
+    assert r.status_code == 409 and "print is running" in r.json()["detail"]

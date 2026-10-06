@@ -200,6 +200,15 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _call(api.adjust, pid, req, acct)
     if method == "printer.temperatures":
         return await _call(api.temperatures, pid, acct)
+    if method == "printer.filament.info":
+        return await _call(api.filament_info, pid, acct)
+    if method == "printer.filament":
+        try:
+            req = api.FilamentRequest(**{k: params.get(k) for k in ("action", "slot", "material", "color", "temp")
+                                         if params.get(k) is not None}, confirm=bool(params.get("confirm")))
+        except Exception as e:  # noqa: BLE001 - pydantic validation
+            raise MethodError("invalid", str(e)[:300]) from None
+        return await _call(api.filament_action, pid, req, acct)
     if method == "printer.camera":
         return await _call(api.camera_info, pid, acct)
     if method == "printer.camera.snapshot":

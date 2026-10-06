@@ -80,6 +80,7 @@ from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
 from .cloud.upload_keys import UploadKeys
 from . import gcode_info
+from . import filament as filament_mod
 from .jobstore import JobStore, job_dir
 from . import jobtrack
 from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
@@ -127,7 +128,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.36.1", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.37.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1768,6 +1769,78 @@ async def adjust(printer_id: str, req: Adjustment, acct: Account = Depends(auth)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     return {"ok": True}
+
+
+# ---------- filament per slot: load / unload / what is in it (Bambu AMS first) ----------
+class FilamentRequest(BaseModel):
+    action: str                        # load | unload | set
+    slot: int | None = None            # tool number of the slot (AMS tray 0-15, Bambu external spool 254)
+    material: str | None = None        # set: one of /filament materials ("PLA", "PETG" …)
+    color: str | None = None           # set: "#RRGGBB"
+    temp: int | None = Field(default=None, ge=150, le=320)   # load/unload: nozzle °C (default: the slot's material)
+    confirm: bool = False
+
+
+@app.get("/api/printers/{printer_id}/filament")
+async def filament_info(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """What the app's filament menu can do for this printer, with its slots and the materials to choose from."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.filament.info")
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
+    caps = adapter.filament_caps() if hasattr(adapter, "filament_caps") else {}
+    if not caps:
+        return {"supported": False, "slots": [], "materials": [], "load": False, "unload": False, "set": False}
+    try:
+        st = await adapter.status()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    slots = list(st.get("lanes") or [])
+    if caps.get("external") and st.get("external"):
+        slots.append(st["external"])
+    return {"supported": True, **caps, "slots": slots, "materials": filament_mod.materials_json(),
+            "busy": printer_kind(st.get("state")) in ("active", "paused")}
+
+
+@app.post("/api/printers/{printer_id}/filament")
+async def filament_action(printer_id: str, req: FilamentRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Load / unload filament or set what is in a slot. Loading and unloading heat the nozzle and move filament: never
+    while a print runs, and only with confirm=true."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.filament", **req.model_dump())
+    _local_only(acct)
+    if req.action not in filament_mod.ACTIONS:
+        raise HTTPException(400, f"action must be one of {', '.join(filament_mod.ACTIONS)}")
+    adapter = get_adapter(_printer(acct, printer_id))
+    caps = adapter.filament_caps() if hasattr(adapter, "filament_caps") else {}
+    if not caps.get(req.action):
+        raise HTTPException(400, f"this printer can't {req.action} filament from PocketPrint3D")
+    if req.action == "set":
+        if filament_mod.material(req.material) is None:
+            raise HTTPException(400, "choose a material from the list")
+        if filament_mod.colour(req.color) is None:
+            raise HTTPException(400, "color must be #RRGGBB")
+    elif req.action == "load" and req.slot is None:
+        raise HTTPException(400, "which slot to load?")
+    try:
+        st = await adapter.status()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    if req.action in ("load", "unload"):
+        if printer_kind(st.get("state")) in ("active", "paused"):
+            raise HTTPException(409, "a print is running - load or unload filament when it is over")
+        if not req.confirm:
+            raise HTTPException(409, "loading and unloading heat the nozzle - confirm (confirm=true)")
+    if req.slot is not None:
+        known = {x.get("tool") for x in (st.get("lanes") or []) + ([st["external"]] if st.get("external") else [])}
+        if req.slot not in known:
+            raise HTTPException(400, "unknown slot")
+    try:
+        return {"ok": True, **await adapter.filament(req.action, req.slot, req.material, req.color, req.temp)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
 
 
 @app.get("/api/printers/{printer_id}/temperatures")

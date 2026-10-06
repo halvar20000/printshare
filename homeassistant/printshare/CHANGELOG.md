@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.37.0
+- Filament menu for Bambu Lab printers: load and unload filament, and set what is in each AMS tray and on the external
+  spool (material and colour) - from the app, also through a bridge.
+
 ## 0.36.1
 - Own camera: add `#rotate=90` (or 180, 270) to the camera address to turn the picture - for a camera mounted on its side.
 

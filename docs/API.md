@@ -574,6 +574,16 @@ No token, home servers only (404 in the cloud):
   the home network and by the bridge's own address (rules: docs/BRIDGE.md 5a); else 403, or 409 when no code is shown.
 - `GET /bridge` – HTML status page (also at `/` on a bridge-only install).
 
+## Filament per slot (0.37.0)
+Bambu Lab (AMS trays + external spool) so far; through a bridge as `printer.filament.info` / `printer.filament`.
+- `GET /api/printers/{id}/filament` → `{"supported", "load", "unload", "set", "external", "busy", "slots": [lane …
+  (+ the external spool, tool 254, id "Ext")], "materials": [{"name", "type", "temp_min", "temp_max", "load_temp"}]}`;
+  `supported: false` for printers without it.
+- `POST /api/printers/{id}/filament` `{"action": "load"|"unload"|"set", "slot"?, "material"?, "color"?, "temp"?,
+  "confirm"?}`: `load` (slot = tool) / `unload` heat the nozzle (default: the slot's material) and move filament → 409
+  while a print runs, 409 without `confirm: true`; `set` = material (from `materials`) + `#RRGGBB` of a slot. 400 for an
+  unknown slot/material/colour.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

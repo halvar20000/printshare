@@ -1,6 +1,6 @@
 // Printer control (issue #5): temperatures with history, fans, light and print speed.
 // Anything that could spoil a running print needs an explicit confirmation (NF-05).
-import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, View, useWindowDimensions } from "react-native";
 
@@ -29,6 +29,8 @@ export default function Control() {
   const [busy, setBusy] = useState("");
   const [picker, setPicker] = useState<string | null>(null);
   const [power, setPower] = useState<{ available: boolean; state: string | null } | null>(null);
+  const [filament, setFilament] = useState(false);
+  const router = useRouter();
 
   const loadStatus = useCallback(() => {
     if (!api) return;
@@ -42,6 +44,8 @@ export default function Control() {
     if (!api) return;
     api.controls(id).then(setCaps).catch(e => setError((e as Error).message));
     api.power(id).then(setPower).catch(() => setPower(null));
+    // older servers/bridges don't know the filament menu: then the row stays hidden
+    api.filamentInfo(id).then(f => setFilament(f.supported)).catch(() => setFilament(false));
     loadStatus();
     loadHistory();
     const s = setInterval(loadStatus, 3000);
@@ -118,6 +122,13 @@ export default function Control() {
       <Stack.Screen options={{ title: name ?? t("control") }} />
       {error ? <View style={{ marginBottom: space }}><Banner kind="error" text={error} /></View> : null}
       {printing ? <View style={{ marginBottom: space }}><Banner kind="warn" icon="warning-outline" text={t("printRunningHint")} /></View> : null}
+
+      {filament ? (
+        <Section>
+          <Row icon="color-filter-outline" label={t("filamentTitle")} sub={t("filamentRowSub")}
+            onPress={() => router.push({ pathname: "/filament/[id]", params: { id, name: name ?? "" } })} />
+        </Section>
+      ) : null}
 
       {shown.length ? (
         <Section title={t("temperatures")}>

@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from ..camera import Camera, CameraError
+from .. import filament as fil
 from ..config import PrinterConfig
 from .. import gcode_info
 
@@ -165,6 +166,43 @@ def lanes(report: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda x: x["tool"])
 
 
+EXTERNAL = 254            # the external spool holder ("vt_tray") in ams_mapping / ams_change_filament
+UNLOAD = 255
+
+
+def external(report: dict[str, Any]) -> dict[str, Any] | None:
+    """The external spool (on the back of the printer) - a slot of its own next to the AMS trays."""
+    vt = report.get("vt_tray")
+    if not isinstance(vt, dict):
+        return None
+    now = str((report.get("ams") or {}).get("tray_now") or "255")
+    material = vt.get("tray_type") or None
+    return {"id": "Ext", "tool": EXTERNAL, "unit": "external", "material": material,
+            "color": _color(vt.get("tray_color")) if material else None, "filament": vt.get("tray_sub_brands") or None,
+            "weight_g": None, "loaded": bool(material), "in_toolhead": now == str(EXTERNAL),
+            "status": "ready" if material else "empty", "spool_id": None}
+
+
+def tray_setting(tool: int, m: fil.Material, colour: str) -> dict[str, Any]:
+    """`ams_filament_setting`: what is in an AMS tray (tool 0-15) or on the external spool holder (254)."""
+    ams_id, tray_id = (255, EXTERNAL) if tool == EXTERNAL else (tool // 4, tool % 4)
+    return {"print": {"command": "ams_filament_setting", "ams_id": ams_id, "tray_id": tray_id,
+                      "tray_info_idx": m.bambu_id, "tray_type": m.type, "tray_color": colour + "FF",
+                      "nozzle_temp_min": m.temp_min, "nozzle_temp_max": m.temp_max, "setting_id": ""}}
+
+
+def change_filament(target: int, temp: int) -> dict[str, Any]:
+    """`ams_change_filament`: load the tray `target` (0-15, 254 = external) - or unload with 255."""
+    return {"print": {"command": "ams_change_filament", "target": target, "curr_temp": temp, "tar_temp": temp}}
+
+
+def slot_temp(report: dict[str, Any], tool: int | None) -> int:
+    """Nozzle temperature for loading/unloading the filament in this slot (its material, else PLA's)."""
+    lane = next((x for x in lanes(report) + [external(report) or {}] if x.get("tool") == tool), None)
+    m = fil.material((lane or {}).get("material")) or fil.MATERIALS[0]
+    return m.load_temp
+
+
 def status_from(report: dict[str, Any]) -> dict[str, Any]:
     state = str(report.get("gcode_state") or "").upper()
     norm = _STATES.get(state, state.lower() or None)
@@ -193,6 +231,7 @@ def status_from(report: dict[str, Any]) -> dict[str, Any]:
         "lights": {"light": lights.get("chamber_light", False)},
         "speed": SPEED_LEVELS.get(int(report.get("spd_lvl") or 2), None),
         "lanes": lanes(report),
+        "external": external(report),
         "camera": None,
         "error": report.get("print_error") or None,
     }
@@ -533,6 +572,35 @@ class Bambu:
             lk.publish({"print": {"command": "print_speed", "param": str(level)}})
         else:
             raise ValueError(f"can't adjust {kind} {target!r}")
+
+    # ---------- filament: load / unload / what is in a slot ----------
+    def filament_caps(self) -> dict[str, Any]:
+        return {"load": True, "unload": True, "set": True, "external": True}
+
+    async def filament(self, action: str, slot: int | None = None, material: str | None = None,
+                       colour: str | None = None, temp: int | None = None) -> dict[str, Any]:
+        """action "load" (slot = tray 0-15 or 254 external), "unload", "set" (material + colour of a slot)."""
+        lk = await self._link()
+        report = lk.snapshot()
+        if action == "set":
+            m = fil.material(material)
+            c = fil.colour(colour)
+            if slot is None or m is None or c is None:
+                raise ValueError("slot, material and colour are needed")
+            lk.publish(tray_setting(int(slot), m, c))
+            return {"slot": slot, "material": m.name, "color": "#" + c}
+        if action == "load":
+            if slot is None:
+                raise ValueError("which slot to load?")
+            t = temp or slot_temp(report, int(slot))
+            lk.publish(change_filament(int(slot), t))
+            return {"slot": slot, "temp": t}
+        if action == "unload":
+            now = str((report.get("ams") or {}).get("tray_now") or "255")
+            t = temp or slot_temp(report, int(now) if now.isdigit() else None)
+            lk.publish(change_filament(UNLOAD, t))
+            return {"slot": None, "temp": t}
+        raise ValueError(f"unknown action {action!r}")
 
     async def camera(self) -> Camera | None:
         """Still pictures only (about one every 2 s) - the app's thumbnails, full screen "still", time-lapse."""
