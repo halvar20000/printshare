@@ -890,6 +890,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   and dropped for this. For Thomas' P1S .20 (camera cable torn): Pi 4 + Pi Camera V2 in the MakerWorld holder (1740878).
   **Verified 2026-10-06** on Thomas' Pi 4 (image pi-image-v0.36.1, 772 MB): bridge at 192.168.86.94 (pairing), camera at
   `rtsp://192.168.86.94:8554/cam` → 1640x1232, ~112 KB, 4-6 s per picture through ffmpeg (camera opened on demand).
+  The app found the Pi bridge on the Wi-Fi only with **Tailscale switched off** on the phone (the same discovery code run here
+  found it in 6 s) - todo: hint "switch off VPN/Tailscale" in the "no bridge found" / "no printer found" texts.
 - 0.36.1: own camera address option `#rotate=90|180|270` (fragment, never sent to the camera; `Camera.rotate`, Pillow
   transpose in `camera.snapshot`, a turned camera reports `stream: false`). For the ESP32-CAM mounted on its side in .20. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
