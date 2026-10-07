@@ -1,7 +1,7 @@
 // Printer settings: own OrcaSlicer printer profile (issue #2, spec PR-01/02), uploaded or from an Orca Cloud share link (#7).
 import * as DocumentPicker from "expo-document-picker";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
@@ -14,6 +14,7 @@ export default function PrinterSettings() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { api, t } = useApp();
   const c = useColors();
+  const router = useRouter();
   const [printer, setPrinter] = useState<Printer | null>(null);
   const [current, setCurrent] = useState<PrinterProfile | null>(null);
   const [allProfiles, setProfiles] = useState<UserProfile[]>([]);
@@ -25,7 +26,8 @@ export default function PrinterSettings() {
   const [orcaLink, setOrcaLink] = useState("");
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
+  // on focus: presets synced from Orca Cloud on the next screen show up when coming back
+  useFocusEffect(useCallback(() => {
     if (!api) return;
     let alive = true;
     Promise.all([api.printers(), api.printerProfile(id), api.profiles()])
@@ -37,7 +39,7 @@ export default function PrinterSettings() {
       })
       .catch(e => { if (alive) setError((e as Error).message); });
     return () => { alive = false; };
-  }, [api, id]);
+  }, [api, id]));
 
   const use = async (file: string | null) => {
     if (!api) return;
@@ -173,6 +175,10 @@ export default function PrinterSettings() {
             onPress={() => { tap(); importOrca(); }} loading={importing}
             disabled={!current || !/cloud\.orcaslicer\.com\/b\//.test(orcaLink)} />
         </View>
+      </Section>
+
+      <Section footer={t("orcaAccountSub")}>
+        <Row icon="sync-outline" label={t("orcaAccountTitle")} onPress={() => router.push("/orca-account")} />
       </Section>
 
       <Button title={t("uploadProfile")} icon="cloud-upload-outline" onPress={() => { tap(); upload(); }}

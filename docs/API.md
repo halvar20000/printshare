@@ -716,6 +716,20 @@ preset `inherits` the printer's system model (`GET /api/printers/{id}/profile` �
 `kind`: `machine` (printer), `process` (quality), `filament` (material). Printer presets are assigned per printer
 (`PUT /api/printers/{id}/profile`); quality/material presets appear in `/options` under `own`.
 
+### Own presets from an Orca Cloud account (0.41.0, issue #7)
+Orca Cloud's "External App Pairing" (OAuth device flow, scope `sync:read`, read only). Each app needs a `client_id`
+from the Orca Cloud team: server env `ORCA_CLOUD_CLIENT_ID` (wins), else the one the user enters. Tokens stay on the
+server (`<config dir>/orca_cloud.yaml`, 0600); presets are stored like uploaded ones and show up in `/api/profiles`,
+`/options` etc. Synced every 6 h; presets gone from Orca Cloud are removed unless a printer uses them.
+- `GET /api/orca-cloud` → `{"client_id" (masked when from the server), "client_id_from": "server"|"user"|null,
+  "connected", "connected_at", "last_sync", "count", "skipped": [{name, error}], "last_error",
+  "pending": {"user_code", "verification_uri", "verification_uri_complete", "expires_in", "error": null|"denied"|"expired"|text} | null}`
+- `PUT /api/orca-cloud {"client_id" | null}` (400 bad format; a different ID ends an existing pairing)
+- `POST /api/orca-cloud/connect` → status with `pending` (409 without an ID, 400 unknown ID); the server polls Orca
+  Cloud in the background - the app polls `GET` until `connected`.
+- `POST /api/orca-cloud/sync` → status + `removed` (409 not connected / pairing ended)
+- `DELETE /api/orca-cloud?remove_presets=true|false` → status + `removed` (the app ID is kept)
+
 ## Web-page-only endpoints
 Settings that are made on the web page, not in the apps: `/api/printers/{id}/power/config` (GET/PUT/DELETE),
 `/power/test`, `/power/entities`. Details in `printshare/api.py`.

@@ -163,6 +163,12 @@ export type JobSummary = {
 };
 /** Started on the printer itself, not through PocketPrint3D (server 0.40.0): no G-code, nothing to send again. */
 export const isExternal = (j: { kind: string }) => j.kind === "external";
+export type OrcaAccount = {
+  client_id: string | null; client_id_from: "server" | "user" | null; connected: boolean; connected_at?: number | null;
+  last_sync?: number | null; count: number; skipped: { name: string; error: string }[]; last_error?: string | null;
+  pending: { user_code: string; verification_uri?: string | null; verification_uri_complete?: string | null;
+             expires_in: number; error?: string | null } | null;
+};
 export type Upload = { id: string; link: string; name: string; size: number };
 export type Source = { id: "printables" | "thingiverse" | "manyfold"; name: string; available: boolean };
 export type SortKey = "relevant" | "popular" | "makes";
@@ -565,6 +571,14 @@ export class Api {
   uploadProfile = (uri: string, name: string) =>
     this.rawUpload<UserProfile[]>(`/api/profiles?filename=${encodeURIComponent(name)}`, uri);
 
+  /** Own presets from an Orca Cloud account (server 0.41.0, issue #7): app ID, pairing, sync. */
+  orcaAccount = () => this.request<OrcaAccount>("/api/orca-cloud");
+  setOrcaClientId = (client_id: string | null) =>
+    this.request<OrcaAccount>("/api/orca-cloud", { method: "PUT", body: { client_id } });
+  connectOrca = () => this.request<OrcaAccount>("/api/orca-cloud/connect", { method: "POST", timeout: 30000 });
+  syncOrca = () => this.request<OrcaAccount & { removed: string[] }>("/api/orca-cloud/sync", { method: "POST", timeout: 120000 });
+  disconnectOrca = (removePresets: boolean) =>
+    this.request<OrcaAccount & { removed: string[] }>(`/api/orca-cloud?remove_presets=${removePresets}`, { method: "DELETE" });
   /** Import a bundle shared on cloud.orcaslicer.com (server 0.18.0, issue #7) - no Orca account needed. */
   /** SpoolmanDB filament presets for adding spools (server 0.19.0). */
   filamentBrands = () => this.request<{ name: string; count: number }[]>("/api/filament-db/brands", { timeout: 60000 });

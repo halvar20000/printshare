@@ -404,7 +404,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `tests/data/orca_cloud_cosmos_bundle.json`). Orca Cloud has only Public and Private bundles - private ones open only for
   whitelisted logged-in users ("Only whitelisted users can access this private bundle link"), no link-only mode → import
   is for public bundles; texts say so since build 24.
-- **Orca Cloud *account* sync (private presets automatically) is still blocked:** it needs a `client_id` registered with the Orca Cloud team and their
+- **Orca Cloud account sync built (0.41.0, 2026-10-07)**, waiting for an own client_id: `printshare/orca_sync.py` (device flow
+  form-encoded - checked against the real API's error answers: JSON body → invalid_request, unknown id → invalid_client;
+  rotating refresh tokens under a lock, saved before use; full `sync/pull` every 6 h in `_orca_sync_loop` for every
+  connected config dir incl. cloud users; presets through `user_profiles.store_presets`, vanished ones removed unless in
+  `printers.d` use). client_id = env `ORCA_CLOUD_CLIENT_ID` or entered by the user (app `orca-account.tsx`, Settings →
+  Erweitert and the printer page); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
+  by hand in the app, test only) - a real pairing with a real account has not been run yet.
+- **Before 0.41.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
   (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow
   (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store
   the pulled presets as `profiles/` files (kind prefix) so everything above works unchanged.

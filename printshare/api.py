@@ -10,6 +10,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
+  GET|PUT|DELETE /api/orca-cloud, POST /api/orca-cloud/connect|sync   sync own presets from an Orca Cloud account (0.41.0)
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
   GET|PUT|DELETE /api/failure-detection/config · /api/printers/{id}/watch/frame|mute   AI failure detection (0.23.0, own servers)
@@ -90,6 +91,7 @@ from .cloud.hub import BridgeError, BridgeHub
 from .bridge.client import BridgeClient, default_name as bridge_default_name
 from .bridge.dispatch import dispatch as bridge_dispatch
 from . import orca_cloud
+from . import orca_sync
 from . import filament_db
 from . import manyfold as mf
 from . import failure_watch as fw
@@ -125,12 +127,13 @@ async def _lifespan(_app):
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
+    _spawn(_orca_sync_loop())      # own presets from Orca Cloud accounts (0.41.0)
     yield
     await BRIDGE_CLIENT.stop()
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.40.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.41.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -2343,6 +2346,79 @@ async def profiles_orca_cloud(req: OrcaCloudImport, acct: Account = Depends(auth
         return await asyncio.to_thread(orca_cloud.import_bundle, acct.settings.config_dir, req.link, lib)
     except orca_cloud.OrcaCloudError as e:
         raise HTTPException(400, str(e))
+
+
+# ---------- own presets from an Orca Cloud account (issue #7, 0.41.0, printshare/orca_sync.py) ----------
+ORCA_SYNC = orca_sync.OrcaSync(lambda: _library(), app.version)
+
+
+async def _orca_sync_loop() -> None:
+    """Every 6 h: pull the presets of every connected account (home server: its own; cloud: each user's)."""
+    await asyncio.sleep(120)
+    while True:
+        for d in await asyncio.to_thread(orca_sync.connected_dirs, settings.config_dir, settings.cloud):
+            try:
+                await ORCA_SYNC.sync(d)
+            except orca_sync.OrcaSyncError as e:
+                orca_sync.update(d, last_error=str(e))
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception("Orca Cloud sync failed")
+            await asyncio.sleep(2)
+        await asyncio.sleep(orca_sync.SYNC_EVERY_S)
+
+
+def _orca_error(e: orca_sync.OrcaSyncError) -> HTTPException:
+    return HTTPException(e.status, str(e))
+
+
+class OrcaClientId(BaseModel):
+    client_id: str | None = Field(None, max_length=200)
+
+
+@app.get("/api/orca-cloud")
+def orca_cloud_status(acct: Account = Depends(auth)) -> dict[str, Any]:
+    return orca_sync.status(acct.settings.config_dir)
+
+
+@app.put("/api/orca-cloud")
+def orca_cloud_set_id(req: OrcaClientId, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The user's own Orca app ID (client_id); empty = remove. A server-wide ORCA_CLOUD_CLIENT_ID wins."""
+    try:
+        cid = orca_sync.check_client_id(req.client_id) if (req.client_id or "").strip() else None
+    except orca_sync.OrcaSyncError as e:
+        raise _orca_error(e)
+    st = orca_sync.load(acct.settings.config_dir)
+    if cid != st.get("client_id") and (st.get("refresh_token") or st.get("access_token")):
+        orca_sync.disconnect(acct.settings.config_dir)     # tokens belong to the old app ID
+    orca_sync.update(acct.settings.config_dir, client_id=cid)
+    return orca_sync.status(acct.settings.config_dir)
+
+
+@app.post("/api/orca-cloud/connect")
+async def orca_cloud_connect(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Start pairing: the user confirms the returned code in Orca Cloud; the server waits for it in the background."""
+    try:
+        await ORCA_SYNC.start(acct.settings.config_dir)
+    except orca_sync.OrcaSyncError as e:
+        raise _orca_error(e)
+    return orca_sync.status(acct.settings.config_dir)
+
+
+@app.post("/api/orca-cloud/sync")
+async def orca_cloud_sync(acct: Account = Depends(auth)) -> dict[str, Any]:
+    try:
+        r = await ORCA_SYNC.sync(acct.settings.config_dir)
+    except orca_sync.OrcaSyncError as e:
+        if e.status >= 500:          # Orca Cloud trouble (a lost pairing records itself)
+            orca_sync.update(acct.settings.config_dir, last_error=str(e))
+        raise _orca_error(e)
+    return {**orca_sync.status(acct.settings.config_dir), "removed": r["removed"]}
+
+
+@app.delete("/api/orca-cloud")
+def orca_cloud_disconnect(remove_presets: bool = False, acct: Account = Depends(auth)) -> dict[str, Any]:
+    r = orca_sync.disconnect(acct.settings.config_dir, remove_presets)
+    return {**orca_sync.status(acct.settings.config_dir), **r}
 
 
 @app.delete("/api/profiles/{file}")
