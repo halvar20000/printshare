@@ -152,11 +152,17 @@ export type Job = {
   printer_file?: string | null;
   /** time-lapse of this print (server 0.32.0) */
   timelapse?: { state: "recording" | "rendering" | "ready" | "failed"; frames: number; error?: string | null; size?: number };
+  /** % of a started print, as last seen by the server (0.33.0) */
+  progress?: number | null;
 };
 export type JobSummary = {
   id: string; kind: string; state: JobState; error: string | null; created: number; printer?: string;
   link: string; file: string | null; print_time: string | null; filament_g: number | null;
+  /** server 0.40.0: % of a started print */
+  progress?: number | null;
 };
+/** Started on the printer itself, not through PocketPrint3D (server 0.40.0): no G-code, nothing to send again. */
+export const isExternal = (j: { kind: string }) => j.kind === "external";
 export type Upload = { id: string; link: string; name: string; size: number };
 export type Source = { id: "printables" | "thingiverse" | "manyfold"; name: string; available: boolean };
 export type SortKey = "relevant" | "popular" | "makes";
@@ -403,11 +409,16 @@ export class Api {
   jobs = () => this.request<JobSummary[]>("/api/jobs");
   job = (id: string) => this.request<Job>(`/api/jobs/${id}`);
   /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>};
-   *  spoolId (server 0.16.0): Spoolman spool Moonraker books the print on (status.spoolman not null) */
+   *  spoolId (server 0.16.0): Spoolman spool Moonraker books the print on (status.spoolman not null);
+   *  timelapse (0.32.0): left out = the server's "always" setting (0.40.0), so a print start always says it */
   send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number, timelapse?: boolean) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`,
       { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}),
-                                ...(timelapse ? { timelapse: true } : {}) } });
+                                ...(start && timelapse != null ? { timelapse } : {}) } });
+  /** Own server (0.40.0): record every print with a camera, also prints started on the printer itself. */
+  timelapseConfig = () => this.request<{ always: boolean }>("/api/timelapse/config");
+  setTimelapseConfig = (always: boolean) =>
+    this.request<{ always: boolean }>("/api/timelapse/config", { method: "PUT", body: { always } });
   /** Cloud: the phone sent the G-code itself (Wi-Fi) - the server follows the print from now on (0.33.0). */
   markRelayed = (id: string, start: boolean, file: string) =>
     this.request<{ state: string }>(`/api/jobs/${encodeURIComponent(id)}/relayed`, { method: "POST", body: { start, file } });

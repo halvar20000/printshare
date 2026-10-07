@@ -961,6 +961,10 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - `GET|PUT /api/timelapse/config {"always"}` (`<config dir>/timelapse.yaml`, own servers/bridges); `/send` `timelapse`
   null = this setting (bridge `job.send` passes null on); external prints are recorded with "always" when `_camera` finds
   one (`_external_timelapse`). Not in the cloud: external prints on bridge printers get no time-lapse yet.
+- Android app (2026-10-07): jobs list shows `progress` and a printer icon for external jobs, own job screen for them
+  (status, progress, printer, file, camera, time-lapse, no "print again"); Settings → "Zeitraffer immer erstellen"
+  (`lib/timelapse.ts`: phone copy `ps_timelapse_always_<server>`, own server via `/api/timelapse/config`, 404 = older
+  server hint); the review switch starts on with it, and a print start always sends `timelapse` true/false. Same as iOS 0.9.3.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

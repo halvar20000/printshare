@@ -1,13 +1,14 @@
 import Constants from "expo-constants";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Linking, Platform, Text, View } from "react-native";
+import { Alert, Linking, Platform, Switch, Text, View } from "react-native";
 
-import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@/components/ui";
+import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync, tap } from "@/components/ui";
 import { WEB_APP, type Me, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
 import { CLOUD_SPOOLS, loadSpoolmanUrl } from "@/lib/spoolman";
+import { loadTimelapseAlways, saveTimelapseAlways, serverTimelapseAlways } from "@/lib/timelapse";
 import { useColors } from "@/lib/theme";
 
 export default function Settings() {
@@ -20,6 +21,10 @@ export default function Settings() {
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [spoolman, setSpoolman] = useState<string | null>(null);
+  // "always make a time-lapse" (server 0.40.0); `tlOld` = own server without the setting
+  const [tlAlways, setTlAlways] = useState(false);
+  const [tlOld, setTlOld] = useState(false);
+  const [tlError, setTlError] = useState("");
   const cloud = !!server?.cloud;
 
   useFocusEffect(useCallback(() => {
@@ -27,6 +32,14 @@ export default function Settings() {
     api.printers().then(setPrinters).catch(() => setPrinters([]));
     if (server?.cloud) api.me().then(setMe).catch(() => setMe(null));
     if (server) loadSpoolmanUrl(server).then(setSpoolman);
+    if (server) {
+      setTlError("");
+      loadTimelapseAlways(server).then(setTlAlways);
+      if (api) serverTimelapseAlways(api, server).then(v => {
+        setTlOld(v === "old");
+        if (typeof v === "boolean") { setTlAlways(v); saveTimelapseAlways(server, v); }
+      });
+    }
     api.info().then(i => { setOnline(true); setServerVersion(i.version); setRoute(api.route()); })
       .catch(() => { setOnline(false); setRoute(null); });
   }, [api, server]));
@@ -55,6 +68,32 @@ export default function Settings() {
       Alert.alert(t("deleteAccount"), (e as Error).message);
     }
   };
+
+  const setTimelapseAlways = async (on: boolean) => {
+    if (!server) return;
+    tap();
+    setTlAlways(on);
+    setTlError("");
+    let value = on;
+    if (!cloud && !tlOld && api) {
+      try {
+        value = (await api.setTimelapseConfig(on)).always;
+      } catch (e) {
+        if ((e as { status?: number }).status === 404) setTlOld(true);
+        else { setTlAlways(!on); setTlError((e as Error).message); return; }
+      }
+    }
+    setTlAlways(value);
+    await saveTimelapseAlways(server, value);
+  };
+  const timelapseSection = (
+    <Section title={t("timelapseTitle")}
+      footer={tlError || t(cloud ? "timelapseAlwaysSubCloud" : tlOld ? "timelapseAlwaysOld" : "timelapseAlwaysSub")}>
+      <Row icon="film-outline" label={t("timelapseAlways")}
+        right={<Switch value={tlAlways} onValueChange={setTimelapseAlways} trackColor={{ true: c.accent, false: c.track }}
+          accessibilityLabel={t("timelapseAlways")} />} />
+    </Section>
+  );
 
   const spoolsRow = (
     <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
@@ -95,6 +134,8 @@ export default function Settings() {
               labels={{ auto: t("langAuto"), de: "Deutsch", en: "English" }} />
           </View>
         </Section>
+
+        {timelapseSection}
 
         <Section title={t("advanced")}>
           <Row icon="git-network-outline" label={t("bridgesTitle")} sub={t("bridgesSub")}
@@ -151,6 +192,8 @@ export default function Settings() {
             labels={{ auto: t("langAuto"), de: "Deutsch", en: "English" }} />
         </View>
       </Section>
+
+      {server ? timelapseSection : null}
 
       {server ? (
         <Section title={t("advanced")}>

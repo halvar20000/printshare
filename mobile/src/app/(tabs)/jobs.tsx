@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 
 import { Badge, Banner, Empty, tap } from "@/components/ui";
-import type { JobSummary } from "@/lib/api";
+import { isExternal, type JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago, jobName, printTime } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
@@ -47,7 +47,9 @@ export default function Jobs() {
       ListHeaderComponent={error ? <Banner kind="error" text={error} /> : null}
       ListEmptyComponent={jobs ? <Empty icon="file-tray-outline" title={t("jobsEmpty")} sub={t("jobsEmptySub")} /> : null}
       renderItem={({ item: j }) => {
-        const meta = [names[j.printer ?? ""] ?? j.printer, j.print_time ? printTime(j.print_time) : null,
+        // a running print shows how far it is (server 0.40.0), also one started on the printer itself
+        const progress = j.state === "started" && j.progress != null ? `${Math.round(j.progress)} %` : null;
+        const meta = [names[j.printer ?? ""] ?? j.printer, progress, j.print_time ? printTime(j.print_time) : null,
           j.filament_g != null ? `${j.filament_g.toFixed(1)} g` : null, ago(t, j.created)].filter(Boolean).join(" · ");
         const kind = j.state === "error" ? "error" : j.state === "finished" || j.state === "done" ? "ok"
           : j.state === "cancelled" ? "warn" : j.state === "started" || j.state === "sliced" ? "accent" : "neutral";
@@ -55,7 +57,7 @@ export default function Jobs() {
           <Pressable onPress={() => { tap(); router.push(`/job/${j.id}`); }} accessibilityRole="button"
             style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", padding: 14, borderRadius: radius,
               backgroundColor: pressed ? c.input : c.card })}>
-            <Ionicons name={j.state === "error" ? "alert-circle-outline" : "cube-outline"} size={26}
+            <Ionicons name={j.state === "error" ? "alert-circle-outline" : isExternal(j) ? "print-outline" : "cube-outline"} size={26}
               color={j.state === "error" ? c.danger : c.accent} style={{ marginRight: 12 }} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ color: c.text, fontSize: 16, fontWeight: "500" }} numberOfLines={1}>{jobName(j.file, j.link)}</Text>
