@@ -1,14 +1,16 @@
-// Printer control (issue #5): temperatures with history, fans, light and print speed.
+// Printer control (issue #5): temperatures with history, fans, light and print speed; since server 0.43.0 also moving
+// by hand (home, axes, extruder, filament, macros - components/MotionPanel).
 // Anything that could spoil a running print needs an explicit confirmation (NF-05).
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, View, useWindowDimensions } from "react-native";
 
+import { MotionPanel } from "@/components/MotionPanel";
 import { TempChart } from "@/components/tempchart";
 import {
   Banner, Button, Card, Divider, PickerSheet, Row, Screen, Section, Segmented, confirmAsync, tap,
 } from "@/components/ui";
-import { ApiError, type Controls, type PrinterStatus, type TempHistory } from "@/lib/api";
+import { ApiError, type Controls, type Motion, type PrinterStatus, type TempHistory } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { space, useColors } from "@/lib/theme";
 
@@ -30,6 +32,7 @@ export default function Control() {
   const [picker, setPicker] = useState<string | null>(null);
   const [power, setPower] = useState<{ available: boolean; state: string | null } | null>(null);
   const [filament, setFilament] = useState(false);
+  const [motion, setMotion] = useState<Motion | null>(null);
   const router = useRouter();
 
   const loadStatus = useCallback(() => {
@@ -46,6 +49,8 @@ export default function Control() {
     api.power(id).then(setPower).catch(() => setPower(null));
     // older servers/bridges don't know the filament menu: then the row stays hidden
     api.filamentInfo(id).then(f => setFilament(f.supported)).catch(() => setFilament(false));
+    // older servers/bridges (before 0.43.0) don't know it: no motion sections then
+    api.motionInfo(id).then(m => setMotion(m.supported ? m : null)).catch(() => setMotion(null));
     loadStatus();
     loadHistory();
     const s = setInterval(loadStatus, 3000);
@@ -169,6 +174,12 @@ export default function Control() {
         <Card style={{ marginBottom: 24, paddingTop: 8 }}>
           <TempChart series={history?.series ?? {}} width={Math.min(width, 640) - 2 * space} />
         </Card>
+      ) : null}
+
+      {motion && api ? (
+        <MotionPanel api={api} id={id} caps={motion} printing={printing}
+          nozzle={status?.heaters?.nozzle?.actual ?? null}
+          onHeat={() => apply("heatForExtrude", [{ kind: "heater", id: "nozzle", value: 220 }])} />
       ) : null}
 
       {caps?.fans.length ? (

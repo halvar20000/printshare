@@ -163,6 +163,14 @@ export type JobSummary = {
 };
 /** Started on the printer itself, not through PocketPrint3D (server 0.40.0): no G-code, nothing to send again. */
 export const isExternal = (j: { kind: string }) => j.kind === "external";
+export type Motion = {
+  supported: boolean; home: string[]; jog: { axes: string[]; steps: number[] } | null; extrude: boolean; load: boolean;
+  unload: boolean; motors_off: boolean; macros: string[];
+};
+export type MotionAction = {
+  action: "home" | "jog" | "extrude" | "load" | "unload" | "motors_off" | "macro"; axis?: string; distance?: number;
+  macro?: string;
+};
 export type OrcaAccount = {
   client_id: string | null; client_id_from: "server" | "user" | null; connected: boolean; connected_at?: number | null;
   last_sync?: number | null; count: number; skipped: { name: string; error: string }[]; last_error?: string | null;
@@ -531,6 +539,11 @@ export class Api {
     this.request<ReaderKey & { key: string }>(`/api/printers/${encodeURIComponent(printer)}/reader-key`, { method: "POST" });
   deleteReaderKey = (printer: string) =>
     this.request<{ deleted: boolean }>(`/api/printers/${encodeURIComponent(printer)}/reader-key`, { method: "DELETE" });
+  /** Moving by hand (server 0.43.0): what the printer can do, and doing it (never during a print). */
+  motionInfo = (printer: string) => this.request<Motion>(`/api/printers/${encodeURIComponent(printer)}/motion`);
+  motion = (printer: string, body: MotionAction & { confirm?: boolean }) =>
+    this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/motion`,
+      { method: "POST", body, timeout: 320000 });
   filamentInfo = (printer: string) =>
     this.request<FilamentInfo>(`/api/printers/${encodeURIComponent(printer)}/filament`, { timeout: 25000 });
   filamentAction = (printer: string, body: FilamentAction) =>

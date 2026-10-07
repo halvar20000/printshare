@@ -136,6 +136,7 @@ Requests go cloud → bridge (each with a timeout); events go bridge → cloud. 
 | `printer.power` | printer, on? | Home Assistant power (config on the bridge) | 20 s |
 | `job.send` | printer, job, start, leveling, lanes, spool_id, confirm | downloads `GET /api/bridge/jobs/{job}/gcode?lanes=…` with its token, uploads to the printer, starts it if `start` | 15 min |
 | `watch.state` / `watch.mute` | printer | AI failure detection (runs on the bridge, it has the camera) | 10 s |
+| `printer.motion.info` / `printer.motion` | printer, action, axis, distance, macro, confirm | moving by hand (0.43.0) | 15 s / 310 s |
 | `spoolman.config` | url | the account's Spoolman address (0.39.0, stored in `spools.yaml` on the bridge) | 15 s |
 | `printer.slot.sync` | printer, tool, spool | reads the spool from the bridge's Spoolman, sets the printer's slot (0.39.0) | 30 s |
 | `discover` | – | finds printers on its LAN (section 9) | 30 s |

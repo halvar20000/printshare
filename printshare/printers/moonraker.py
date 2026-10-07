@@ -12,6 +12,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from .. import motion
 from ..camera import Camera
 from ..config import PrinterConfig
 
@@ -183,6 +184,37 @@ class Moonraker:
             r = await client.post(f"{base}/printer/gcode/script", params={"script": script}, headers=self.headers)
             if r.status_code != 200:
                 raise MoonrakerError(f"{script} failed: HTTP {r.status_code} {r.text[:200]}")
+
+    # ---------- moving by hand (0.43.0, printshare/motion.py) ----------
+    async def motion(self) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=15) as client:
+            base = await self._resolve_base(client)
+            objects = await self._objects(client, base)
+        names = {o.split(" ", 1)[1].strip().upper() for o in objects if o.lower().startswith("gcode_macro ")}
+        return {"home": ["XYZ", "X", "Y", "Z"], "jog": {"axes": ["X", "Y", "Z"], "steps": [0.1, 1, 10, 50]},
+                "extrude": True, "load": "LOAD_FILAMENT" in names, "unload": "UNLOAD_FILAMENT" in names,
+                "motors_off": True, "macros": motion.klipper_macros(objects)}
+
+    async def move(self, action: str, axis: str | None = None, distance: float | None = None,
+                   macro: str | None = None) -> dict[str, Any]:
+        script = {"home": lambda: motion.home_gcode(str(axis)),
+                  "jog": lambda: motion.jog_gcode(str(axis), float(distance)),
+                  "extrude": lambda: motion.extrude_gcode(float(distance)),
+                  "load": lambda: "LOAD_FILAMENT", "unload": lambda: "UNLOAD_FILAMENT",
+                  "motors_off": lambda: "M84", "macro": lambda: str(macro)}.get(action)
+        if script is None:
+            raise ValueError(f"unknown action {action!r}")
+        # homing, filament routines and macros can take minutes: Moonraker answers when the G-code is done
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15, read=300)) as client:
+            base = await self._resolve_base(client)
+            r = await client.post(f"{base}/printer/gcode/script", params={"script": script()}, headers=self.headers)
+        if r.status_code != 200:
+            try:
+                msg = r.json()["error"]["message"]
+            except (ValueError, KeyError, TypeError):
+                msg = r.text[:200]
+            raise MoonrakerError(f"the printer refused it: {msg}")
+        return {"action": action, "axis": axis, "distance": distance, "macro": macro}
 
     async def temperature_history(self) -> dict[str, list]:
         """Moonraker keeps the last ~20 min at 1 s; the app gets every 10th value."""

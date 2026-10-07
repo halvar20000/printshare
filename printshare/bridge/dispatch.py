@@ -226,6 +226,15 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         except Exception as e:  # noqa: BLE001 - pydantic validation
             raise MethodError("invalid", str(e)[:300]) from None
         return await _call(api.filament_action, pid, req, acct)
+    if method == "printer.motion.info":
+        return await _call(api.motion_info, pid, acct)
+    if method == "printer.motion":
+        try:
+            req = api.MotionRequest(**{k: params.get(k) for k in ("action", "axis", "distance", "macro")
+                                       if params.get(k) is not None}, confirm=bool(params.get("confirm")))
+        except Exception as e:  # noqa: BLE001 - pydantic validation
+            raise MethodError("invalid", str(e)[:300]) from None
+        return await _call(api.motion_action, pid, req, acct)
     if method == "printer.camera":
         return await _call(api.camera_info, pid, acct)
     if method == "printer.camera.snapshot":

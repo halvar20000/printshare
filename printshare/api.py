@@ -92,6 +92,7 @@ from .bridge.client import BridgeClient, default_name as bridge_default_name
 from .bridge.dispatch import dispatch as bridge_dispatch
 from . import orca_cloud
 from . import orca_sync
+from . import motion as motion_mod
 from . import filament_db
 from . import manyfold as mf
 from . import failure_watch as fw
@@ -133,7 +134,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.42.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.43.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1884,6 +1885,69 @@ async def filament_action(printer_id: str, req: FilamentRequest, acct: Account =
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
+
+
+# ---------- moving by hand: home, jog, extrude, filament, macros (0.43.0, printshare/motion.py) ----------
+class MotionRequest(BaseModel):
+    action: str                                          # home | jog | extrude | load | unload | motors_off | macro
+    axis: str | None = Field(default=None, max_length=3)  # home: X/Y/Z/XYZ, jog: X/Y/Z
+    distance: float | None = None                        # jog / extrude: mm, negative = back / retract
+    macro: str | None = Field(default=None, max_length=80)
+    confirm: bool = False
+
+
+async def _motion_caps(adapter) -> dict[str, Any]:
+    if not hasattr(adapter, "motion"):
+        return {}
+    caps = adapter.motion()
+    return (await caps) if asyncio.iscoroutine(caps) else caps
+
+
+@app.get("/api/printers/{printer_id}/motion")
+async def motion_info(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """What can be moved by hand on this printer (the app's "Bedienen" page)."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.motion.info")
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
+    try:
+        caps = await _motion_caps(adapter)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    return {"supported": bool(caps), "home": [], "jog": None, "extrude": False, "load": False, "unload": False,
+            "motors_off": False, "macros": [], **caps}
+
+
+@app.post("/api/printers/{printer_id}/motion")
+async def motion_action(printer_id: str, req: MotionRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Move the printer by hand. Never while a print runs. Filament routines and macros heat or run on their own:
+    only with confirm=true."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.motion", **req.model_dump())
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
+    axis = (req.axis or "").upper() or None
+    try:
+        caps = await _motion_caps(adapter)
+        motion_mod.check(caps, req.action, axis, req.distance, req.macro)
+    except motion_mod.MotionError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    if req.action in ("load", "unload", "macro") and not req.confirm:
+        raise HTTPException(409, "this runs on its own and may heat the nozzle - confirm (confirm=true)")
+    try:
+        st = await adapter.status()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    if printer_kind(st.get("state")) in ("active", "paused"):
+        raise HTTPException(409, "a print is running - move the printer when it is over")
+    try:
+        return {"ok": True, **await adapter.move(req.action, axis, req.distance, req.macro)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, str(e) if "refused" in str(e) else f"printer not reachable: {e}")
 
 
 # ---------- spools by NFC chip and per slot, NFC readers at the printer (0.38.0, printshare/spooltags.py) ----------

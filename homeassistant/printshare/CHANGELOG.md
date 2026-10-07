@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.43.0
+- Move the printer by hand from the app: home, jog X/Y/Z, extrude and retract, load and unload filament, motors off and
+  the printer's own macros (Klipper) - never while a print runs. The Centauri Carbon (stock firmware) can home and
+  move its axes; filament on it stays on its screen.
+
 ## 0.42.0
 - Orca Cloud account: pair once, and your own OrcaSlicer printer, quality and material presets are taken over
   automatically (every 6 hours, read only). Needs an Orca app ID (client_id), entered in the app or set as

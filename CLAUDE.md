@@ -981,6 +981,19 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   addresses/passwords) stay in the app: the PWA only runs on own servers. Checked with Chromium against fake
   Moonraker + FakeSpoolman.
 
+## Moving by hand (2026-10-07, server 0.43.0)
+- Thomas: one page per printer with everything (load/unload, homing, axes …). The control page (`control/[id].tsx`) got
+  `components/MotionPanel.tsx`: home buttons, jog pad (X/Y cross + Z, step selector), extrude/retract (hint + "heat to
+  220 °C" below 170 °C), load/unload, motors off, Klipper macros. Server `printshare/motion.py` + adapters `motion()` /
+  `move()`, API `GET/POST /api/printers/{id}/motion`, bridge `printer.motion(.info)`.
+- **Centauri CC1 stock SDCP:** found in the printer's own web page (`http://<CC>/`, Angular chunk `590.*.js`):
+  Cmd 401 `{"Axis": "X"|"Y"|"Z", "Step": ±mm}` (steps 0.1/1/10/100), Cmd 402 `{"Axis": "X"|"Y"|"Z"|"XYZ"}` (home), only when
+  `CurrentStatus` has no 1 (printing). Full Cmd list there: 0, 1, 64, 128-131, 134/135 (blackout), 192, 255, 257-260,
+  320-323, 386, 387, 401-403. **No load/unload/extrude in the CC1 protocol** (only on its screen).
+- Bambu: gcode_line like Bambu Studio (`M211 S / M211 X1 Y1 Z1 / M1002 push_ref_mode / G91 / G1 … / M1002 pop_ref_mode /
+  M211 R`), home `G28`, extrude `M83 / G0 E`, motors `M18`, unload = AMS change 255. COSMOS: UNLOAD_FILAMENT macro, no
+  LOAD_FILAMENT (its load is screen-driven). **Not yet tried on a real printer** (none of the moves).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

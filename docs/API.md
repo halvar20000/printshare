@@ -588,6 +588,19 @@ No token, home servers only (404 in the cloud):
   the home network and by the bridge's own address (rules: docs/BRIDGE.md 5a); else 403, or 409 when no code is shown.
 - `GET /bridge` – HTML status page (also at `/` on a bridge-only install).
 
+## Moving by hand (0.43.0)
+Home, jog, extrude, filament routines, motors off and Klipper macros (`printshare/motion.py`); through a bridge as
+`printer.motion.info` / `printer.motion`. Never while a print runs (409).
+- `GET /api/printers/{id}/motion` → `{"supported", "home": ["XYZ", "X", …], "jog": {"axes", "steps": [mm…]} | null,
+  "extrude", "load", "unload", "motors_off", "macros": [names]}`
+- `POST /api/printers/{id}/motion {"action": "home"|"jog"|"extrude"|"load"|"unload"|"motors_off"|"macro", "axis"?,
+  "distance"? (mm, ± up to the biggest step / 100 for extrude), "macro"?, "confirm"?}` → `{"ok": true, …}`;
+  load/unload/macro need `confirm: true` (409 otherwise); 400 for anything the printer can't do; the printer's own
+  refusal (e.g. Klipper "Must home axis first") comes back as 502 with its message.
+- Centauri (stock): home + jog only (SDCP Cmd 402 / 401, steps 0.1/1/10/100); Klipper: everything, load/unload when the
+  printer has LOAD_FILAMENT / UNLOAD_FILAMENT, macros = user macros without "_"; Bambu: home (all), jog 1/10/50, extrude,
+  unload (AMS), motors off.
+
 ## Filament per slot (0.37.0)
 Bambu Lab (AMS trays + external spool) so far; through a bridge as `printer.filament.info` / `printer.filament`.
 - `GET /api/printers/{id}/filament` → `{"supported", "load", "unload", "set", "external", "busy", "slots": [lane …

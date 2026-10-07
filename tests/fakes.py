@@ -191,6 +191,8 @@ class FakeMoonraker:
 
     async def gcode_script(self, request: web.Request) -> web.Response:
         self.scripts.append(request.query["script"])
+        if getattr(self, "gcode_error", None):      # like Klipper: HTTP 400 with the console message
+            return web.json_response({"error": {"code": 400, "message": self.gcode_error}}, status=400)
         return web.json_response({"result": "ok"})
 
     async def temperature_store(self, request: web.Request) -> web.Response:

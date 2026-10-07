@@ -118,6 +118,26 @@ class ElegooSDCP:
             else:
                 raise ValueError(f"unknown control {kind}/{target}")
 
+    # ---------- moving by hand (0.43.0): SDCP Cmd 401 jog / 402 home, as the printer's own web page does ----------
+    def motion(self) -> dict[str, Any]:
+        return {"home": ["XYZ", "X", "Y", "Z"], "jog": {"axes": ["X", "Y", "Z"], "steps": [0.1, 1, 10, 100]},
+                "extrude": False, "load": False, "unload": False, "motors_off": False, "macros": []}
+
+    async def move(self, action: str, axis: str | None = None, distance: float | None = None,
+                   macro: str | None = None) -> dict[str, Any]:
+        if action == "home":
+            cmd, data = 402, {"Axis": axis}
+        elif action == "jog":
+            cmd, data = 401, {"Axis": axis, "Step": float(distance)}
+        else:
+            raise ValueError(f"the Centauri can't {action} from PocketPrint3D")
+        async with await self._connect(enable_control=True) as p:
+            resp = await p._request(cmd, data, await p.wait_for_mainboard(), timeout=60 if cmd == 402 else 20)
+        ack = ((resp.inner or {}).get("Data") or {}).get("Ack")
+        if ack not in (0, None):
+            raise RuntimeError(f"the printer refused it (error code {ack}) - is it busy or not homed yet?")
+        return {"action": action, "axis": axis, "distance": distance}
+
     async def camera(self) -> Camera:
         # the CC1 serves its webcam as MJPEG on :3031 (pycentauri camera module)
         return Camera(stream_url=f"http://{self.cfg.host}:3031/video", name="Centauri Carbon")

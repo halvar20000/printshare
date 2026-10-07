@@ -32,6 +32,7 @@ from typing import Any
 
 from ..camera import Camera, CameraError
 from .. import filament as fil
+from .. import motion
 from ..config import PrinterConfig
 from .. import gcode_info
 
@@ -572,6 +573,24 @@ class Bambu:
             lk.publish({"print": {"command": "print_speed", "param": str(level)}})
         else:
             raise ValueError(f"can't adjust {kind} {target!r}")
+
+    # ---------- moving by hand (0.43.0, printshare/motion.py) ----------
+    def motion(self) -> dict[str, Any]:
+        return {"home": ["XYZ"], "jog": {"axes": ["X", "Y", "Z"], "steps": [1, 10, 50]}, "extrude": True,
+                "load": False, "unload": True, "motors_off": True, "macros": []}
+
+    async def move(self, action: str, axis: str | None = None, distance: float | None = None,
+                   macro: str | None = None) -> dict[str, Any]:
+        if action == "unload":
+            return await self.filament("unload")
+        gcode = {"home": lambda: "G28 \n", "jog": lambda: motion.bambu_jog(str(axis), float(distance)),
+                 "extrude": lambda: f"M83 \nG0 E{float(distance):.1f} F{motion.EXTRUDE_FEED}\n",
+                 "motors_off": lambda: "M18 \n"}.get(action)
+        if gcode is None:
+            raise ValueError(f"can't {action} on this printer")
+        lk = await self._link()
+        lk.publish({"print": {"command": "gcode_line", "param": gcode()}})
+        return {"action": action, "axis": axis, "distance": distance}
 
     # ---------- filament: load / unload / what is in a slot ----------
     def filament_caps(self) -> dict[str, Any]:
