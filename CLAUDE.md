@@ -992,7 +992,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   320-323, 386, 387, 401-403. **No load/unload/extrude in the CC1 protocol** (only on its screen).
 - Bambu: gcode_line like Bambu Studio (`M211 S / M211 X1 Y1 Z1 / M1002 push_ref_mode / G91 / G1 … / M1002 pop_ref_mode /
   M211 R`), home `G28`, extrude `M83 / G0 E`, motors `M18`, unload = AMS change 255. COSMOS: UNLOAD_FILAMENT macro, no
-  LOAD_FILAMENT (its load is screen-driven). **Not yet tried on a real printer** (none of the moves).
+  LOAD_FILAMENT (its load is screen-driven).
+- **Live 2026-10-07 (checked with the printers' cameras, Thomas present):** Centauri .144: home XYZ acked (head was already
+  at home, no visible move), X +10 / −10 clearly moved and back. P1S .53: after a print `home_flag & 7 == 0` (not homed) →
+  a jog is answered "success" but nothing moves (soft limits) → the adapter now refuses jogs until homed; `G28` homed in
+  48 s (`home_flag & 7 == 7`), then X +10 / −10 moved and back. Not tried yet: Z, extrude, unload, motors off, COSMOS.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

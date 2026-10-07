@@ -79,6 +79,7 @@ def test_centauri_home_and_jog():
 def test_bambu_motion(fake):  # noqa: F811
     import asyncio
     link, _ = fake
+    link.report["home_flag"] = 7                  # X, Y, Z homed
     ad = get_adapter(PrinterConfig(id="p1s", type="bambu_lan", host="192.168.1.53", password="12345678"))
 
     async def go():
@@ -91,6 +92,9 @@ def test_bambu_motion(fake):  # noqa: F811
     assert lines[0] == "G28 \n" and "G1 Y-10.0 F3000" in lines[1] and lines[1].startswith("M211 S")
     assert lines[2] == "M83 \nG0 E5.0 F300\n"
     assert any((p.get("print") or {}).get("command") == "ams_change_filament" for p in link.sent)
+    link.report["home_flag"] = 6505880          # as the real P1S after a print: axes not homed
+    with pytest.raises(ValueError, match="not homed"):
+        asyncio.run(ad.move("jog", "X", 10))
 
 
 def test_api_motion(client):  # noqa: F811

@@ -589,6 +589,9 @@ class Bambu:
         if gcode is None:
             raise ValueError(f"can't {action} on this printer")
         lk = await self._link()
+        # not homed: the P1S answers "success" to a jog but doesn't move (soft limits) - seen live 2026-10-07
+        if action == "jog" and int(lk.snapshot().get("home_flag") or 0) & 7 != 7:
+            raise ValueError("the printer is not homed - home all axes first")
         lk.publish({"print": {"command": "gcode_line", "param": gcode()}})
         return {"action": action, "axis": axis, "distance": distance}
 
