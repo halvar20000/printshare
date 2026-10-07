@@ -8,7 +8,7 @@ reports it - the home server for its printers, the cloud for printers behind a b
   idle / another file afterwards   → "finished" when it got to ≥ 99 %, else "cancelled" (only once it was seen printing)
   never seen printing for 6 hours  → left as "started" (the printer may have been off; nothing is guessed)
 
-Prints started elsewhere (0.39.0: OrcaSlicer straight to the printer, the printer's screen, Mainsail …) become jobs of
+Prints started elsewhere (0.40.0: OrcaSlicer straight to the printer, the printer's screen, Mainsail …) become jobs of
 their own, kind "external", as soon as a printer is seen printing a file no job of the account stands for; from then on
 they are followed by the same rules.
 """

@@ -82,6 +82,13 @@ export class Spoolman {
     return [...list.filter(s => !empty(s)), ...list.filter(empty)];
   }
 
+  /** All spools as Spoolman stores them (for the import into the cloud spools). */
+  async rawSpools(archived = false): Promise<Raw[]> {
+    const r = await this.call("GET", `/spool?allow_archived=${archived}`, undefined, 20000);
+    if (!r.ok) throw new SpoolmanError(`Spoolman answered HTTP ${r.status}`);
+    return ((await r.json()) as Raw[]).filter(s => archived || !s.archived);
+  }
+
   /** Book used filament (grams) on a spool. */
   async use(spoolId: number, grams: number): Promise<Spool> {
     const r = await this.call("PUT", `/spool/${spoolId}/use`, { use_weight: Math.round(grams * 10) / 10 });
@@ -154,12 +161,13 @@ export async function loadSlotSpools(server: Server, printer: string, api?: Api 
   }
   return (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
 }
+/** `printerSet`: the server (or the bridge) already told the printer the spool's material and colour (0.39.0). */
 export async function setSlotSpool(server: Server, printer: string, tool: number, spool: number | null,
-                                   api?: Api | null): Promise<Record<string, number>> {
+                                   api?: Api | null): Promise<{ slots: Record<string, number>; printerSet: boolean }> {
   if (api) {
     try {
       const r = await api.setSlotSpool(printer, tool, spool);
-      return Object.fromEntries(Object.entries(r.slots).map(([k, v]) => [k, v.spool]));
+      return { slots: Object.fromEntries(Object.entries(r.slots).map(([k, v]) => [k, v.spool])), printerSet: !!r.printer_set };
     } catch { /* older server: keep it on the phone */ }
   }
   const all = (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
@@ -170,7 +178,7 @@ export async function setSlotSpool(server: Server, printer: string, tool: number
     all[String(tool)] = spool;
   }
   await setJSON(slotKey(server, printer), all);
-  return all;
+  return { slots: all, printerSet: false };
 }
 
 // ---------- bookings: filament to book once the print is over ----------
@@ -321,4 +329,67 @@ export async function resolveBooking(server: Server, id: string, part: number, a
     await bookUses(server, url, b, part, list);
   }
   await saveBookings(server, list.filter(x => x.id !== id));
+}
+
+
+// ---------- import: own Spoolman → PocketPrint3D cloud spools (server 0.39.0) ----------
+/** A Spoolman spool in the cloud's shape: filament (name, vendor, material, colour, net weight, density, diameter),
+ *  initial / empty-spool / remaining weight, location, comment ("Spoolman #12" is added for reference). */
+export function cloudInput(s: Raw): SpoolInput & { initial_weight?: number | null } {
+  const f: Raw = s.filament ?? {};
+  const hex = String(f.color_hex ?? f.multi_color_hexes ?? "").split(",")[0].replace("#", "");
+  const comment = [s.comment, `Spoolman #${s.id}`].filter(Boolean).join(" · ");
+  return {
+    filament: { name: f.name ?? null, vendor: f.vendor?.name ?? null, material: f.material ?? null,
+                color_hex: /^[0-9A-Fa-f]{6}/.test(hex) ? hex.slice(0, 6).toUpperCase() : null,
+                weight: typeof f.weight === "number" ? f.weight : null,
+                density: typeof f.density === "number" ? f.density : null },
+    initial_weight: typeof s.initial_weight === "number" ? s.initial_weight : (typeof f.weight === "number" ? f.weight : null),
+    spool_weight: typeof s.spool_weight === "number" ? s.spool_weight : (typeof f.spool_weight === "number" ? f.spool_weight : null),
+    remaining_weight: typeof s.remaining_weight === "number" ? s.remaining_weight : null,
+    location: s.location ?? null, comment: comment.slice(0, 1024),
+  };
+}
+
+const importKey = (server: Server) => `ps_spoolimport_${sk(server)}`;
+
+/** Copies the spools of the user's Spoolman into the cloud account, then points chip links and slot assignments to the
+ *  new numbers. Spools copied before are skipped (remembered on this phone), so it can run again after a break. */
+export async function importToCloud(server: Server, api: Api, fromUrl: string,
+                                    onProgress?: (done: number, total: number) => void):
+    Promise<{ imported: number; skipped: number; relinked: number }> {
+  const source = new Spoolman(fromUrl);
+  const cloud = openSpoolman(server, CLOUD_SPOOLS);
+  const raw = await source.rawSpools(false);
+  const map = (await getJSON<Record<string, number>>(importKey(server))) ?? {};
+  let imported = 0, skipped = 0;
+  // only spools copied in this run are relinked: links of earlier runs already carry cloud numbers, which can equal
+  // other Spoolman numbers
+  const fresh: Record<string, number> = {};
+  for (const [i, s] of raw.entries()) {
+    onProgress?.(i, raw.length);
+    if (map[String(s.id)] != null) { skipped++; continue; }
+    const created = await cloud.create(cloudInput(s));
+    map[String(s.id)] = created.id;
+    fresh[String(s.id)] = created.id;
+    imported++;
+    await setJSON(importKey(server), map);            // after every spool: a break doesn't copy twice
+  }
+  onProgress?.(raw.length, raw.length);
+  // chips and slots pointed at Spoolman numbers: now at the cloud copies
+  let relinked = 0;
+  try {
+    for (const link of await api.spoolTags()) {
+      const to = fresh[String(link.spool)];
+      if (to != null && to !== link.spool) { await api.linkSpoolTag(link.uid, to); relinked++; }
+    }
+    for (const p of await api.printers()) {
+      const slots = (await api.slotSpools(p.id).catch(() => null))?.slots ?? {};
+      for (const [tool, v] of Object.entries(slots)) {
+        const to = fresh[String(v.spool)];
+        if (to != null && to !== v.spool) { await api.setSlotSpool(p.id, Number(tool), to); relinked++; }
+      }
+    }
+  } catch { /* older server: no links / slots there */ }
+  return { imported, skipped, relinked };
 }

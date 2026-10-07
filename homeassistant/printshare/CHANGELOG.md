@@ -1,10 +1,17 @@
 # Changelog
 
-## 0.39.0
+## 0.40.0
 - Prints started elsewhere (e.g. sent from OrcaSlicer straight to the printer) now show up in the app's job list and
   are followed until they finish.
 - Time-lapse "always": record every print where the printer has a camera, including prints started elsewhere (setting
   in the app; own servers and bridges).
+
+## 0.39.0
+- Choose where your spools live: in the PocketPrint3D cloud or in your own Spoolman. The server and your bridges follow
+  the choice, so NFC readers and slot assignments work with both.
+- Copy all spools from your Spoolman into the cloud with one tap (chip links and slot assignments move along).
+- Home servers and bridges can read spools from Spoolman (`PRINTSHARE_SPOOLMAN_URL` or set from the app) and tell the
+  printer what is in a slot.
 
 ## 0.38.0
 - Spools by NFC chip: link any chip (sticker, Bambu spool tag, OpenPrintTag) to a spool once - from then on the app

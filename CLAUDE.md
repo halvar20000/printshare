@@ -943,8 +943,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   OpenPrintTag content); unknown chip → "which spool is this?" (job screen, filament screen); spool form → "NFC-Chip
   verknüpfen"; filament screen → section "NFC-Leser am Drucker" (key + URL). Phone-local slot storage stays as fallback
   for older servers. Next (step 3, waiting for Thomas' PN5180 modules): ESP32 + PN5180 firmware posting `/api/reader/scan`.
+- **Cloud spools or Spoolman - the user's choice (0.39.0, public project):** `printshare/spool_source.py` (`spools.yaml`
+  in the account's / server's config dir: `source` cloud|spoolman, `spoolman_url`; env `PRINTSHARE_SPOOLMAN_URL` wins on
+  home servers/bridges; `fetch_spool` tries the address, then :7912). `GET/PUT /api/spool-source`; the app's Settings →
+  Spoolman sends the choice (cloud: the URL goes to online bridges via `spoolman.config`). `_sync_slot`: cloud source →
+  cloud spool; Spoolman in the cloud → `printer.slot.sync` on the printer's bridge (a cloud server can't reach a home
+  Spoolman); home → own Spoolman. Phone-reached printers: the app sets the slot (`setSlotSpool` returns `printerSet`).
+  Import Spoolman → cloud in the app (`lib/spoolman.importToCloud`: mapping `ps_spoolimport_<key>` so a rerun skips copied
+  spools, relinks chips + slots, then offers to switch). Not yet tried against Thomas' real Spoolman (44 spools).
 
-## Prints started elsewhere + time-lapse "always" (2026-10-06, server 0.39.0, Dominique)
+## Prints started elsewhere + time-lapse "always" (2026-10-06, server 0.40.0, Dominique)
 - `jobtrack.external()`: a printer seen printing a file no job of the account stands for → job `kind: "external"`
   (`result: null`, `printer_file`, `progress`), then followed like any started job. Not external: a started job with the
   same file, any `sending`/`uploading` job of the printer, an own start not yet seen printing (< 20 min, names may differ).

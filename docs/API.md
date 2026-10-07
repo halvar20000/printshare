@@ -379,7 +379,7 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
 
 `GET /api/jobs` – recent jobs (newest first, in memory, max. 50):
 `[{"id", "kind", "state", "error", "created", "printer", "link", "file", "print_time", "filament_g", "progress"}]`
-(`progress` since 0.39.0: % of a started print, else null).
+(`progress` since 0.40.0: % of a started print, else null).
 `DELETE /api/jobs/{job}` removes a job and its G-code (`409` while it runs).
 
 ### `POST /api/jobs/{job}/send` – after the review and the user's confirmation
@@ -501,11 +501,11 @@ Recorded where the camera is reachable: on an own server, or on the bridge for p
 - `GET /api/jobs/{id}/timelapse` → the MP4 (`Content-Disposition: inline`, `?token=` works for video players); 404 until ready.
   Stored in the job's folder, so it goes with the job (14 days).
 - The apps show the switch only for printers with a camera that the server reaches (own server, bridge printers).
-- "Always" (0.39.0, own servers and bridges): `GET|PUT /api/timelapse/config {"always": bool}` (cloud: 409), stored in
+- "Always" (0.40.0, own servers and bridges): `GET|PUT /api/timelapse/config {"always": bool}` (cloud: 409), stored in
   `<config dir>/timelapse.yaml`. `timelapse` in `/send` is optional now: left out (null) = this setting; an explicit
   `true`/`false` wins. With `always` on, prints started elsewhere (see below) are recorded too when the printer has a camera.
 
-## Prints started elsewhere (0.39.0)
+## Prints started elsewhere (0.40.0)
 A print the server sees on a printer that no job of the account stands for (OrcaSlicer straight to the printer, the
 printer's screen, Mainsail …) becomes a job of its own: `kind: "external"`, `state: "started"`, `result: null`,
 `request.link: null`, `printer_file` = the file on the printer (also as `file` in `GET /api/jobs`), `progress`. It is
@@ -613,6 +613,21 @@ the user's own Spoolman). Stored per account (cloud) or on the home server (`<co
   shown once); the reader sends `POST /api/reader/scan` with `Authorization: Bearer <key>` (or `X-Api-Key`)
   `{"slot": <tool>, "uid": "<hex>"}` → `{"known", "spool", "printer_set"}`. On a home server its own token works too,
   with `"printer": "<id>"` in the body.
+
+### Where the spools are kept (0.39.0)
+Each user chooses: cloud spools or their own Spoolman (Settings → Spoolman in the app). The server needs to know it so a
+spool number from a chip or a reader means the right spool.
+- `GET /api/spool-source` → `{"source": "cloud"|"spoolman", "spoolman_url" | null, "server_reaches_spoolman"}`.
+  Cloud accounts default to `cloud`; home servers / bridges always use `spoolman` (address from
+  `PRINTSHARE_SPOOLMAN_URL` or set from the app, stored in `<config dir>/spools.yaml`).
+- `PUT /api/spool-source` `{"source", "spoolman_url"?}` → as GET (+ `bridges_set` in the cloud: the address was passed to
+  that many online bridges with the bridge method `spoolman.config`). 400 for `cloud` on a home server or a bad address.
+- `printer_set` of slot-spools / reader scans: cloud spools → the cloud tells bridge printers; Spoolman spools → the home
+  server reads the spool from its Spoolman, and the cloud asks the printer's bridge (`printer.slot.sync {printer, tool,
+  spool}`). Printers reached by the phone are told by the app (`printer_set: false`).
+- Moving from Spoolman to the cloud is done by the app: it reads the user's Spoolman, creates the cloud spools
+  (`POST /spoolman/api/v1/spool`, remaining weight kept), then moves chip links and slot assignments to the new numbers
+  and switches the source. Spoolman itself is left unchanged.
 
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman

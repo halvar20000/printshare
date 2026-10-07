@@ -87,7 +87,7 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
     req = api.SendRequest(start=bool(params.get("start")), confirm=bool(params.get("confirm")),
                           leveling=params.get("leveling"), lanes=params.get("lanes") or None,
                           spool_id=params.get("spool_id"),
-                          # None = the bridge's own "always" setting (0.39.0)
+                          # None = the bridge's own "always" setting (0.40.0)
                           timelapse=params["timelapse"] if isinstance(params.get("timelapse"), bool) else None)
     try:
         await _call(api.send, local["id"], req, acct)
@@ -184,6 +184,14 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _add_or_update(client, params, None)
     if method == "job.send":
         return await _send(client, params)
+    if method == "spoolman.config":
+        from .. import spool_source
+        try:
+            url = spool_source.check_url(str(params.get("url") or ""))
+        except ValueError as e:
+            raise MethodError("invalid", str(e)) from None
+        spool_source.save(api.settings.config_dir, source="spoolman", spoolman_url=url)
+        return {"spoolman_url": url}
     pid = _printer_id(params)
     acct = _local()
     if method == "printer.status":
@@ -202,6 +210,13 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _call(api.adjust, pid, req, acct)
     if method == "printer.temperatures":
         return await _call(api.temperatures, pid, acct)
+    if method == "printer.slot.sync":
+        await _call(api._printer, acct, pid)
+        try:
+            tool, spool = int(params.get("tool")), int(params.get("spool"))
+        except (TypeError, ValueError):
+            raise MethodError("invalid", "tool and spool are needed") from None
+        return {"printer_set": await api._sync_slot(acct, pid, tool, spool)}
     if method == "printer.filament.info":
         return await _call(api.filament_info, pid, acct)
     if method == "printer.filament":

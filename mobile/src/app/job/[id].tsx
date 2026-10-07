@@ -388,7 +388,7 @@ export default function JobScreen() {
   }
 
   const r = job.result;
-  // started on the printer (OrcaSlicer straight to the printer …, server 0.39.0): nothing to send again
+  // started on the printer (OrcaSlicer straight to the printer …, server 0.40.0): nothing to send again
   const external = job.kind === "external";
   const name = jobName(r?.source_file ?? job.printer_file, job.request.link);
 

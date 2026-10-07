@@ -83,8 +83,10 @@ export default function FilamentScreen() {
   /** Put a spool into a slot: remembered on this phone, and the printer's slot gets the spool's material and colour. */
   const assign = async (l: Lane, spool: Spool | null) => {
     if (!server || l.tool == null) return;
-    setSlotSpools(await setSlotSpool(server, id, l.tool, spool?.id ?? null, api));
+    const r = await setSlotSpool(server, id, l.tool, spool?.id ?? null, api);
+    setSlotSpools(r.slots);
     if (!spool) { setDone(t("slotSpoolCleared", { slot: slotName(l) })); return; }
+    if (r.printerSet) { setDone(t("slotSpoolSet", { slot: slotName(l), spool: spoolLabel(spool) })); setTimeout(load, 1500); return; }
     const m = info?.materials.find(x => x.name.toUpperCase() === (spool.material ?? "").toUpperCase()
       || x.type === (spool.material ?? "").toUpperCase());
     const col = (spool.color ?? "").replace(/^#?/, "#");
