@@ -130,7 +130,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.40.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.41.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -2046,6 +2046,17 @@ async def spool_source_set(req: SpoolSourceRequest, acct: Account = Depends(auth
     else:
         spool_source.save(acct.settings.config_dir, source="spoolman", spoolman_url=url)
     return {**spool_source_get(acct), "bridges_set": bridges_set}
+
+
+@app.post("/api/spool-source/test")
+async def spool_source_test(req: SpoolSourceRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Can this server reach that Spoolman? (Web page of an own server; the app tests from the phone.)"""
+    if acct.cloud:
+        raise HTTPException(409, "the cloud can't reach a Spoolman at home - the app or a bridge tests it")
+    try:
+        return await spool_source.check(spool_source.check_url(req.spoolman_url or ""))
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/printers/{printer_id}/reader-key")

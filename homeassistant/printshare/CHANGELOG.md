@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.41.0
+- The server's web page shows the settings that were only in the app so far: time-lapse "always", Spoolman address
+  (with a connection test from the server), NFC reader key per printer, Manyfold library and AI failure detection.
+
 ## 0.40.0
 - Prints started elsewhere (e.g. sent from OrcaSlicer straight to the printer) now show up in the app's job list and
   are followed until they finish.
