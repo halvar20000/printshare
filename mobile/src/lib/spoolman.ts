@@ -143,10 +143,26 @@ export const saveLastSpools = (server: Server, printer: string, v: Record<string
 /** Which spool sits in which slot of a printer (tool number → spool id) - set in the filament menu, by NFC scan or
  *  from the list; the print screen then proposes (and books) the slot's spool by itself. */
 const slotKey = (server: Server, printer: string) => `ps_slotspools_${sk(server)}_${printer.replace(/[^\w.-]/g, "_")}`;
-export const loadSlotSpools = async (server: Server, printer: string) =>
-  (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
-export async function setSlotSpool(server: Server, printer: string, tool: number, spool: number | null): Promise<Record<string, number>> {
-  const all = await loadSlotSpools(server, printer);
+/** Since server 0.38.0 the assignment lives on the server (shared with the web app and NFC readers at the printer);
+ *  older servers: on this phone. */
+export async function loadSlotSpools(server: Server, printer: string, api?: Api | null): Promise<Record<string, number>> {
+  if (api) {
+    try {
+      const r = await api.slotSpools(printer);
+      return Object.fromEntries(Object.entries(r.slots).map(([k, v]) => [k, v.spool]));
+    } catch { /* older server */ }
+  }
+  return (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
+}
+export async function setSlotSpool(server: Server, printer: string, tool: number, spool: number | null,
+                                   api?: Api | null): Promise<Record<string, number>> {
+  if (api) {
+    try {
+      const r = await api.setSlotSpool(printer, tool, spool);
+      return Object.fromEntries(Object.entries(r.slots).map(([k, v]) => [k, v.spool]));
+    } catch { /* older server: keep it on the phone */ }
+  }
+  const all = (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
   if (spool == null) delete all[String(tool)];
   else {
     // a spool can only be in one slot: moving it clears the old one

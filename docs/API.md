@@ -584,6 +584,22 @@ Bambu Lab (AMS trays + external spool) so far; through a bridge as `printer.fila
   while a print runs, 409 without `confirm: true`; `set` = material (from `materials`) + `#RRGGBB` of a slot. 400 for an
   unknown slot/material/colour.
 
+## Spools by NFC chip and per slot, NFC readers (0.38.0)
+Any NFC chip (OpenPrintTag, NTAG sticker, a Bambu spool's MIFARE tag) is linked once to a spool by its chip number (UID,
+hex; Android's byte order = as received over the air). Spool numbers are those of the list the app uses (cloud spools or
+the user's own Spoolman). Stored per account (cloud) or on the home server (`<config dir>/spooltags.db`).
+- `GET /api/spool-tags` → `[{"uid", "spool", "created"}]`; `GET /api/spool-tags/{uid}` → `{"uid", "spool" | null}`;
+  `PUT /api/spool-tags/{uid}` `{"spool"}` (a reader that already saw the chip in a slot puts the spool there);
+  `DELETE /api/spool-tags/{uid}`. 400 for a malformed UID (4-16 bytes hex).
+- `GET /api/printers/{id}/slot-spools` → `{"slots": {"<tool>": {"spool", "source": "app"|"reader", "updated"}},
+  "scans": {"<tool>": {"uid", "spool" | null, "at"}}}`; `PUT /api/printers/{id}/slot-spools/{tool}` `{"spool" | null}`
+  → `{"slots", "printer_set"}` (cloud spools: the printer's slot gets the spool's material and colour). A spool sits in
+  one slot at a time.
+- NFC reader at the printer: `GET|POST|DELETE /api/printers/{id}/reader-key` (`{"enabled", "url", "key"?}`, key `pp3dr_…`
+  shown once); the reader sends `POST /api/reader/scan` with `Authorization: Bearer <key>` (or `X-Api-Key`)
+  `{"slot": <tool>, "uid": "<hex>"}` → `{"known", "spool", "printer_set"}`. On a home server its own token works too,
+  with `"printer": "<id>"` in the body.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

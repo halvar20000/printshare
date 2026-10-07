@@ -2,6 +2,7 @@ package io.github.halvar20000.nfctag
 
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.nfc.tech.NfcA
 import android.nfc.tech.NfcV
 import android.os.Handler
 import android.os.Looper
@@ -13,8 +14,11 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.ByteArrayOutputStream
 
-/** Reads the memory of an NFC-V (ISO 15693) tag, e.g. an OpenPrintTag spool (ICODE SLIX2, 80 blocks × 4 bytes).
- *  Read only: no write or lock commands are ever sent. The app parses the bytes (NDEF → CBOR, lib/openprinttag.ts). */
+/** Reads the memory of an NFC-V (ISO 15693) tag, e.g. an OpenPrintTag spool (ICODE SLIX2, 80 blocks × 4 bytes), or just
+ *  the chip number of an NFC-A tag (NTAG stickers, the MIFARE Classic tags on Bambu spools - their content is encrypted;
+ *  the app links the chip number to a spool). Read only: no write or lock commands are ever sent. The app parses the
+ *  bytes (NDEF → CBOR, lib/openprinttag.ts). The UID is the byte order Android reports (ISO 15693: least significant
+ *  byte first, as received over the air) - an NFC reader at the printer must send it the same way. */
 class NfcTagModule : Module() {
   private val main = Handler(Looper.getMainLooper())
   private var pending: Promise? = null
@@ -33,7 +37,8 @@ class NfcTagModule : Module() {
       }
     }
 
-    /** Waits for an NFC-V tag (reader mode, max timeoutMs) and resolves {uid: hex as reported, data: base64, blockSize}. */
+    /** Waits for an NFC-V or NFC-A tag (reader mode, max timeoutMs) and resolves {uid: hex as reported, data: base64,
+     *  blockSize, kind: "nfcv" | "nfca"} - data is empty for NFC-A (only the chip number is used). */
     AsyncFunction("readAsync") { timeoutMs: Int, promise: Promise ->
       val activity = appContext.currentActivity
       val adapter = activity?.let { NfcAdapter.getDefaultAdapter(it) }
@@ -46,7 +51,7 @@ class NfcTagModule : Module() {
       finish(null, CodedException("ERR_NFC_CANCELLED", "a new read started", null))
       pending = promise
       adapter.enableReaderMode(activity, { tag -> onTag(tag) },
-        NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
+        NfcAdapter.FLAG_READER_NFC_V or NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
       val t = Runnable { finish(null, CodedException("ERR_NFC_TIMEOUT", "no tag found", null)) }
       timeout = t
       main.postDelayed(t, timeoutMs.toLong())
@@ -72,7 +77,12 @@ class NfcTagModule : Module() {
   }
 
   private fun read(tag: Tag): Map<String, Any> {
-    val v = NfcV.get(tag) ?: throw IllegalStateException("not an NFC-V tag")
+    val uid = tag.id.joinToString("") { "%02x".format(it) }
+    val v = NfcV.get(tag)
+    if (v == null) {
+      if (NfcA.get(tag) == null) throw IllegalStateException("not an NFC-V or NFC-A tag")
+      return mapOf("uid" to uid, "data" to "", "blockSize" to 0, "kind" to "nfca")
+    }
     v.use { nfc ->
       nfc.connect()
       var blockSize = 4
@@ -100,9 +110,10 @@ class NfcTagModule : Module() {
         out.write(r, 1, r.size - 1)
       }
       return mapOf(
-        "uid" to tag.id.joinToString("") { "%02x".format(it) },
+        "uid" to uid,
         "data" to Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP),
         "blockSize" to blockSize,
+        "kind" to "nfcv",
       )
     }
   }

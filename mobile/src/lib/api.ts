@@ -79,6 +79,12 @@ export type FilamentInfo = {
   supported: boolean; load: boolean; unload: boolean; set: boolean; external?: boolean; busy?: boolean;
   slots: Lane[]; materials: { name: string; type: string; temp_min: number; temp_max: number; load_temp: number }[];
 };
+/** Spool per slot (tool → spool) and what NFC readers at the printer saw last (tool → chip). */
+export type SlotSpools = {
+  slots: Record<string, { spool: number; source: string; updated: number }>;
+  scans: Record<string, { uid: string; spool: number | null; at: number }>;
+};
+export type ReaderKey = { enabled: boolean; url: string; created?: number; last_used?: number | null };
 export type FilamentAction = { action: "load" | "unload" | "set"; slot?: number; material?: string; color?: string;
   temp?: number; confirm?: boolean };
 export type PrinterStatus = {
@@ -486,6 +492,23 @@ export class Api {
   setPower = (printer: string, on: boolean) =>
     this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/power`,
       { method: "POST", body: { on }, timeout: 20000 });
+  /** NFC chips linked to spools and the spool per slot (server 0.38.0) */
+  spoolTag = (uid: string) => this.request<{ uid: string; spool: number | null }>(`/api/spool-tags/${encodeURIComponent(uid)}`);
+  linkSpoolTag = (uid: string, spool: number) =>
+    this.request<{ uid: string; spool: number }>(`/api/spool-tags/${encodeURIComponent(uid)}`, { method: "PUT", body: { spool } });
+  unlinkSpoolTag = (uid: string) =>
+    this.request<{ deleted: boolean }>(`/api/spool-tags/${encodeURIComponent(uid)}`, { method: "DELETE" });
+  slotSpools = (printer: string) =>
+    this.request<SlotSpools>(`/api/printers/${encodeURIComponent(printer)}/slot-spools`);
+  setSlotSpool = (printer: string, tool: number, spool: number | null) =>
+    this.request<{ slots: SlotSpools["slots"]; printer_set: boolean }>(
+      `/api/printers/${encodeURIComponent(printer)}/slot-spools/${tool}`, { method: "PUT", body: { spool }, timeout: 30000 });
+  readerKey = (printer: string) =>
+    this.request<ReaderKey>(`/api/printers/${encodeURIComponent(printer)}/reader-key`);
+  createReaderKey = (printer: string) =>
+    this.request<ReaderKey & { key: string }>(`/api/printers/${encodeURIComponent(printer)}/reader-key`, { method: "POST" });
+  deleteReaderKey = (printer: string) =>
+    this.request<{ deleted: boolean }>(`/api/printers/${encodeURIComponent(printer)}/reader-key`, { method: "DELETE" });
   filamentInfo = (printer: string) =>
     this.request<FilamentInfo>(`/api/printers/${encodeURIComponent(printer)}/filament`, { timeout: 25000 });
   filamentAction = (printer: string, body: FilamentAction) =>

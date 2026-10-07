@@ -15,7 +15,7 @@ import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
 import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSlotSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
-import { cancelScan, matchSpool, nfcStatus, scanSpool } from "@/lib/nfc";
+import { cancelScan, identifyChip, nfcStatus, scanChip } from "@/lib/nfc";
 import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { plateSummary } from "@/lib/plate";
 import { translateLog, type T } from "@/lib/i18n";
@@ -207,9 +207,9 @@ export default function JobScreen() {
   useEffect(() => {
     if (server && printerId) {
       loadLastSpools(server, printerId).then(setLastSpools);
-      loadSlotSpools(server, printerId).then(setSlotSpools);
+      loadSlotSpools(server, printerId, api).then(setSlotSpools);
     }
-  }, [server, printerId]);
+  }, [server, printerId, api]);
   // reloaded whenever the screen comes back (e.g. after adding a spool for a scanned tag)
   useFocusEffect(useCallback(() => {
     if (!smUrl || !reviewing || !server) return;
@@ -237,19 +237,29 @@ export default function JobScreen() {
   const hasNfc = useMemo(() => nfcStatus() !== "none", []);
   const [scanning, setScanning] = useState(false);
   const [nfcMsg, setNfcMsg] = useState<{ kind: "ok" | "warn"; text: string; tag?: OpenPrintTag } | null>(null);
+  // a chip without a link (sticker, Bambu tag, blank OpenPrintTag): "which spool is this?" - linked once, known after
+  const [linkUid, setLinkUid] = useState<string | null>(null);
+  const chooseForNfc = (sp: Spool, material: string | null) => {
+    // the colour whose material fits the spool, else the first one
+    const fitting = colours.filter(col => fits(col.preset, { material } as Parameters<typeof fits>[1]));
+    const target = (fitting.length ? fitting : colours)[0];
+    if (target) setSpoolChoice(prev => ({ ...prev, [target.index]: sp.id }));
+  };
   const pickByNfc = async () => {
     if (!spools) return;
     tap();
     setScanning(true); setNfcMsg(null);
     try {
-      const tag = await scanSpool(t);
-      const sp = matchSpool(tag, spools);
-      if (!sp) { setNfcMsg({ kind: "warn", text: t("nfcNoMatch", { tag: tagLabel(tag) }), tag }); return; }
-      // the colour whose material fits the tag, closest colour first; else the first one
-      const fitting = colours.filter(col => fits(col.preset, { material: tag.materialType } as Parameters<typeof fits>[1]));
-      const target = (fitting.length ? fitting : colours)[0];
-      setSpoolChoice(prev => ({ ...prev, [target.index]: sp.id }));
-      setNfcMsg({ kind: "ok", text: t("nfcMatched", { spool: spoolLabel(sp), tag: tagLabel(tag) }) });
+      const chip = await scanChip(t);
+      const sp = await identifyChip(api, chip, spools);
+      if (!sp) {
+        if (chip.tag) setNfcMsg({ kind: "warn", text: t("nfcNoMatch", { tag: tagLabel(chip.tag) }), tag: chip.tag });
+        if (api && spools.length) setLinkUid(chip.uid);             // link it now to a spool of the list
+        return;
+      }
+      chooseForNfc(sp, sp.material ?? chip.tag?.materialType ?? null);
+      setNfcMsg({ kind: "ok", text: chip.tag ? t("nfcMatched", { spool: spoolLabel(sp), tag: tagLabel(chip.tag) })
+        : t("nfcLinkedChip", { spool: spoolLabel(sp) }) });
     } catch (e) {
       if ((e as Error).message) setNfcMsg({ kind: "warn", text: (e as Error).message });
     } finally {
@@ -590,6 +600,25 @@ export default function JobScreen() {
           onPress={() => router.push({ pathname: "/spool/[id]", params: { id: "new", tag: JSON.stringify({ ...nfcMsg.tag, main: undefined, aux: undefined }) } })} />
       ) : null}
       {!done ? spoolWarnings.map(w => <Banner key={w} kind="warn" icon="disc-outline" text={w} />) : null}
+      {linkUid && spools ? (
+        <PickerSheet visible title={t("nfcWhichSpool")} value={null} searchLabel={t("search")} closeLabel="OK"
+          choices={spools.map(s => ({ value: String(s.id), label: spoolLabel(s), group: s.material ?? undefined,
+            sub: s.remaining_g != null ? t("spoolLeft", { g: Math.round(s.remaining_g) }) : undefined }))}
+          onPick={async v => {
+            const sp = spools.find(s => String(s.id) === v);
+            const uid = linkUid;
+            setLinkUid(null);
+            if (!sp || !api || !uid) return;
+            try {
+              await api.linkSpoolTag(uid, sp.id);
+              chooseForNfc(sp, sp.material);
+              setNfcMsg({ kind: "ok", text: t("nfcLinkedNow", { spool: spoolLabel(sp) }) });
+            } catch (e) {
+              setNfcMsg({ kind: "warn", text: errorText(t, e) });
+            }
+          }}
+          onClose={() => setLinkUid(null)} />
+      ) : null}
       {spoolSheet != null && spools ? (
         <PickerSheet visible title={colours.length > 1 ? t("colorN", { n: spoolSheet }) : t("spool")}
           choices={[{ value: "none", label: t("noSpool"), sub: t("noSpoolSub") }, ...spools.map(s => ({

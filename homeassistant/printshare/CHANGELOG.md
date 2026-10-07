@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.38.0
+- Spools by NFC chip: link any chip (sticker, Bambu spool tag, OpenPrintTag) to a spool once - from then on the app
+  recognises the spool when you hold the phone to it.
+- Spool per slot is kept on the server (shared by the app, the web app and NFC readers).
+- NFC reader at the printer: a reader in the spool holder can report which spool sits in which slot (key per printer).
+
 ## 0.37.0
 - Filament menu for Bambu Lab printers: load and unload filament, and set what is in each AMS tray and on the external
   spool (material and colour) - from the app, also through a bridge.

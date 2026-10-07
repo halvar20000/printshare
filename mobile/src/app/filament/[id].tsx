@@ -7,9 +7,9 @@ import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 
 import { Badge, Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync } from "@/components/ui";
-import { errorText, type FilamentInfo, type Lane } from "@/lib/api";
+import { errorText, type FilamentInfo, type Lane, type ReaderKey, type SlotSpools } from "@/lib/api";
 import { useApp } from "@/lib/app";
-import { cancelScan, matchSpool, nfcStatus, scanSpool } from "@/lib/nfc";
+import { cancelScan, identifyChip, nfcStatus, scanChip } from "@/lib/nfc";
 import { loadSlotSpools, loadSpoolmanUrl, openSpoolman, setSlotSpool, spoolLabel, type Spool } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
 
@@ -34,6 +34,10 @@ export default function FilamentScreen() {
   const [hasSpools, setHasSpools] = useState(false);
   const [slotSpools, setSlotSpools] = useState<Record<string, number>>({});
   const [spoolFor, setSpoolFor] = useState<Lane | null>(null);
+  // a chip nobody linked yet (scanned by the phone or seen by a reader at the printer): "which spool is this?"
+  const [linkFor, setLinkFor] = useState<{ lane: Lane; uid: string } | null>(null);
+  const [scans, setScans] = useState<SlotSpools["scans"]>({});
+  const [reader, setReader] = useState<(ReaderKey & { key?: string }) | null>(null);
   const hasNfc = useMemo(() => nfcStatus() !== "none", []);
 
   const load = useCallback(() => {
@@ -41,13 +45,15 @@ export default function FilamentScreen() {
   }, [api, id, t]);
   useFocusEffect(useCallback(() => {
     if (server) {
-      loadSlotSpools(server, id).then(setSlotSpools);
+      loadSlotSpools(server, id, api).then(setSlotSpools);
+      api?.slotSpools(id).then(r => setScans(r.scans)).catch(() => setScans({}));
+      api?.readerKey(id).then(setReader).catch(() => setReader(null));
       loadSpoolmanUrl(server).then(url => {
         setHasSpools(!!url);
         if (url) openSpoolman(server, url).spools().then(setSpools).catch(() => setSpools([]));
       });
     }
-  }, [server, id]));
+  }, [server, id, api]));
   useFocusEffect(useCallback(() => {
     load();
     const timer = setInterval(load, 4000);          // follow loading / unloading as it happens
@@ -77,7 +83,7 @@ export default function FilamentScreen() {
   /** Put a spool into a slot: remembered on this phone, and the printer's slot gets the spool's material and colour. */
   const assign = async (l: Lane, spool: Spool | null) => {
     if (!server || l.tool == null) return;
-    setSlotSpools(await setSlotSpool(server, id, l.tool, spool?.id ?? null));
+    setSlotSpools(await setSlotSpool(server, id, l.tool, spool?.id ?? null, api));
     if (!spool) { setDone(t("slotSpoolCleared", { slot: slotName(l) })); return; }
     const m = info?.materials.find(x => x.name.toUpperCase() === (spool.material ?? "").toUpperCase()
       || x.type === (spool.material ?? "").toUpperCase());
@@ -97,10 +103,12 @@ export default function FilamentScreen() {
       setError("");
       setDone(t("nfcHold"));
       try {
-        const tag = await scanSpool(t);
-        const hit = matchSpool(tag, spools ?? []);
-        if (!hit) { setDone(""); setError(t("slotSpoolNoMatch", { material: tag.materialType ?? "?" })); return; }
-        await assign(l, hit);
+        const chip = await scanChip(t);
+        const hit = await identifyChip(api, chip, spools ?? []);
+        setDone("");
+        if (hit) { await assign(l, hit); return; }
+        if (chip.tag && !spools?.length) { setError(t("slotSpoolNoMatch", { material: chip.tag.materialType ?? "?" })); return; }
+        setLinkFor({ lane: l, uid: chip.uid });            // unknown chip: link it to a spool now
       } catch (e) {
         setDone("");
         if ((e as Error).message) setError((e as Error).message);
@@ -111,6 +119,26 @@ export default function FilamentScreen() {
     }
     const sp = spools?.find(s => String(s.id) === v);
     if (sp) await assign(l, sp);
+  };
+
+  /** Link an unknown chip to a spool - from now on the phone and the readers know it - and put the spool in the slot. */
+  const linkChip = async (v: string) => {
+    const target = linkFor;
+    setLinkFor(null);
+    const sp = spools?.find(s => String(s.id) === v);
+    if (!target || !sp || !api) return;
+    try {
+      await api.linkSpoolTag(target.uid, sp.id);
+      await assign(target.lane, sp);
+      api.slotSpools(id).then(r => setScans(r.scans)).catch(() => {});
+    } catch (e) {
+      setError(errorText(t, e));
+    }
+  };
+  const newReaderKey = async () => {
+    if (!api) return;
+    if (reader?.enabled && !(await confirmAsync(t("readerKeyRenewQ"), t("readerKeyNew"), t("cancelBtn")))) return;
+    try { setReader(await api.createReaderKey(id)); } catch (e) { setError(errorText(t, e)); }
   };
 
   const loadSlot = async (l: Lane) => {
@@ -166,6 +194,14 @@ export default function FilamentScreen() {
                     {slotName(l)} · {l.material ?? (l.loaded ? t("filamentUnknown") : t("filamentEmpty"))}</Text>
                   {l.filament ? <Text style={{ color: c.sub, fontSize: 13 }}>{l.filament}</Text> : null}
                   {(() => {
+                    const scan = l.tool != null ? scans[String(l.tool)] : undefined;
+                    return scan && scan.spool == null ? (
+                      <Pressable onPress={() => setLinkFor({ lane: l, uid: scan.uid })} accessibilityRole="button">
+                        <Text style={{ color: c.accent, fontSize: 13 }}>{t("readerUnknownChip")}</Text>
+                      </Pressable>
+                    ) : null;
+                  })()}
+                  {(() => {
                     const sp = l.tool != null ? spools?.find(s => s.id === slotSpools[String(l.tool)]) : undefined;
                     return sp ? <Text style={{ color: c.sub, fontSize: 13 }}>
                       {t("slotSpool", { spool: spoolLabel(sp) })}{sp.remaining_g != null ? ` · ${Math.round(sp.remaining_g)} g` : ""}</Text> : null;
@@ -193,6 +229,21 @@ export default function FilamentScreen() {
               </View>
             </View>
           ))}
+        </Section>
+      ) : null}
+
+      {info?.supported && reader ? (
+        <Section title={t("readerTitle")} footer={reader.key ? t("readerKeyHint") : t("readerHint")}>
+          <Row icon="radio-outline" label={reader.enabled ? t("readerOn") : t("readerOff")}
+            value={reader.enabled ? t("readerKeyNew") : t("readerKeyCreate")} onPress={newReaderKey} />
+          {reader.key ? (
+            <View style={{ paddingHorizontal: space, paddingBottom: space, gap: 6 }}>
+              <Text style={{ color: c.sub, fontSize: 13 }}>{t("readerUrl")}</Text>
+              <Text selectable style={{ color: c.text, fontSize: 14 }}>{reader.url}</Text>
+              <Text style={{ color: c.sub, fontSize: 13 }}>{t("readerKey")}</Text>
+              <Text selectable style={{ color: c.text, fontSize: 14, fontWeight: "600" }}>{reader.key}</Text>
+            </View>
+          ) : null}
         </Section>
       ) : null}
 
@@ -232,6 +283,11 @@ export default function FilamentScreen() {
                                          group: s.material ?? "?" })),
         ]}
         onPick={v => { const l = spoolFor; if (l) pickSpool(l, v); }} onClose={() => { setSpoolFor(null); cancelScan(); }} />
+      <PickerSheet visible={!!linkFor} title={linkFor ? t("linkChipTitle", { slot: slotName(linkFor.lane) }) : ""} value={null}
+        searchLabel={t("search")} closeLabel="OK"
+        choices={(spools ?? []).map(s => ({ value: String(s.id), label: `${spoolLabel(s)}${s.remaining_g != null ? ` · ${Math.round(s.remaining_g)} g` : ""}`,
+                                             group: s.material ?? "?" }))}
+        onPick={linkChip} onClose={() => setLinkFor(null)} />
       <PickerSheet visible={pickMaterial} title={t("material")} value={material} searchLabel={t("search")} closeLabel="OK"
         choices={(info?.materials ?? []).map(m => ({ value: m.name, label: `${m.name}  ·  ${m.temp_min}–${m.temp_max} °C` }))}
         onPick={setMaterial} onClose={() => setPickMaterial(false)} />

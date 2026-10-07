@@ -934,6 +934,15 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   print screen (`job/[id].tsx` `spoolFor`) proposes the chosen slot's spool (after AFC's own `spool_id`) and books it.
   Neither the AMS nor the Centauri can read OpenPrintTag (AMS: only Bambu's signed MIFARE Classic tags) - the phone reads
   the tag. Not tried with a real tag (Thomas has none yet); not in the web app (no NFC) beyond picking from the list.
+- **Chips linked to spools, server-side slots, NFC readers (0.38.0):** `printshare/spooltags.py` (SQLite `spooltags.db`
+  next to the cloud DB / in the home config dir; owner = user id or "local"): `spool_tags` (UID → spool, several chips per
+  spool), `slot_spools` (moved from the phone; one slot per spool), `reader_scans` (last chip per slot; an unknown chip
+  shows in the app as "assign a spool"), `reader_keys` (`pp3dr_`, hashed). API in docs/API.md; `_sync_slot` tells a Bambu
+  printer the cloud spool's material/colour (bridge printers through `filament_action`). Android NFC module now also reads
+  NFC-A (NTAG stickers, Bambu MIFARE tags: UID only) besides NFC-V; `scanChip` + `identifyChip` (server link first, then
+  OpenPrintTag content); unknown chip → "which spool is this?" (job screen, filament screen); spool form → "NFC-Chip
+  verknüpfen"; filament screen → section "NFC-Leser am Drucker" (key + URL). Phone-local slot storage stays as fallback
+  for older servers. Next (step 3, waiting for Thomas' PN5180 modules): ESP32 + PN5180 firmware posting `/api/reader/scan`.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
