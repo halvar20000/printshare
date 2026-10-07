@@ -130,7 +130,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.39.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.40.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -658,12 +658,48 @@ def bookings_delete(booking_id: str, acct: Account = Depends(auth)) -> dict[str,
 
 
 def _track_jobs(owner: str, printer_id: str, status: dict[str, Any] | None) -> None:
-    """Started jobs of this printer learn from its status that they finished or were cancelled (0.33.0)."""
+    """Started jobs of this printer learn from its status that they finished or were cancelled (0.33.0); a print
+    started elsewhere (OrcaSlicer straight to the printer …) becomes a job of its own (0.40.0)."""
     kind = printer_kind(status.get("state")) if status else None
-    for job in list(JOBS.values()):
-        if job.get("owner", "local") == owner and job.get("state") in jobtrack.TRACKED \
-                and (job.get("printer") or (job.get("result") or {}).get("printer")) == printer_id:
+    mine = [j for j in list(JOBS.values()) if j.get("owner", "local") == owner
+            and (j.get("printer") or (j.get("result") or {}).get("printer")) == printer_id]
+    for job in mine:
+        if job.get("state") in jobtrack.TRACKED:
             jobtrack.track(job, status, kind)
+    ext = jobtrack.external(mine, printer_id, status, kind)
+    if ext is not None:
+        job = _new_job(jobtrack.EXTERNAL, "started", ext.pop("request"), owner=owner)
+        job.update(ext)
+        job["log"].append("Started on the printer, not through PocketPrint3D")
+        if not settings.cloud and owner == "local" and _timelapse_wanted(None):
+            _spawn(_external_timelapse(job))
+
+
+async def _external_timelapse(job: dict[str, Any]) -> None:
+    """Time-lapse of a print started elsewhere ("always" setting) - only where the printer has a camera."""
+    printer_id = job["printer"]
+    if TIMELAPSE.active.get(printer_id) is not None:
+        return
+    try:
+        await _camera(Account("local", settings), printer_id)
+    except HTTPException:
+        return
+    out = Path(settings.gcode_dir) / printer_id / job["id"]
+    rec = TIMELAPSE.start(printer_id, job["id"], job["printer_file"], out)
+    rec.seen_active = True
+    job["timelapse"] = {"state": rec.state, "frames": 0}
+
+
+def _bridge_printers() -> set[tuple[str, str]]:
+    """Every printer behind a bridge that is online now (prints started elsewhere show up as jobs, 0.40.0)."""
+    if ACCOUNTS is None:
+        return set()
+    out = set()
+    for conn in list(HUB.conns.values()):
+        for row in ACCOUNTS.printers(conn.user_id):
+            if row.get("bridge") == conn.bridge_id and row.get("id"):
+                out.add((conn.user_id, row["id"]))
+    return out
 
 
 def _started_printers() -> set[tuple[str, str]]:
@@ -676,7 +712,7 @@ async def _check_bridge_bookings() -> None:
     the app open)."""
     if BOOKINGS is None:
         return
-    for user_id, printer_id in sorted(set(BOOKINGS.waiting_printers()) | _started_printers()):
+    for user_id, printer_id in sorted(set(BOOKINGS.waiting_printers()) | _started_printers() | _bridge_printers()):
         row = next((p for p in ACCOUNTS.printers(user_id) if p.get("id") == printer_id), None)
         if not row or not row.get("bridge"):
             continue                       # reached by the phone: it reports the status itself
@@ -2515,16 +2551,21 @@ def _validate_options(acct: "Account", printer: PrinterConfig, o: OptionsModel) 
 JOB_TRACK_S = 30
 
 
+async def _track_printer(owner: str, printer_id: str) -> None:
+    try:
+        st = await asyncio.wait_for(get_adapter(settings.printer(printer_id)).status(), JOB_TRACK_S / 2)
+    except Exception:  # noqa: BLE001 - unknown printer or off: nothing learned
+        return
+    _track_jobs(owner, printer_id, st)
+
+
 async def _jobs_track_loop() -> None:
-    """Home server: started jobs follow their printer until the print is over (0.33.0)."""
+    """Home server: started jobs follow their printer until the print is over (0.33.0); every printer is looked at, so
+    prints started elsewhere show up as jobs too (0.40.0)."""
     while True:
         await asyncio.sleep(JOB_TRACK_S)
-        for owner, printer_id in _started_printers():
-            try:
-                st = await get_adapter(settings.printer(printer_id)).status()
-            except Exception:  # noqa: BLE001 - unknown printer or off: nothing learned
-                continue
-            _track_jobs(owner, printer_id, st)
+        pairs = _started_printers() | {("local", p.id) for p in settings.printers}
+        await asyncio.gather(*(_track_printer(o, p) for o, p in sorted(pairs)), return_exceptions=True)
 
 
 async def _jobs_loop() -> None:
@@ -2575,7 +2616,8 @@ def list_jobs(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
     jobs = sorted((j for j in JOBS.values() if j.get("owner", "local") == acct.id), key=lambda j: j["created"], reverse=True)
     return [{k: j.get(k) for k in ("id", "kind", "state", "error", "created", "printer")}
             | {"link": j["request"].get("link"),
-               "file": (j["result"] or {}).get("source_file"),
+               "file": (j["result"] or {}).get("source_file") or j.get("printer_file"),
+               "progress": j.get("progress"),
                "print_time": (j["result"] or {}).get("print_time"),
                "filament_g": (j["result"] or {}).get("filament_g")}
             for j in jobs]
@@ -2594,8 +2636,9 @@ class SendRequest(BaseModel):
     lanes: dict[str, int] | None = None
     # Spoolman (0.16.0): spool that the printer's Moonraker books this print on (status "spoolman" not null)
     spool_id: int | None = Field(None, ge=1)
-    # time-lapse video of this print (0.32.0): own servers and printers behind a bridge, needs a camera
-    timelapse: bool = False
+    # time-lapse video of this print (0.32.0): own servers and printers behind a bridge, needs a camera;
+    # None = the server's "always" setting (0.40.0)
+    timelapse: bool | None = None
 
 
 @app.post("/api/jobs/{job_id}/send")
@@ -2608,6 +2651,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         raise HTTPException(400, "starting a print needs confirm=true")  # NF-05
     if job["state"] not in ("sliced", "uploaded", "finished", "cancelled"):     # printed before: print it again
         raise HTTPException(409, f"job is {job['state']}, not ready to send")
+    if not job.get("result"):
+        raise HTTPException(409, "this print was started on the printer - there is no G-code to send")
     result = JobResult(**job["result"])
     via = _via_bridge(acct, result.printer)
     if via:
@@ -2666,7 +2711,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
             await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
                            leveling=req.leveling, tools=tools, spool_id=req.spool_id)
             job["leveling"] = req.leveling
-            if req.start and req.timelapse and not settings.cloud:
+            if req.start and _timelapse_wanted(req.timelapse) and not settings.cloud:
                 # registered before the job says "started", so whoever sees "started" also sees the recording
                 out = job_dir(job) or Path(acct.settings.gcode_dir) / result.printer / job_id
                 rec = TIMELAPSE.start(result.printer, job_id, Path(result.gcode).name, out,
@@ -2728,7 +2773,7 @@ class RelayedRequest(BaseModel):
 def job_relayed(job_id: str, req: RelayedRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Cloud: the app sent the G-code to the printer itself (home Wi-Fi) - the job says so and follows the print."""
     job = _own_job(acct, job_id)
-    if job["state"] not in ("sliced", "uploaded", "finished", "cancelled"):
+    if job["state"] not in ("sliced", "uploaded", "finished", "cancelled") or not job.get("result"):
         raise HTTPException(409, f"job is {job['state']}")
     job["printer_file"] = Path(req.file).name[:200]
     if req.start:
@@ -2736,6 +2781,51 @@ def job_relayed(job_id: str, req: RelayedRequest, acct: Account = Depends(auth))
     else:
         job.update(state="uploaded")
     return {"state": job["state"]}
+
+
+# "always make a time-lapse" (0.40.0, own servers and bridges): prints sent without a choice and prints started elsewhere
+TIMELAPSE_CONFIG = "timelapse.yaml"
+
+
+def _timelapse_always() -> bool:
+    if settings.cloud or not settings.config_dir:
+        return False
+    try:
+        import yaml
+        data = yaml.safe_load((Path(settings.config_dir) / TIMELAPSE_CONFIG).read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and data.get("always") is True
+
+
+def _timelapse_wanted(choice: bool | None) -> bool:
+    """The app's choice for this print, else the server's setting."""
+    return choice if choice is not None else _timelapse_always()
+
+
+class TimelapseConfig(BaseModel):
+    always: bool
+
+
+@app.get("/api/timelapse/config")
+def timelapse_config(acct: Account = Depends(auth)) -> dict[str, Any]:
+    _local_only(acct)
+    return {"always": _timelapse_always()}
+
+
+@app.put("/api/timelapse/config")
+def timelapse_config_set(req: TimelapseConfig, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Own servers: record every print where the printer has a camera, also prints started elsewhere."""
+    _local_only(acct)
+    if not settings.config_dir:
+        raise HTTPException(409, "this server has no config folder")
+    import yaml
+    p = Path(settings.config_dir) / TIMELAPSE_CONFIG
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text("# Set from the PocketPrint3D app.\n" + yaml.safe_dump({"always": req.always}), encoding="utf-8")
+    tmp.replace(p)
+    return {"always": _timelapse_always()}
 
 
 @app.get("/api/jobs/{job_id}/timelapse")

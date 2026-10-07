@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.40.0
+- Prints started elsewhere (e.g. sent from OrcaSlicer straight to the printer) now show up in the app's job list and
+  are followed until they finish.
+- Time-lapse "always": record every print where the printer has a camera, including prints started elsewhere (setting
+  in the app; own servers and bridges).
+
 ## 0.39.0
 - Choose where your spools live: in the PocketPrint3D cloud or in your own Spoolman. The server and your bridges follow
   the choice, so NFC readers and slot assignments work with both.
