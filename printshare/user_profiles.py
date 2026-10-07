@@ -46,6 +46,8 @@ def detect_kind(data: dict[str, Any]) -> str | None:
         return t
     if t == "printer":
         return "machine"
+    if t == "print":          # Orca Cloud's name for a quality (process) preset
+        return "process"
     if any(k in data for k in ("printer_settings_id", "machine_start_gcode", "printable_area", "printer_model")):
         return "machine"
     if any(k in data for k in ("filament_settings_id", "filament_type", "nozzle_temperature")):

@@ -157,3 +157,12 @@ def test_client_id_from_server_and_api(tmp_path, monkeypatch):
     assert c.put("/api/orca-cloud", headers=h, json={"client_id": ""}).json()["client_id_from"] == "server"
     assert "client_id" not in (yaml.safe_load((tmp_path / orca_sync.FILE).read_text()) or {}) \
         if (tmp_path / orca_sync.FILE).exists() else True
+
+
+def test_quality_presets_of_type_print_are_kept(tmp_path, lib):  # noqa: F811
+    # Orca Cloud sends quality presets as "type": "print"; a preset with only its changes has no other hint of its kind
+    up = [{"id": "q", "name": "My Quality", "content": {"name": "My Quality", "type": "print", "from": "User",
+                                                         "inherits": "0.20mm Standard @Elegoo CC 0.4 nozzle"}}]
+    out = orca_sync.store(tmp_path, up, lib)
+    assert out["skipped"] == [] and len(out["files"]) == 1 and out["files"][0].startswith("process-")
+    assert [p["name"] for p in user_profiles.list_profiles(tmp_path, lib)] == ["My Quality"]

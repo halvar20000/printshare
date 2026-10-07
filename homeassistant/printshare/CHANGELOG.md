@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.1
+- Orca Cloud account: quality presets (Orca Cloud calls them "print") are taken over too instead of being skipped
+  when they carry no other hint of their kind.
+
 ## 0.43.0
 - Move the printer by hand from the app: home, jog X/Y/Z, extrude and retract, load and unload filament, motors off and
   the printer's own macros (Klipper) - never while a print runs. The Centauri Carbon (stock firmware) can home and
