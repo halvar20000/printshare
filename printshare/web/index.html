@@ -192,6 +192,75 @@
       <button type="button" id="power-save" class="primary" data-t="save">Speichern</button>
       <button type="button" id="power-remove" class="danger" data-t="power_remove" hidden>Entfernen</button>
     </div>
+    <!-- settings the app has too (0.41.0): kept on the server, so app and web page show the same -->
+    <div class="card" id="timelapse-card" hidden>
+      <h2 data-t="tl_title">Zeitraffer</h2>
+      <label class="check">
+        <input type="checkbox" id="tl-always">
+        <span data-t="tl_always">Zeitraffer immer erstellen</span>
+      </label>
+      <p class="hint" data-t="tl_always_hint"></p>
+      <p id="tl-msg" class="error" hidden></p>
+    </div>
+    <div class="card" id="spoolman-card" hidden>
+      <h2 data-t="sm_title">Filament-Spulen (Spoolman)</h2>
+      <p class="hint" data-t="sm_hint"></p>
+      <label for="sm-url" data-t="sm_url">Spoolman-Adresse</label>
+      <input id="sm-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.1.20:7912">
+      <p id="sm-env" class="hint" data-t="sm_env" hidden></p>
+      <button type="button" id="sm-test" class="ghost" data-t="sm_test">Verbindung testen</button>
+      <p id="sm-msg" class="hint" hidden></p>
+      <button type="button" id="sm-save" class="primary" data-t="save">Speichern</button>
+      <button type="button" id="sm-remove" class="danger" data-t="sm_remove" hidden>Spoolman entfernen</button>
+    </div>
+    <div class="card" id="reader-card" hidden>
+      <h2 data-t="rd_title">NFC-Leser am Drucker</h2>
+      <p class="hint" data-t="rd_hint"></p>
+      <div id="rd-printer-row" hidden>
+        <label for="rd-printer" data-t="printer">Drucker</label>
+        <select id="rd-printer"></select>
+      </div>
+      <p id="rd-state" class="hint"></p>
+      <div id="rd-new" hidden>
+        <label for="rd-url" data-t="rd_url">Adresse</label>
+        <input id="rd-url" readonly>
+        <label for="rd-key" data-t="rd_key">Schlüssel</label>
+        <input id="rd-key" readonly>
+        <p class="hint" data-t="rd_key_hint"></p>
+      </div>
+      <p id="rd-msg" class="error" hidden></p>
+      <button type="button" id="rd-create" class="primary" data-t="rd_create">Schlüssel erzeugen</button>
+      <button type="button" id="rd-remove" class="danger" data-t="rd_remove" hidden>Leser entfernen</button>
+    </div>
+    <div class="card" id="manyfold-card" hidden>
+      <h2 data-t="mf_title">Eigene Modell-Bibliothek (Manyfold)</h2>
+      <p class="hint" data-t="mf_hint"></p>
+      <label for="mf-url" data-t="mf_url">Manyfold-Adresse</label>
+      <input id="mf-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.20:3214">
+      <label for="mf-key" data-t="mf_key">API-Key</label>
+      <input id="mf-key" type="password" autocomplete="off" spellcheck="false">
+      <p id="mf-msg" class="hint" hidden></p>
+      <button type="button" id="mf-save" class="primary" data-t="save">Speichern</button>
+      <button type="button" id="mf-remove" class="danger" data-t="mf_remove" hidden>Manyfold trennen</button>
+    </div>
+    <div class="card" id="failure-card" hidden>
+      <h2 data-t="fd_title">KI-Fehlererkennung</h2>
+      <p class="hint" data-t="fd_hint"></p>
+      <label for="fd-ml" data-t="fd_ml">Adresse der ML-API</label>
+      <input id="fd-ml" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.10:3333">
+      <label for="fd-token" data-t="fd_token">ML_API_TOKEN (optional)</label>
+      <input id="fd-token" type="password" autocomplete="off" spellcheck="false">
+      <label for="fd-server" data-t="fd_server">Adresse dieses Servers für die ML-API</label>
+      <input id="fd-server" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.10:8484">
+      <label data-t="fd_sens">Empfindlichkeit</label>
+      <div id="fd-sens" class="seg" role="radiogroup"></div>
+      <label data-t="fd_action">Bei Verdacht</label>
+      <div id="fd-action" class="seg" role="radiogroup"></div>
+      <p class="hint" data-t="fd_note"></p>
+      <p id="fd-msg" class="hint" hidden></p>
+      <button type="button" id="fd-save" class="primary" data-t="save">Speichern</button>
+      <button type="button" id="fd-remove" class="danger" data-t="fd_remove" hidden>Fehlererkennung ausschalten</button>
+    </div>
     <!-- bridge mode: the app reaches these printers from anywhere through PocketPrint3D Cloud (docs/BRIDGE.md) -->
     <div class="card" id="bridge-card" hidden>
       <h2 data-t="bridge_title">Unterwegs drucken</h2>

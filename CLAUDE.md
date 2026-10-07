@@ -966,6 +966,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (`lib/timelapse.ts`: phone copy `ps_timelapse_always_<server>`, own server via `/api/timelapse/config`, 404 = older
   server hint); the review switch starts on with it, and a print start always sends `timelapse` true/false. Same as iOS 0.9.3.
 
+## App settings on the web page (2026-10-07, server 0.41.0, Dominique)
+- The PWA settings got the cards the app had alone: time-lapse "always" (`/api/timelapse/config`), Spoolman address
+  (`/api/spool-source`; new `POST /api/spool-source/test` = connection test from the server, saving needs it to pass,
+  cloud 409), NFC reader key per printer (`/reader-key`, key shown once), Manyfold, AI failure detection. Each card hides
+  itself when its endpoint fails (older server). Cloud-only things (account, bridges, cloud spools, phone-side printer
+  addresses/passwords) stay in the app: the PWA only runs on own servers. Checked with Chromium against fake
+  Moonraker + FakeSpoolman.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

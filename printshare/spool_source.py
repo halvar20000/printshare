@@ -77,6 +77,29 @@ def candidates(url: str) -> list[str]:
     return out
 
 
+async def check(url: str, timeout: float = 8.0) -> dict[str, Any]:
+    """Connection test: {"url" (the address that answered), "version", "spools" (not archived)}."""
+    last: Exception | None = None
+    async with httpx.AsyncClient(timeout=timeout) as c:
+        for base in candidates(url):
+            try:
+                info = await c.get(f"{base}/api/v1/info")
+                spools = await c.get(f"{base}/api/v1/spool", params={"allow_archived": "false"})
+            except httpx.HTTPError as e:
+                last = e
+                continue
+            if info.status_code != 200 or spools.status_code != 200:
+                last = RuntimeError(f"HTTP {info.status_code if info.status_code != 200 else spools.status_code}")
+                continue
+            try:
+                version, count = (info.json() or {}).get("version"), len(spools.json() or [])
+            except ValueError:
+                last = RuntimeError("no Spoolman answer")
+                continue
+            return {"url": base, "version": version, "spools": count}
+    raise RuntimeError(f"Spoolman not reachable: {last}")
+
+
 async def fetch_spool(url: str, spool_id: int, timeout: float = 8.0) -> dict[str, Any]:
     """{"material", "color" ("#RRGGBB" or None), "name", "vendor"} of a Spoolman spool."""
     last: Exception | None = None
