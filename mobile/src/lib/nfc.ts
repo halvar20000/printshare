@@ -2,6 +2,7 @@
 import NfcTag from "../../modules/nfc-tag/src/NfcTagModule";
 import type { T } from "./i18n";
 import { decodeBase64, parseTag, TagError, type OpenPrintTag } from "./openprinttag";
+import type { Api } from "./api";
 import type { Spool } from "./spoolman";
 
 /** Is NFC there at all? ("none": no hardware / not Android - hide the NFC buttons) */
@@ -55,4 +56,41 @@ export function matchSpool(tag: OpenPrintTag, spools: Spool[]): Spool | null {
     if (!best || score > best.score || (score === best.score && diff < best.diff)) best = { s, score, diff };
   }
   return best && best.score >= 2 ? best.s : null;
+}
+
+
+// ---------- any NFC chip: linked to a spool once by its chip number (server 0.38.0, /api/spool-tags) ----------
+/** A chip held to the phone: its number (hex, upper case) and - for an OpenPrintTag - what is written in it. */
+export type Chip = { uid: string; tag: OpenPrintTag | null };
+
+/** Wait for any chip: OpenPrintTag / ISO 15693 (content read), NTAG sticker or a Bambu spool's tag (number only). */
+export async function scanChip(t: T): Promise<Chip> {
+  let raw: { uid: string; data: string };
+  try {
+    raw = await NfcTag.readAsync(30000);
+  } catch (e) {
+    const code = (e as { code?: string }).code ?? "";
+    if (code === "ERR_NFC_OFF") throw new Error(t("nfcOff"));
+    if (code === "ERR_NFC_UNAVAILABLE") throw new Error(t("nfcNone"));
+    if (code === "ERR_NFC_TIMEOUT") throw new Error(t("nfcTimeout"));
+    if (code === "ERR_NFC_CANCELLED") throw new Error("");
+    throw new Error(t("nfcReadFailed"));
+  }
+  let tag: OpenPrintTag | null = null;
+  if (raw.data) {
+    try { tag = parseTag(decodeBase64(raw.data), raw.uid); } catch { tag = null; }   // blank or another format
+  }
+  return { uid: raw.uid.replace(/[^0-9a-f]/gi, "").toUpperCase(), tag };
+}
+
+/** The spool of a chip: linked on the server by its number, else (OpenPrintTag) by what the tag says. */
+export async function identifyChip(api: Api | null, chip: Chip, spools: Spool[]): Promise<Spool | null> {
+  if (api) {
+    try {
+      const linked = (await api.spoolTag(chip.uid)).spool;
+      const sp = linked != null ? spools.find(s => s.id === linked) : undefined;
+      if (sp) return sp;
+    } catch { /* older server: no links yet */ }
+  }
+  return chip.tag ? matchSpool(chip.tag, spools) : null;
 }

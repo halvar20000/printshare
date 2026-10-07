@@ -379,7 +379,7 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
 
 `GET /api/jobs` – recent jobs (newest first, in memory, max. 50):
 `[{"id", "kind", "state", "error", "created", "printer", "link", "file", "print_time", "filament_g", "progress"}]`
-(`progress` since 0.37.0: % of a started print, else null).
+(`progress` since 0.39.0: % of a started print, else null).
 `DELETE /api/jobs/{job}` removes a job and its G-code (`409` while it runs).
 
 ### `POST /api/jobs/{job}/send` – after the review and the user's confirmation
@@ -501,11 +501,11 @@ Recorded where the camera is reachable: on an own server, or on the bridge for p
 - `GET /api/jobs/{id}/timelapse` → the MP4 (`Content-Disposition: inline`, `?token=` works for video players); 404 until ready.
   Stored in the job's folder, so it goes with the job (14 days).
 - The apps show the switch only for printers with a camera that the server reaches (own server, bridge printers).
-- "Always" (0.37.0, own servers and bridges): `GET|PUT /api/timelapse/config {"always": bool}` (cloud: 409), stored in
+- "Always" (0.39.0, own servers and bridges): `GET|PUT /api/timelapse/config {"always": bool}` (cloud: 409), stored in
   `<config dir>/timelapse.yaml`. `timelapse` in `/send` is optional now: left out (null) = this setting; an explicit
   `true`/`false` wins. With `always` on, prints started elsewhere (see below) are recorded too when the printer has a camera.
 
-## Prints started elsewhere (0.37.0)
+## Prints started elsewhere (0.39.0)
 A print the server sees on a printer that no job of the account stands for (OrcaSlicer straight to the printer, the
 printer's screen, Mainsail …) becomes a job of its own: `kind: "external"`, `state: "started"`, `result: null`,
 `request.link: null`, `printer_file` = the file on the printer (also as `file` in `GET /api/jobs`), `progress`. It is
@@ -587,6 +587,32 @@ No token, home servers only (404 in the cloud):
 - `GET /api/bridge/local-code` → `{"code", "expires_in", "name"}` – only on a bridge-only install, while unpaired, from
   the home network and by the bridge's own address (rules: docs/BRIDGE.md 5a); else 403, or 409 when no code is shown.
 - `GET /bridge` – HTML status page (also at `/` on a bridge-only install).
+
+## Filament per slot (0.37.0)
+Bambu Lab (AMS trays + external spool) so far; through a bridge as `printer.filament.info` / `printer.filament`.
+- `GET /api/printers/{id}/filament` → `{"supported", "load", "unload", "set", "external", "busy", "slots": [lane …
+  (+ the external spool, tool 254, id "Ext")], "materials": [{"name", "type", "temp_min", "temp_max", "load_temp"}]}`;
+  `supported: false` for printers without it.
+- `POST /api/printers/{id}/filament` `{"action": "load"|"unload"|"set", "slot"?, "material"?, "color"?, "temp"?,
+  "confirm"?}`: `load` (slot = tool) / `unload` heat the nozzle (default: the slot's material) and move filament → 409
+  while a print runs, 409 without `confirm: true`; `set` = material (from `materials`) + `#RRGGBB` of a slot. 400 for an
+  unknown slot/material/colour.
+
+## Spools by NFC chip and per slot, NFC readers (0.38.0)
+Any NFC chip (OpenPrintTag, NTAG sticker, a Bambu spool's MIFARE tag) is linked once to a spool by its chip number (UID,
+hex; Android's byte order = as received over the air). Spool numbers are those of the list the app uses (cloud spools or
+the user's own Spoolman). Stored per account (cloud) or on the home server (`<config dir>/spooltags.db`).
+- `GET /api/spool-tags` → `[{"uid", "spool", "created"}]`; `GET /api/spool-tags/{uid}` → `{"uid", "spool" | null}`;
+  `PUT /api/spool-tags/{uid}` `{"spool"}` (a reader that already saw the chip in a slot puts the spool there);
+  `DELETE /api/spool-tags/{uid}`. 400 for a malformed UID (4-16 bytes hex).
+- `GET /api/printers/{id}/slot-spools` → `{"slots": {"<tool>": {"spool", "source": "app"|"reader", "updated"}},
+  "scans": {"<tool>": {"uid", "spool" | null, "at"}}}`; `PUT /api/printers/{id}/slot-spools/{tool}` `{"spool" | null}`
+  → `{"slots", "printer_set"}` (cloud spools: the printer's slot gets the spool's material and colour). A spool sits in
+  one slot at a time.
+- NFC reader at the printer: `GET|POST|DELETE /api/printers/{id}/reader-key` (`{"enabled", "url", "key"?}`, key `pp3dr_…`
+  shown once); the reader sends `POST /api/reader/scan` with `Authorization: Bearer <key>` (or `X-Api-Key`)
+  `{"slot": <tool>, "uid": "<hex>"}` → `{"known", "spool", "printer_set"}`. On a home server its own token works too,
+  with `"printer": "<id>"` in the body.
 
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman

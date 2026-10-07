@@ -8,7 +8,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-nativ
 
 import { Banner, Button, Divider, PickerSheet, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
 import type { FilamentPreset } from "@/lib/api";
-import { cancelScan, nfcStatus, scanSpool } from "@/lib/nfc";
+import { cancelScan, nfcStatus, scanChip, scanSpool } from "@/lib/nfc";
 import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { useApp } from "@/lib/app";
 import { CLOUD_SPOOLS, openSpoolman, type SpoolInput } from "@/lib/spoolman";
@@ -68,6 +68,23 @@ export default function SpoolForm() {
       if ((e as Error).message) setDbError((e as Error).message);
     } finally {
       setScanning(false);
+    }
+  };
+  /** Link a chip on this spool (sticker, Bambu tag, OpenPrintTag): from then on the app and readers know the spool. */
+  const [linking, setLinking] = useState(false);
+  const linkChip = async () => {
+    if (!api) return;
+    tap();
+    setLinking(true); setDbError(""); setNfcInfo(t("nfcHold"));
+    try {
+      const chip = await scanChip(t);
+      await api.linkSpoolTag(chip.uid, Number(id));
+      setNfcInfo(t("nfcChipLinked", { uid: chip.uid }));
+    } catch (e) {
+      setNfcInfo("");
+      if ((e as Error).message) setDbError((e as Error).message);
+    } finally {
+      setLinking(false);
     }
   };
   const [tagApplied, setTagApplied] = useState(false);
@@ -241,6 +258,13 @@ export default function SpoolForm() {
 
       {!isNew ? (
         <Section>
+          {hasNfc ? (
+            <>
+              <Row icon="radio-outline" label={t("nfcLinkChip")} sub={t("nfcLinkChipSub")} onPress={linking ? undefined : linkChip}
+                right={linking ? <Button kind="plain" title={t("nfcCancel")} onPress={() => cancelScan()} /> : undefined} />
+              <Divider />
+            </>
+          ) : null}
           <Row icon="copy-outline" label={t("spoolCopy")}
             onPress={() => router.replace({ pathname: "/spool/[id]", params: { id: "new", copy: id } })} />
           <Divider />

@@ -882,6 +882,16 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   stream, 8081 snapshot), `wifi: output_power: 8.5dB` (at full power it browned out/rebooted on connect), `web_server` :80
   for logs. Files `releases/esp32cam-p1s-links*.{bin,yaml}`. At 192.168.86.193: `http://IP:8081/` 1024x768 ~27 KB in 0.25 s.
   Thomas' Home Assistant (192.168.86.173) ESPHome add-on couldn't build: no DNS inside HA.
+- **Pi camera in the bridge image** (2026-10-06, Thomas: test bridge + camera on the same Pi 4): `pi-image/stage-pp3d/01-camera`
+  installs mediamtx v1.21.1 (arm64 tarball checksum-checked against the release's checksums.sha256 in pi-image.yml) as
+  `pocketprint3d-camera.service` (user `mediamtx`, group video), config `/etc/pocketprint3d-camera/mediamtx.yml`: only
+  RTSP/TCP :8554, path `cam` = rpiCamera 1640x1232 @15 fps (full FOV of V2/OV5647), `sourceOnDemand: true` (no camera,
+  no cost), no password (LAN). Own camera address: `rtsp://<Pi IP>:8554/cam`. A separate camera image was built first
+  and dropped for this. For Thomas' P1S .20 (camera cable torn): Pi 4 + Pi Camera V2 in the MakerWorld holder (1740878).
+  **Verified 2026-10-06** on Thomas' Pi 4 (image pi-image-v0.36.1, 772 MB): bridge at 192.168.86.94 (pairing), camera at
+  `rtsp://192.168.86.94:8554/cam` → 1640x1232, ~112 KB, 4-6 s per picture through ffmpeg (camera opened on demand).
+  The app found the Pi bridge on the Wi-Fi only with **Tailscale switched off** on the phone (the same discovery code run here
+  found it in 6 s) - todo: hint "switch off VPN/Tailscale" in the "no bridge found" / "no printer found" texts.
 - 0.36.1: own camera address option `#rotate=90|180|270` (fragment, never sent to the camera; `Camera.rotate`, Pillow
   transpose in `camera.snapshot`, a turned camera reports `stream: false`). For the ESP32-CAM mounted on its side in .20. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
@@ -905,7 +915,36 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   to the server for Bambu (no G-code rewrite) but `opts.tools` → ams_mapping. Discovery: `deps.bambu` = `BambuLan.probeAsync`.
   Printer type `bambu_lan` offered without a bridge on Android only. **Not yet tried on a real phone.**
 
-## Prints started elsewhere + time-lapse "always" (2026-10-06, server 0.37.0, Dominique)
+## Filament menu (2026-10-06, server 0.37.0, app build 43)
+- `printshare/filament.py`: materials with Bambu generic `tray_info_idx` (read from Orca's BBL "Generic … @base": PLA GFL99,
+  PLA Silk GFL96, PLA-CF GFL98, PETG GFG99, PETG-CF GFG98, ABS GFB99, ASA GFB98, TPU GFU99, PA GFN99, PA-CF GFN98, PC GFC99,
+  PVA GFS99), temp range + load temperature. Bambu adapter: `filament_caps()`, `filament(action, slot, material, colour,
+  temp)`: `ams_filament_setting` (ams_id = tool//4, tray_id = tool%4; external spool ams_id 255 / tray_id 254; colour
+  "RRGGBBFF") and `ams_change_filament` (target 0-15 / 254 external, 255 = unload; curr_temp = tar_temp = material's load
+  temperature). Status has `external` (vt_tray). API `GET/POST /api/printers/{id}/filament` (load/unload refused while
+  printing and without confirm), bridge methods `printer.filament.info` / `printer.filament`. App: `filament/[id].tsx`
+  (slots with colour dot, Load/Unload/Edit, material picker + colour swatches/hex), row "Filament" in the control screen
+  (only when the server answers `supported`).
+- **Live 2026-10-06:** `set` on P1S .53 tray 2 → PLA red, the printer replied `result: success`, the report showed GFL99 /
+  E02020FF / 190-240. P1S generic PLA range is 190-240, PETG 220-270 (as the printer reports its own trays). Load/unload not
+  yet tried on the real printer. Klipper/AFC next.
+- **Spool per slot** (app only, 2026-10-07): filament screen → "Spule" per slot: scan an OpenPrintTag (`scanSpool` +
+  `matchSpool`) or pick from the spool list (own Spoolman or cloud spools); stored on the phone (`ps_slotspools_<server>_<printer>`,
+  `setSlotSpool`: a spool sits in one slot only) and the slot is set to the spool's material/colour on the printer. The
+  print screen (`job/[id].tsx` `spoolFor`) proposes the chosen slot's spool (after AFC's own `spool_id`) and books it.
+  Neither the AMS nor the Centauri can read OpenPrintTag (AMS: only Bambu's signed MIFARE Classic tags) - the phone reads
+  the tag. Not tried with a real tag (Thomas has none yet); not in the web app (no NFC) beyond picking from the list.
+- **Chips linked to spools, server-side slots, NFC readers (0.38.0):** `printshare/spooltags.py` (SQLite `spooltags.db`
+  next to the cloud DB / in the home config dir; owner = user id or "local"): `spool_tags` (UID → spool, several chips per
+  spool), `slot_spools` (moved from the phone; one slot per spool), `reader_scans` (last chip per slot; an unknown chip
+  shows in the app as "assign a spool"), `reader_keys` (`pp3dr_`, hashed). API in docs/API.md; `_sync_slot` tells a Bambu
+  printer the cloud spool's material/colour (bridge printers through `filament_action`). Android NFC module now also reads
+  NFC-A (NTAG stickers, Bambu MIFARE tags: UID only) besides NFC-V; `scanChip` + `identifyChip` (server link first, then
+  OpenPrintTag content); unknown chip → "which spool is this?" (job screen, filament screen); spool form → "NFC-Chip
+  verknüpfen"; filament screen → section "NFC-Leser am Drucker" (key + URL). Phone-local slot storage stays as fallback
+  for older servers. Next (step 3, waiting for Thomas' PN5180 modules): ESP32 + PN5180 firmware posting `/api/reader/scan`.
+
+## Prints started elsewhere + time-lapse "always" (2026-10-06, server 0.39.0, Dominique)
 - `jobtrack.external()`: a printer seen printing a file no job of the account stands for → job `kind: "external"`
   (`result: null`, `printer_file`, `progress`), then followed like any started job. Not external: a started job with the
   same file, any `sending`/`uploading` job of the printer, an own start not yet seen printing (< 20 min, names may differ).

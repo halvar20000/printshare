@@ -87,7 +87,7 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
     req = api.SendRequest(start=bool(params.get("start")), confirm=bool(params.get("confirm")),
                           leveling=params.get("leveling"), lanes=params.get("lanes") or None,
                           spool_id=params.get("spool_id"),
-                          # None = the bridge's own "always" setting (0.37.0)
+                          # None = the bridge's own "always" setting (0.39.0)
                           timelapse=params["timelapse"] if isinstance(params.get("timelapse"), bool) else None)
     try:
         await _call(api.send, local["id"], req, acct)
@@ -202,6 +202,15 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _call(api.adjust, pid, req, acct)
     if method == "printer.temperatures":
         return await _call(api.temperatures, pid, acct)
+    if method == "printer.filament.info":
+        return await _call(api.filament_info, pid, acct)
+    if method == "printer.filament":
+        try:
+            req = api.FilamentRequest(**{k: params.get(k) for k in ("action", "slot", "material", "color", "temp")
+                                         if params.get(k) is not None}, confirm=bool(params.get("confirm")))
+        except Exception as e:  # noqa: BLE001 - pydantic validation
+            raise MethodError("invalid", str(e)[:300]) from None
+        return await _call(api.filament_action, pid, req, acct)
     if method == "printer.camera":
         return await _call(api.camera_info, pid, acct)
     if method == "printer.camera.snapshot":

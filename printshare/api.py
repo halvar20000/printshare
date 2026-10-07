@@ -80,6 +80,8 @@ from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
 from .cloud.upload_keys import UploadKeys
 from . import gcode_info
+from . import filament as filament_mod
+from . import spooltags as spooltags_mod
 from .jobstore import JobStore, job_dir
 from . import jobtrack
 from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
@@ -127,7 +129,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.37.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.39.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -387,6 +389,7 @@ async def auth_delete_account(response: Response, confirm: bool = False, acct: A
         shutil.rmtree(d, ignore_errors=True)
     bridge_ids = [b["id"] for b in BRIDGES.list(acct.id)]
     ACCOUNTS.delete_user(acct.id)
+    _tags().forget_owner(acct.id)
     for bid in bridge_ids:
         await HUB.disconnect(bid, "the account was deleted")
     response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
@@ -655,7 +658,7 @@ def bookings_delete(booking_id: str, acct: Account = Depends(auth)) -> dict[str,
 
 def _track_jobs(owner: str, printer_id: str, status: dict[str, Any] | None) -> None:
     """Started jobs of this printer learn from its status that they finished or were cancelled (0.33.0); a print
-    started elsewhere (OrcaSlicer straight to the printer …) becomes a job of its own (0.37.0)."""
+    started elsewhere (OrcaSlicer straight to the printer …) becomes a job of its own (0.39.0)."""
     kind = printer_kind(status.get("state")) if status else None
     mine = [j for j in list(JOBS.values()) if j.get("owner", "local") == owner
             and (j.get("printer") or (j.get("result") or {}).get("printer")) == printer_id]
@@ -687,7 +690,7 @@ async def _external_timelapse(job: dict[str, Any]) -> None:
 
 
 def _bridge_printers() -> set[tuple[str, str]]:
-    """Every printer behind a bridge that is online now (prints started elsewhere show up as jobs, 0.37.0)."""
+    """Every printer behind a bridge that is online now (prints started elsewhere show up as jobs, 0.39.0)."""
     if ACCOUNTS is None:
         return set()
     out = set()
@@ -1244,6 +1247,7 @@ async def delete_printer(printer_id: str, acct: Account = Depends(auth)) -> dict
         raise HTTPException(404, f"Unknown printer {printer_id!r}")
     if UPLOAD_KEYS is not None:
         UPLOAD_KEYS.delete(acct.id, printer_id)
+    _tags().forget_printer(acct.id, printer_id)
     user_profiles.write_overlay(acct.settings.config_dir, printer_id, {})     # its profile/power settings too
     return {"deleted": printer_id}
 
@@ -1806,6 +1810,227 @@ async def adjust(printer_id: str, req: Adjustment, acct: Account = Depends(auth)
     return {"ok": True}
 
 
+# ---------- filament per slot: load / unload / what is in it (Bambu AMS first) ----------
+class FilamentRequest(BaseModel):
+    action: str                        # load | unload | set
+    slot: int | None = None            # tool number of the slot (AMS tray 0-15, Bambu external spool 254)
+    material: str | None = None        # set: one of /filament materials ("PLA", "PETG" …)
+    color: str | None = None           # set: "#RRGGBB"
+    temp: int | None = Field(default=None, ge=150, le=320)   # load/unload: nozzle °C (default: the slot's material)
+    confirm: bool = False
+
+
+@app.get("/api/printers/{printer_id}/filament")
+async def filament_info(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """What the app's filament menu can do for this printer, with its slots and the materials to choose from."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.filament.info")
+    _local_only(acct)
+    adapter = get_adapter(_printer(acct, printer_id))
+    caps = adapter.filament_caps() if hasattr(adapter, "filament_caps") else {}
+    if not caps:
+        return {"supported": False, "slots": [], "materials": [], "load": False, "unload": False, "set": False}
+    try:
+        st = await adapter.status()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    slots = list(st.get("lanes") or [])
+    if caps.get("external") and st.get("external"):
+        slots.append(st["external"])
+    return {"supported": True, **caps, "slots": slots, "materials": filament_mod.materials_json(),
+            "busy": printer_kind(st.get("state")) in ("active", "paused")}
+
+
+@app.post("/api/printers/{printer_id}/filament")
+async def filament_action(printer_id: str, req: FilamentRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Load / unload filament or set what is in a slot. Loading and unloading heat the nozzle and move filament: never
+    while a print runs, and only with confirm=true."""
+    if _via_bridge(acct, printer_id):
+        return await _forward(acct, printer_id, "printer.filament", **req.model_dump())
+    _local_only(acct)
+    if req.action not in filament_mod.ACTIONS:
+        raise HTTPException(400, f"action must be one of {', '.join(filament_mod.ACTIONS)}")
+    adapter = get_adapter(_printer(acct, printer_id))
+    caps = adapter.filament_caps() if hasattr(adapter, "filament_caps") else {}
+    if not caps.get(req.action):
+        raise HTTPException(400, f"this printer can't {req.action} filament from PocketPrint3D")
+    if req.action == "set":
+        if filament_mod.material(req.material) is None:
+            raise HTTPException(400, "choose a material from the list")
+        if filament_mod.colour(req.color) is None:
+            raise HTTPException(400, "color must be #RRGGBB")
+    elif req.action == "load" and req.slot is None:
+        raise HTTPException(400, "which slot to load?")
+    try:
+        st = await adapter.status()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+    if req.action in ("load", "unload"):
+        if printer_kind(st.get("state")) in ("active", "paused"):
+            raise HTTPException(409, "a print is running - load or unload filament when it is over")
+        if not req.confirm:
+            raise HTTPException(409, "loading and unloading heat the nozzle - confirm (confirm=true)")
+    if req.slot is not None:
+        known = {x.get("tool") for x in (st.get("lanes") or []) + ([st["external"]] if st.get("external") else [])}
+        if req.slot not in known:
+            raise HTTPException(400, "unknown slot")
+    try:
+        return {"ok": True, **await adapter.filament(req.action, req.slot, req.material, req.color, req.temp)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"printer not reachable: {e}")
+
+
+# ---------- spools by NFC chip and per slot, NFC readers at the printer (0.38.0, printshare/spooltags.py) ----------
+_SPOOLTAGS: spooltags_mod.SpoolTags | None = None
+
+
+def _tags() -> spooltags_mod.SpoolTags:
+    """One store: next to the cloud database, or in the home server's config folder (owner "local")."""
+    global _SPOOLTAGS
+    if _SPOOLTAGS is None:
+        base = Path(settings.cloud_db).parent if settings.cloud else Path(settings.config_dir or ".")
+        _SPOOLTAGS = spooltags_mod.SpoolTags(base / "spooltags.db")
+    return _SPOOLTAGS
+
+
+def _tag_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except spooltags_mod.TagError as e:
+        raise HTTPException(400, str(e))
+
+
+class TagLink(BaseModel):
+    spool: int = Field(ge=1)
+
+
+class SlotSpool(BaseModel):
+    spool: int | None = Field(default=None, ge=1)     # None = no spool in this slot
+
+
+class ReaderScan(BaseModel):
+    slot: int = Field(ge=0, le=255)       # tool number of the slot (Bambu external spool: 254)
+    uid: str                              # the chip number, hex
+    printer: str | None = None            # only with the server's own token (a reader key names its printer)
+
+
+@app.get("/api/spool-tags")
+def spool_tags_list(acct: Account = Depends(auth)) -> list[dict[str, Any]]:
+    """All chips linked to a spool."""
+    return _tags().links(acct.id)
+
+
+@app.get("/api/spool-tags/{uid}")
+def spool_tag(uid: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The spool of a chip - null if the chip isn't linked yet (the app then asks "which spool is this?")."""
+    u = _tag_call(spooltags_mod.normalize_uid, uid)
+    return {"uid": u, "spool": _tags().spool_for(acct.id, u)}
+
+
+@app.put("/api/spool-tags/{uid}")
+def spool_tag_link(uid: str, req: TagLink, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Link a chip to a spool (a reader that already saw the chip in a slot puts the spool there). The spool number is
+    the one of the spool list the app uses: the cloud account's spools or the user's own Spoolman."""
+    return _tag_call(_tags().link, acct.id, uid, req.spool)
+
+
+@app.delete("/api/spool-tags/{uid}")
+def spool_tag_unlink(uid: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    return {"deleted": _tag_call(_tags().unlink, acct.id, uid)}
+
+
+def _cloud_spool(acct: Account, spool: int) -> dict[str, Any]:
+    try:
+        return SPOOLS.get(acct.id, spool)
+    except accounts.AccountError as e:
+        raise HTTPException(e.status, str(e))
+
+
+@app.get("/api/printers/{printer_id}/slot-spools")
+def slot_spools(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Spool per slot ({tool: {spool, source, updated}}) and what NFC readers saw last ({tool: {uid, spool, at}})."""
+    _printer(acct, printer_id)
+    return {"slots": _tags().slots(acct.id, printer_id), "scans": _tags().scans(acct.id, printer_id)}
+
+
+@app.put("/api/printers/{printer_id}/slot-spools/{tool}")
+async def slot_spool_set(printer_id: str, tool: int, req: SlotSpool, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Put a spool into a slot (or none). With cloud spools the printer's slot gets the spool's material and colour."""
+    _printer(acct, printer_id)
+    if not 0 <= tool <= 255:
+        raise HTTPException(400, "slot must be 0-255")
+    _tags().set_slot(acct.id, printer_id, tool, req.spool, "app")
+    synced = await _sync_slot(acct, printer_id, tool, req.spool) if req.spool else False
+    return {"slots": _tags().slots(acct.id, printer_id), "printer_set": synced}
+
+
+async def _sync_slot(acct: Account, printer_id: str, tool: int, spool: int) -> bool:
+    """Tell the printer what is in the slot (Bambu: ams_filament_setting) - cloud spools only (their material and
+    colour are known here); never fails the caller."""
+    if not (acct.cloud and SPOOLS is not None):
+        return False
+    try:
+        f = _cloud_spool(acct, spool).get("filament") or {}
+        m = filament_mod.material(f.get("material"))
+        col = filament_mod.colour(f.get("color_hex"))
+        if m is None or col is None:
+            return False
+        await filament_action(printer_id, FilamentRequest(action="set", slot=tool, material=m.name, color="#" + col), acct)
+        return True
+    except Exception:  # noqa: BLE001 - the assignment stands even if the printer can't be told
+        return False
+
+
+@app.get("/api/printers/{printer_id}/reader-key")
+def reader_key_state(printer_id: str, request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Is an NFC reader set up for this printer? (The key itself is shown only when it is created.)"""
+    _printer(acct, printer_id)
+    info = _tags().key_info(acct.id, printer_id)
+    return {"enabled": info is not None, "url": _public_url(request) + "/api/reader/scan", **(info or {})}
+
+
+@app.post("/api/printers/{printer_id}/reader-key")
+def reader_key_create(printer_id: str, request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """A key for an NFC reader at this printer (ESP32 + PN5180): shown once, an older key stops working."""
+    _printer(acct, printer_id)
+    return {"enabled": True, "url": _public_url(request) + "/api/reader/scan",
+            "key": _tags().create_key(acct.id, printer_id)}
+
+
+@app.delete("/api/printers/{printer_id}/reader-key")
+def reader_key_delete(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    return {"deleted": _tags().delete_key(acct.id, printer_id)}
+
+
+@app.post("/api/reader/scan")
+async def reader_scan(req: ReaderScan, request: Request) -> dict[str, Any]:
+    """An NFC reader at the printer saw a chip in a slot. Auth: the printer's reader key (Bearer or X-Api-Key), or on a
+    home server its token with `printer`. Known chip → the spool now sits in that slot (and the printer is told);
+    unknown chip → remembered, the app offers to link it."""
+    key = _token(request) or request.headers.get("x-api-key") or ""
+    found = _tags().resolve_key(key)
+    if found:
+        owner, printer_id = found
+        if settings.cloud:
+            user = ACCOUNTS.user(owner) if ACCOUNTS is not None else None
+            if user is None:
+                raise HTTPException(403, "invalid reader key")
+            acct = _user_account(user, "")
+        else:
+            acct = Account("local", settings)
+    else:
+        acct = auth(request)                                # home server token (or a logged-in session)
+        if not req.printer:
+            raise HTTPException(400, "printer is missing")
+        printer_id = req.printer
+    _printer(acct, printer_id)
+    spool = _tag_call(_tags().scan, acct.id, printer_id, req.slot, req.uid)
+    synced = await _sync_slot(acct, printer_id, req.slot, spool) if spool else False
+    return {"known": spool is not None, "spool": spool, "printer_set": synced}
+
+
 @app.get("/api/printers/{printer_id}/temperatures")
 async def temperatures(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Temperature history: from the printer where it keeps one (Moonraker, OctoPrint), else what
@@ -2271,7 +2496,7 @@ async def _track_printer(owner: str, printer_id: str) -> None:
 
 async def _jobs_track_loop() -> None:
     """Home server: started jobs follow their printer until the print is over (0.33.0); every printer is looked at, so
-    prints started elsewhere show up as jobs too (0.37.0)."""
+    prints started elsewhere show up as jobs too (0.39.0)."""
     while True:
         await asyncio.sleep(JOB_TRACK_S)
         pairs = _started_printers() | {("local", p.id) for p in settings.printers}
@@ -2347,7 +2572,7 @@ class SendRequest(BaseModel):
     # Spoolman (0.16.0): spool that the printer's Moonraker books this print on (status "spoolman" not null)
     spool_id: int | None = Field(None, ge=1)
     # time-lapse video of this print (0.32.0): own servers and printers behind a bridge, needs a camera;
-    # None = the server's "always" setting (0.37.0)
+    # None = the server's "always" setting (0.39.0)
     timelapse: bool | None = None
 
 
@@ -2493,7 +2718,7 @@ def job_relayed(job_id: str, req: RelayedRequest, acct: Account = Depends(auth))
     return {"state": job["state"]}
 
 
-# "always make a time-lapse" (0.37.0, own servers and bridges): prints sent without a choice and prints started elsewhere
+# "always make a time-lapse" (0.39.0, own servers and bridges): prints sent without a choice and prints started elsewhere
 TIMELAPSE_CONFIG = "timelapse.yaml"
 
 

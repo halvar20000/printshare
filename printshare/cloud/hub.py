@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 METHODS: dict[str, float] = {
     "printers.list": 10, "printer.status": 15, "printer.control": 30, "printer.controls": 15,
     "printer.adjust": 15, "printer.temperatures": 15, "printer.camera": 15, "printer.camera.snapshot": 15,
-    "printer.power": 20,
+    "printer.power": 20, "printer.filament.info": 15, "printer.filament": 30,
     "job.send": 15 * 60, "watch.state": 10, "watch.mute": 10, "discover": 60,
     "printer.add": 30, "printer.update": 30, "printer.remove": 30,
 }
