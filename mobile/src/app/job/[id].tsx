@@ -3,11 +3,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { errorText, friendlyError, WEB_APP, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { errorText, friendlyError, isExternal, WEB_APP, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
 import { NoAddressError, printerFileName, printerStatus, relayJob, viaServer } from "@/lib/printerAccess";
@@ -18,6 +18,7 @@ import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSlotSpools, loadSpoolmanU
 import { cancelScan, identifyChip, nfcStatus, scanChip } from "@/lib/nfc";
 import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { plateSummary } from "@/lib/plate";
+import { loadTimelapseAlways } from "@/lib/timelapse";
 import { translateLog, type T } from "@/lib/i18n";
 import { useColors } from "@/lib/theme";
 
@@ -60,8 +61,10 @@ export default function JobScreen() {
   const [printerNames, setPrinterNames] = useState<Record<string, string>>({});
   const [levelingDefault, setLevelingDefault] = useState<Record<string, boolean | null>>({});
   const [leveling, setLeveling] = useState<boolean | null>(null);
-  // time-lapse (server 0.32.0): only where the server/bridge reaches the camera; off by default
+  // time-lapse (server 0.32.0): only where the server/bridge reaches the camera; starts as the "always make a
+  // time-lapse" setting says (off unless set, 0.40.0)
   const [timelapse, setTimelapse] = useState(false);
+  const timelapseDefaulted = useRef(false);
   const [again, setAgain] = useState(false);
   const [pstatus, setPstatus] = useState<PrinterStatus | "offline" | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -136,6 +139,11 @@ export default function JobScreen() {
     return () => { alive = false; };
   }, [api, camCapable, printerObj]);
   const hasCam = camCapable && camFound;
+  useEffect(() => {
+    if (!hasCam || !server || timelapseDefaulted.current) return;
+    timelapseDefaulted.current = true;
+    loadTimelapseAlways(server).then(setTimelapse).catch(() => {});
+  }, [hasCam, server]);
   // follow a running print (→ finished / cancelled) and its time-lapse until the video is ready
   const jobId = job?.id;
   const tlState = job?.timelapse?.state;
@@ -332,7 +340,7 @@ export default function JobScreen() {
     }
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
-        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, start && hasCam && timelapse);
+        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, hasCam && timelapse);
       let j: Job | null = null;
       for (let i = 0; i < 600; i++) {
         await new Promise(r => setTimeout(r, 1000));
@@ -389,7 +397,7 @@ export default function JobScreen() {
 
   const r = job.result;
   // started on the printer (OrcaSlicer straight to the printer …, server 0.40.0): nothing to send again
-  const external = job.kind === "external";
+  const external = isExternal(job);
   const name = jobName(r?.source_file ?? job.printer_file, job.request.link);
 
   // ---------- slicing ----------
@@ -437,6 +445,61 @@ export default function JobScreen() {
     );
   }
 
+  const timelapseInfo = job.timelapse ? (
+    job.timelapse.state === "ready" ? (
+      <Button title={t("timelapseWatch")} icon="film-outline" style={{ marginTop: 16, alignSelf: "stretch" }}
+        onPress={() => router.push({ pathname: "/timelapse/[id]", params: { id: job.id, name } })} />
+    ) : (
+      <Text style={{ color: job.timelapse.state === "failed" ? c.danger : c.sub, fontSize: 14, marginTop: 12, textAlign: "center" }}>
+        {job.timelapse.state === "recording" ? t("timelapseRecording", { n: job.timelapse.frames })
+          : job.timelapse.state === "rendering" ? t("timelapseRendering")
+          : t("timelapseFailed", { error: job.timelapse.error ?? "" })}
+      </Text>
+    )
+  ) : null;
+  const cameraButton = !cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
+    onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null;
+
+  // ---------- started on the printer itself (server 0.40.0): status, progress, camera, time-lapse ----------
+  if (external) {
+    const finished = job.state === "finished";
+    const cancelled = job.state === "cancelled";
+    const pct = job.state === "started" && job.progress != null ? Math.min(Math.max(job.progress, 0), 100) : null;
+    return (
+      <Screen footer={<>
+        <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />
+        {cameraButton}
+      </>}>
+        <View style={{ alignItems: "center", paddingVertical: 20 }}>
+          <Ionicons name={cancelled ? "close-circle" : finished ? "checkmark-circle" : "print"} size={64}
+            color={cancelled ? c.warn : finished ? c.ok : c.accent} />
+          <Text style={{ color: c.text, fontSize: 22, fontWeight: "700", marginTop: 10 }}>
+            {t(finished ? "finishedTitle" : cancelled ? "cancelledTitle" : "jobExternal")}</Text>
+          <Text style={{ color: c.sub, fontSize: 15, marginTop: 6, textAlign: "center" }}>{t("jobExternalSub")}</Text>
+          {timelapseInfo}
+        </View>
+        {actionError ? <Banner kind="error" text={actionError} /> : null}
+        {pct != null ? (
+          <Card style={{ padding: 16, marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ color: c.text, fontSize: 16 }}>{t("jobProgress")}</Text>
+              <Text style={{ color: c.sub, fontSize: 16 }}>{Math.round(pct)} %</Text>
+            </View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: c.track, marginTop: 10, overflow: "hidden" }}>
+              <View style={{ width: `${pct}%`, height: 6, backgroundColor: c.accent }} />
+            </View>
+          </Card>
+        ) : null}
+        <Section title={t("details")}>
+          <Row label={t("printer")} value={printerNames[printerId ?? ""] ?? printerId ?? "–"} />
+          <Divider />
+          <Row label={t("file")} sub={name} />
+        </Section>
+        <Button kind="plain" title={t("deleteJob")} onPress={del} style={{ marginTop: 4 }} />
+      </Screen>
+    );
+  }
+
   // ---------- review / sent ----------
   const p = r?.profiles ?? {};
   const changed = changedValues(t, r?.overrides ?? {});
@@ -469,10 +532,9 @@ export default function JobScreen() {
 
   const footer = done ? (
     <>
-      {over && !external ? <Button title={t("printAgain")} icon="refresh" onPress={() => { setRelayed(null); setAgain(true); }} />
+      {over ? <Button title={t("printAgain")} icon="refresh" onPress={() => { setRelayed(null); setAgain(true); }} />
         : <Button title={t("toPrinter")} icon="print-outline" onPress={() => router.navigate("/printers")} />}
-      {!cloud || printerObj?.bridge ? <Button kind="secondary" title={t("camera")} icon="videocam-outline"
-        onPress={() => printerId && router.push({ pathname: "/camera/[id]", params: { id: printerId, name: printerNames[printerId] } })} /> : null}
+      {cameraButton}
       <Button kind="secondary" title={t("newModel")} onPress={() => router.navigate("/")} />
     </>
   ) : webLan ? (
@@ -501,18 +563,7 @@ export default function JobScreen() {
             {t(job.state === "finished" ? "finishedTitle" : job.state === "cancelled" ? "cancelledTitle" : done ? "startedTitle" : "uploadedTitle")}</Text>
           <Text style={{ color: c.sub, fontSize: 15, marginTop: 6, textAlign: "center" }}>
             {t(job.state === "finished" ? "finishedSub" : job.state === "cancelled" ? "cancelledSub" : done ? "startedSub" : "uploadedSub")}</Text>
-          {job.timelapse ? (
-            job.timelapse.state === "ready" ? (
-              <Button title={t("timelapseWatch")} icon="film-outline" style={{ marginTop: 16, alignSelf: "stretch" }}
-                onPress={() => router.push({ pathname: "/timelapse/[id]", params: { id: job.id, name } })} />
-            ) : (
-              <Text style={{ color: job.timelapse.state === "failed" ? c.danger : c.sub, fontSize: 14, marginTop: 12, textAlign: "center" }}>
-                {job.timelapse.state === "recording" ? t("timelapseRecording", { n: job.timelapse.frames })
-                  : job.timelapse.state === "rendering" ? t("timelapseRendering")
-                  : t("timelapseFailed", { error: job.timelapse.error ?? "" })}
-              </Text>
-            )
-          ) : null}
+          {timelapseInfo}
         </View>
       ) : (
         <Text style={{ color: c.text, fontSize: 28, fontWeight: "800", marginBottom: 4 }}>{t("reviewTitle")}</Text>
