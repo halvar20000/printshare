@@ -82,6 +82,7 @@ from .cloud.upload_keys import UploadKeys
 from . import gcode_info
 from . import filament as filament_mod
 from . import spooltags as spooltags_mod
+from . import spool_source
 from .jobstore import JobStore, job_dir
 from . import jobtrack
 from .timelapse import FILE_NAME as TIMELAPSE_FILE, TimelapseRecorder
@@ -129,7 +130,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.38.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.39.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1930,21 +1931,85 @@ async def slot_spool_set(printer_id: str, tool: int, req: SlotSpool, acct: Accou
     return {"slots": _tags().slots(acct.id, printer_id), "printer_set": synced}
 
 
+def _spool_source(acct: Account) -> str:
+    """"cloud" or "spoolman" - what spool numbers of this account mean (a home server has only Spoolman)."""
+    chosen = spool_source.load(acct.settings.config_dir).get("source")
+    if not acct.cloud:
+        return "spoolman"
+    return chosen if chosen in spool_source.SOURCES else "cloud"
+
+
 async def _sync_slot(acct: Account, printer_id: str, tool: int, spool: int) -> bool:
-    """Tell the printer what is in the slot (Bambu: ams_filament_setting) - cloud spools only (their material and
-    colour are known here); never fails the caller."""
-    if not (acct.cloud and SPOOLS is not None):
-        return False
+    """Tell the printer what is in the slot (Bambu: ams_filament_setting): material and colour from the cloud spools,
+    or from the user's Spoolman - read by this home server / bridge, or asked of the bridge the printer sits behind
+    (the cloud can't reach a Spoolman at home). Never fails the caller."""
     try:
-        f = _cloud_spool(acct, spool).get("filament") or {}
-        m = filament_mod.material(f.get("material"))
-        col = filament_mod.colour(f.get("color_hex"))
+        if acct.cloud and _spool_source(acct) == "spoolman":
+            if not _via_bridge(acct, printer_id):
+                return False                                  # printer on the phone's Wi-Fi: the app tells it
+            r = await _forward(acct, printer_id, "printer.slot.sync", tool=tool, spool=spool)
+            return bool((r or {}).get("printer_set"))
+        if acct.cloud:
+            if SPOOLS is None:
+                return False
+            f = _cloud_spool(acct, spool).get("filament") or {}
+            material, colour = f.get("material"), f.get("color_hex")
+        else:
+            url = spool_source.spoolman_url(acct.settings.config_dir)
+            if not url:
+                return False
+            info = await spool_source.fetch_spool(url, spool)
+            material, colour = info["material"], info["color"]
+        m, col = filament_mod.material(material), filament_mod.colour(colour)
         if m is None or col is None:
             return False
         await filament_action(printer_id, FilamentRequest(action="set", slot=tool, material=m.name, color="#" + col), acct)
         return True
     except Exception:  # noqa: BLE001 - the assignment stands even if the printer can't be told
         return False
+
+
+class SpoolSourceRequest(BaseModel):
+    source: str                          # cloud | spoolman
+    spoolman_url: str | None = None      # the user's own Spoolman (home server: stored; cloud: passed to the bridges)
+
+
+@app.get("/api/spool-source")
+def spool_source_get(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Where this account keeps its spools, and whether this server reaches a Spoolman itself (home server / bridge)."""
+    url = None if acct.cloud else spool_source.spoolman_url(acct.settings.config_dir)
+    return {"source": _spool_source(acct), "spoolman_url": url, "server_reaches_spoolman": bool(url)}
+
+
+@app.put("/api/spool-source")
+async def spool_source_set(req: SpoolSourceRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The app's choice (Settings → Spoolman). A home server stores its Spoolman address; a cloud account passes it to
+    its online bridges, so they can tell printers what is in a slot when an NFC reader reports a spool."""
+    if req.source not in spool_source.SOURCES:
+        raise HTTPException(400, "source must be cloud or spoolman")
+    if not acct.cloud and req.source != "spoolman":
+        raise HTTPException(400, "a home server keeps spools in Spoolman")
+    url = None
+    if req.spoolman_url:
+        try:
+            url = spool_source.check_url(req.spoolman_url)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+    bridges_set = 0
+    if acct.cloud:
+        spool_source.save(acct.settings.config_dir, source=req.source)
+        if url and BRIDGES is not None:
+            for b in BRIDGES.list(acct.id):
+                if not HUB.online(b["id"]):
+                    continue
+                try:
+                    await bridge_call(acct, b["id"], "spoolman.config", {"url": url})
+                    bridges_set += 1
+                except HTTPException:
+                    continue                                   # offline or an older bridge
+    else:
+        spool_source.save(acct.settings.config_dir, source="spoolman", spoolman_url=url)
+    return {**spool_source_get(acct), "bridges_set": bridges_set}
 
 
 @app.get("/api/printers/{printer_id}/reader-key")

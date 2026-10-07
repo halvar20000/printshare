@@ -1,14 +1,16 @@
 // Spoolman (spec MA-07): where the spools are - the user's own Spoolman (address kept on this phone) or, for cloud
-// accounts, the PocketPrint3D cloud (server 0.17.0) - and bookings waiting for a decision.
+// accounts, the PocketPrint3D cloud (server 0.17.0) - and bookings waiting for a decision. The choice also goes to the
+// server (0.39.0: NFC readers and slot assignments need to know which spool list counts; the Spoolman address goes to the
+// account's bridges / the own server), and an own Spoolman can be copied into the cloud spools.
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Text, TextInput, View } from "react-native";
 
 import { BookingCard } from "@/components/bookings";
-import { Banner, Button, Divider, Row, Screen, Section, Segmented } from "@/components/ui";
+import { Banner, Button, Divider, Row, Screen, Section, Segmented, confirmAsync } from "@/components/ui";
 import { errorText } from "@/lib/api";
 import { useApp } from "@/lib/app";
-import { CLOUD_SPOOLS, loadBookings, loadSpoolmanUrl, openSpoolman, saveSpoolmanUrl, type Booking } from "@/lib/spoolman";
+import { CLOUD_SPOOLS, importToCloud, loadBookings, loadSpoolmanUrl, openSpoolman, saveSpoolmanUrl, type Booking } from "@/lib/spoolman";
 import { space, useColors } from "@/lib/theme";
 
 type Mode = "cloud" | "own";
@@ -25,6 +27,8 @@ export default function SpoolmanScreen() {
   const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
   const [testing, setTesting] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [importDone, setImportDone] = useState("");
 
   const reload = useCallback(() => {
     if (!server) return;
@@ -59,7 +63,31 @@ export default function SpoolmanScreen() {
     if (!server || (value !== CLOUD_SPOOLS && !(await check(value)))) return;
     await saveSpoolmanUrl(server, value);
     setSaved(value.trim());
+    // the server needs to know which list counts (NFC readers, slots); bridges / the own server get the address
+    api?.setSpoolSource(value === CLOUD_SPOOLS ? "cloud" : "spoolman", value === CLOUD_SPOOLS ? undefined : value.trim())
+      .then(r => { if (r.bridges_set) setTest({ ok: true, text: t("spoolmanToBridges", { n: r.bridges_set }) }); })
+      .catch(() => { /* older server */ });
     if (value === CLOUD_SPOOLS) reload();
+  };
+  const runImport = async () => {
+    if (!server || !api || !saved || saved === CLOUD_SPOOLS) return;
+    if (!(await confirmAsync(t("spoolImportQ"), t("spoolImportBtn"), t("cancelBtn"), false))) return;
+    setImportDone("");
+    setImporting(t("spoolImportRunning", { done: 0, total: "…" }));
+    try {
+      const r = await importToCloud(server, api, saved, (done, total) =>
+        setImporting(t("spoolImportRunning", { done, total })));
+      setImportDone(t("spoolImportDone", { n: r.imported, skipped: r.skipped, relinked: r.relinked }));
+      if (await confirmAsync(t("spoolImportSwitchQ"), t("spoolsUseCloud"), t("spoolImportKeep"), false)) {
+        setMode("cloud");
+        await save(CLOUD_SPOOLS);
+      }
+    } catch (e) {
+      setImportDone("");
+      setTest({ ok: false, text: errorText(t, e) });
+    } finally {
+      setImporting(null);
+    }
   };
   const remove = async () => {
     if (!server) return;
@@ -112,6 +140,14 @@ export default function SpoolmanScreen() {
           {saved && !cloudOn ? <><Divider /><Row icon="trash-outline" label={t("spoolmanRemove")} danger onPress={remove} /></> : null}
         </Section>
       ) : null}
+
+      {cloud && saved && saved !== CLOUD_SPOOLS ? (
+        <Section title={t("spoolImportTitle")} footer={t("spoolImportHint")}>
+          <Row icon="cloud-upload-outline" label={t("spoolImportBtn")} onPress={importing ? undefined : runImport}
+            sub={importing ?? undefined} right={importing ? <ActivityIndicator /> : undefined} />
+        </Section>
+      ) : null}
+      {importDone ? <Banner kind="ok" text={importDone} /> : null}
 
       {open.length || waiting.length ? <Text style={{ color: c.sub, fontSize: 13, marginBottom: 8, marginLeft: 16 }}>
         {t("bookingsOpen").toUpperCase()}</Text> : null}

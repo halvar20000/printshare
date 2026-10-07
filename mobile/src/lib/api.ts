@@ -493,6 +493,11 @@ export class Api {
     this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/power`,
       { method: "POST", body: { on }, timeout: 20000 });
   /** NFC chips linked to spools and the spool per slot (server 0.38.0) */
+  spoolTags = () => this.request<{ uid: string; spool: number; created: number }[]>("/api/spool-tags");
+  spoolSource = () => this.request<{ source: "cloud" | "spoolman"; spoolman_url: string | null; server_reaches_spoolman: boolean }>("/api/spool-source");
+  setSpoolSource = (source: "cloud" | "spoolman", spoolman_url?: string) =>
+    this.request<{ source: string; server_reaches_spoolman: boolean; bridges_set: number }>("/api/spool-source",
+      { method: "PUT", body: { source, ...(spoolman_url ? { spoolman_url } : {}) }, timeout: 30000 });
   spoolTag = (uid: string) => this.request<{ uid: string; spool: number | null }>(`/api/spool-tags/${encodeURIComponent(uid)}`);
   linkSpoolTag = (uid: string, spool: number) =>
     this.request<{ uid: string; spool: number }>(`/api/spool-tags/${encodeURIComponent(uid)}`, { method: "PUT", body: { spool } });

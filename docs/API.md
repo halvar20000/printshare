@@ -600,6 +600,21 @@ the user's own Spoolman). Stored per account (cloud) or on the home server (`<co
   `{"slot": <tool>, "uid": "<hex>"}` → `{"known", "spool", "printer_set"}`. On a home server its own token works too,
   with `"printer": "<id>"` in the body.
 
+### Where the spools are kept (0.39.0)
+Each user chooses: cloud spools or their own Spoolman (Settings → Spoolman in the app). The server needs to know it so a
+spool number from a chip or a reader means the right spool.
+- `GET /api/spool-source` → `{"source": "cloud"|"spoolman", "spoolman_url" | null, "server_reaches_spoolman"}`.
+  Cloud accounts default to `cloud`; home servers / bridges always use `spoolman` (address from
+  `PRINTSHARE_SPOOLMAN_URL` or set from the app, stored in `<config dir>/spools.yaml`).
+- `PUT /api/spool-source` `{"source", "spoolman_url"?}` → as GET (+ `bridges_set` in the cloud: the address was passed to
+  that many online bridges with the bridge method `spoolman.config`). 400 for `cloud` on a home server or a bad address.
+- `printer_set` of slot-spools / reader scans: cloud spools → the cloud tells bridge printers; Spoolman spools → the home
+  server reads the spool from its Spoolman, and the cloud asks the printer's bridge (`printer.slot.sync {printer, tool,
+  spool}`). Printers reached by the phone are told by the app (`printer_set: false`).
+- Moving from Spoolman to the cloud is done by the app: it reads the user's Spoolman, creates the cloud spools
+  (`POST /spoolman/api/v1/spool`, remaining weight kept), then moves chip links and slot assignments to the new numbers
+  and switches the source. Spoolman itself is left unchanged.
+
 ## Spoolman (0.16.0, spec MA-07)
 [Spoolman](https://github.com/Donkie/Spoolman) keeps track of filament spools. **The apps talk to the user's Spoolman
 directly** on the home network (like to the printers in cloud mode); its address stays on the phone and the server

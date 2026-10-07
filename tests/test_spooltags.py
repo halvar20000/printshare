@@ -94,3 +94,59 @@ def test_cloud_endpoints_and_account_isolation(cloud):  # noqa: F811
         c.delete("/api/printers/cc", headers=a)
         uid = api.ACCOUNTS.user_for_token(a["Authorization"].removeprefix("Bearer ")).id
         assert api._tags().key_info(uid, "cc") is None and api._tags().slots(uid, "cc") == {}
+
+
+# ---------- where spools are kept: cloud or the user's Spoolman (0.39.0) ----------
+def test_spool_source_helpers():
+    from printshare import spool_source
+    assert spool_source.check_url("192.168.1.20:7912/") == "http://192.168.1.20:7912"
+    assert spool_source.candidates("http://spoolman.local") == ["http://spoolman.local", "http://spoolman.local:7912"]
+    with pytest.raises(ValueError):
+        spool_source.check_url("ftp://x y")
+
+
+def test_home_server_tells_the_printer_from_spoolman(home, monkeypatch):
+    import socket
+    from .fakes import FakeSpoolman
+    from .test_api import BackgroundFake
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    told: list = []
+
+    async def fake_filament_action(printer_id, req, acct):
+        told.append((printer_id, req.action, req.slot, req.material, req.color))
+        return {"ok": True}
+    monkeypatch.setattr(home, "filament_action", fake_filament_action)
+    c = TestClient(home.app)
+    h = {"Authorization": "Bearer t"}
+    assert c.get("/api/spool-source", headers=h).json() == {"source": "spoolman", "spoolman_url": None,
+                                                           "server_reaches_spoolman": False}
+    assert c.put("/api/spool-source", headers=h, json={"source": "cloud"}).status_code == 400   # home: Spoolman only
+    with BackgroundFake(FakeSpoolman(port)):
+        r = c.put("/api/spool-source", headers=h, json={"source": "spoolman", "spoolman_url": f"127.0.0.1:{port}"})
+        assert r.json()["server_reaches_spoolman"] is True
+        c.put("/api/spool-tags/04A23B1C", headers=h, json={"spool": 4})                # Spoolman #4: PETG white
+        r = c.post("/api/reader/scan", headers=h, json={"slot": 2, "uid": "04A23B1C", "printer": "cc"})
+        assert r.json() == {"known": True, "spool": 4, "printer_set": True}
+        assert told == [("cc", "set", 2, "PETG", "#FFFFFF")]
+        # the bridge methods: the cloud passes the address on, and asks the bridge to tell a printer
+        from printshare.bridge.dispatch import dispatch
+        import asyncio
+        assert asyncio.run(dispatch("spoolman.config", {"url": f"http://127.0.0.1:{port}"}, None)) == \
+            {"spoolman_url": f"http://127.0.0.1:{port}"}
+        assert asyncio.run(dispatch("printer.slot.sync", {"printer": "cc", "tool": 1, "spool": 3}, None)) == {"printer_set": True}
+        assert told[-1] == ("cc", "set", 1, "PLA", "#000000")
+
+
+def test_cloud_account_chooses_spoolman(cloud):  # noqa: F811
+    api = cloud
+    with TestClient(api.app) as c:
+        a = login(api, c, "a@example.com")
+        assert c.get("/api/spool-source", headers=a).json()["source"] == "cloud"
+        r = c.put("/api/spool-source", headers=a, json={"source": "spoolman", "spoolman_url": "192.168.1.20"})
+        assert r.json()["source"] == "spoolman" and r.json()["bridges_set"] == 0      # no bridge online
+        c.post("/api/printers", headers=a, json={"name": "CC", "type": "elegoo_sdcp"})
+        r = c.put("/api/printers/cc/slot-spools/254", headers=a, json={"spool": 7})
+        # printer on the phone's Wi-Fi with a Spoolman spool: the app tells the printer, not the cloud
+        assert r.json()["printer_set"] is False and r.json()["slots"]["254"]["spool"] == 7

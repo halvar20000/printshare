@@ -552,6 +552,11 @@ class FakeSpoolman(_FakeHTTP):
             s["used_weight"] += grams
             s["remaining_weight"] = max(0, s["remaining_weight"] - grams)
             return web.json_response(s)
+        async def spool_get(request):
+            s = self.spools.get(int(request.match_info["id"]))
+            return web.json_response(s) if s else web.json_response({"message": "not found"}, status=404)
+
         app.router.add_get("/api/v1/info", info)
         app.router.add_get("/api/v1/spool", spool_list)
+        app.router.add_get("/api/v1/spool/{id}", spool_get)
         app.router.add_put("/api/v1/spool/{id}/use", use)
