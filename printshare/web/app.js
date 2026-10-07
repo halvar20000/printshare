@@ -68,6 +68,20 @@ const I18N = {
     fd_note: "Die Warnung erscheint in der App (noch keine Push-Mitteilung).",
     fd_ok: "Verbunden – die ML-API hat das Testbild geprüft.", fd_token_kept: "gespeichert (leer = behalten)",
     fd_remove: "Fehlererkennung ausschalten", fd_remove_q: "Fehlererkennung ausschalten?", fd_removed: "Ausgeschaltet.",
+    oc_title: "Orca-Cloud-Konto",
+    oc_hint: "Deine eigenen Drucker-, Qualitäts- und Materialprofile aus OrcaSlicer kommen automatisch hierher: einmal koppeln, danach holt der Server sie alle 6 Stunden ab. Nur lesen – an deinen Profilen in Orca Cloud ändert sich nichts.",
+    oc_id: "Orca-App-ID",
+    oc_id_hint: "Orca Cloud verlangt für jede App eine eigene ID (client_id), die das Orca-Team vergibt. Trage hier die ID ein, die du bekommen hast.",
+    oc_id_server: "Die App-ID ist auf dem Server eingestellt (ORCA_CLOUD_CLIENT_ID).", oc_id_saved: "App-ID gespeichert.",
+    oc_connect: "Mit Orca Cloud koppeln", oc_connect_again: "Neuen Code holen",
+    oc_pair_hint: "In Orca Cloud anmelden und diesen Code bestätigen. Diese Seite wartet.", oc_open: "Orca Cloud öffnen",
+    oc_waiting: "Warte auf die Bestätigung …", oc_denied: "In Orca Cloud abgelehnt.",
+    oc_expired: "Der Code ist abgelaufen – hol einen neuen.",
+    oc_connected: "Gekoppelt.", oc_last_sync: "Zuletzt synchronisiert {when} · {n} Profile",
+    oc_skipped: "{n} Profile nicht nutzbar: {names}", oc_sync: "Jetzt synchronisieren", oc_synced: "{n} Profile übernommen.",
+    oc_disconnect: "Kopplung trennen", oc_disconnect_q: "Die Kopplung mit Orca Cloud trennen?",
+    oc_remove_presets_q: "Auch die übernommenen Profile löschen? Profile, die ein Drucker gerade nutzt, bleiben. (Abbrechen = behalten)",
+    oc_disconnected: "Kopplung getrennt.",
     bridge_title: "Unterwegs drucken",
     bridge_hint: "Verbindet diesen Server mit deinem kostenlosen PocketPrint3D-Cloud-Konto. Dann erreicht die App seine Drucker von überall – nur über eine ausgehende Verbindung, nichts muss im Router freigegeben werden.",
     bridge_on: "Mit PocketPrint3D Cloud verbinden",
@@ -191,6 +205,20 @@ const I18N = {
     fd_note: "The warning shows in the app (no push notification yet).",
     fd_ok: "Connected – the ML API checked the test picture.", fd_token_kept: "stored (empty = keep)",
     fd_remove: "Turn failure detection off", fd_remove_q: "Turn failure detection off?", fd_removed: "Turned off.",
+    oc_title: "Orca Cloud account",
+    oc_hint: "Your own printer, quality and material presets from OrcaSlicer come here automatically: pair once, then the server fetches them every 6 hours. Read only – nothing changes in Orca Cloud.",
+    oc_id: "Orca app ID",
+    oc_id_hint: "Orca Cloud requires an own ID (client_id) for every app, given out by the Orca team. Enter the ID you received.",
+    oc_id_server: "The app ID is set on the server (ORCA_CLOUD_CLIENT_ID).", oc_id_saved: "App ID saved.",
+    oc_connect: "Pair with Orca Cloud", oc_connect_again: "Get a new code",
+    oc_pair_hint: "Sign in to Orca Cloud and confirm this code. This page waits.", oc_open: "Open Orca Cloud",
+    oc_waiting: "Waiting for the confirmation …", oc_denied: "Declined in Orca Cloud.",
+    oc_expired: "The code has expired – get a new one.",
+    oc_connected: "Paired.", oc_last_sync: "Last synced {when} · {n} presets",
+    oc_skipped: "{n} presets can't be used: {names}", oc_sync: "Sync now", oc_synced: "{n} presets taken over.",
+    oc_disconnect: "Unpair", oc_disconnect_q: "Unpair from Orca Cloud?",
+    oc_remove_presets_q: "Delete the taken-over presets too? Presets a printer uses stay. (Cancel = keep)",
+    oc_disconnected: "Unpaired.",
     bridge_title: "Print from anywhere",
     bridge_hint: "Connects this server to your free PocketPrint3D Cloud account. The app then reaches its printers from anywhere – through an outgoing connection only, nothing has to be opened in your router.",
     bridge_on: "Connect to PocketPrint3D Cloud",
@@ -1050,10 +1078,10 @@ function cardMsg(id, text, error = false) {
 }
 async function loadAppSettings() {
   if (!store.get("ps_token")) {
-    for (const c of ["timelapse-card", "spoolman-card", "reader-card", "manyfold-card", "failure-card"]) $(c).hidden = true;
+    for (const c of ["timelapse-card", "spoolman-card", "reader-card", "manyfold-card", "failure-card", "orca-card"]) $(c).hidden = true;
     return;
   }
-  loadTimelapse(); loadSpoolman(); loadReader(); loadManyfold(); loadFailure();
+  loadTimelapse(); loadSpoolman(); loadReader(); loadManyfold(); loadFailure(); loadOrca();
 }
 
 async function loadTimelapse() {
@@ -1176,6 +1204,78 @@ $("mf-remove").onclick = async () => {
   if (!confirm(t("mf_remove_q"))) return;
   try { await api("/api/manyfold/config", { method: "DELETE" }); await loadManyfold(); cardMsg("mf-msg", t("mf_removed")); }
   catch (e) { cardMsg("mf-msg", e.message, true); }
+};
+
+// own OrcaSlicer presets from an Orca Cloud account (0.42.0, issue #7): app ID, pairing code, sync - same as the app
+const OC = { st: null, timer: null, opened: false };
+function showOrca(st) {
+  OC.st = st;
+  const p = st.pending, fromServer = st.client_id_from === "server";
+  $("orca-card").hidden = false;
+  $("oc-id-row").hidden = fromServer;
+  $("oc-id-server").hidden = !fromServer;
+  if (!fromServer && document.activeElement !== $("oc-id")) $("oc-id").value = st.client_id || "";
+  $("oc-pair").hidden = !p;
+  if (p) {
+    $("oc-code").textContent = p.error ? "" : p.user_code;
+    $("oc-code").hidden = !!p.error;
+    $("oc-pair-hint").hidden = !!p.error;
+    $("oc-pair-state").textContent = p.error === "denied" ? t("oc_denied") : p.error === "expired" ? t("oc_expired")
+      : p.error || t("oc_waiting");
+    $("oc-pair-state").className = p.error ? "error" : "hint";
+    const url = p.verification_uri_complete || p.verification_uri;
+    $("oc-open").hidden = !url || !!p.error;
+    OC.url = url;
+  }
+  $("oc-state").hidden = !st.connected;
+  if (st.connected) {
+    let text = t("oc_connected");
+    if (st.last_sync) text += " " + t("oc_last_sync", { when: ago(st.last_sync), n: st.count });
+    if (st.skipped && st.skipped.length)
+      text += "\n" + t("oc_skipped", { n: st.skipped.length, names: st.skipped.slice(0, 4).map(x => x.name).join(", ") });
+    $("oc-state").textContent = text;
+  }
+  if (st.last_error && !p) cardMsg("oc-msg", st.last_error, true);
+  $("oc-connect").hidden = st.connected;
+  $("oc-connect").disabled = !st.client_id;
+  $("oc-connect").textContent = t(p ? "oc_connect_again" : "oc_connect");
+  $("oc-sync").hidden = !st.connected;
+  $("oc-disconnect").hidden = !st.connected;
+  clearTimeout(OC.timer);
+  if (p && !p.error) OC.timer = setTimeout(refreshOrca, 3000);       // follow the pairing until it is confirmed
+}
+async function refreshOrca() {
+  if ($("view-settings").hidden) return;
+  try { showOrca(await api("/api/orca-cloud")); } catch { /* keep the last state */ }
+}
+async function loadOrca() {
+  cardMsg("oc-msg", "");
+  let st;
+  try { st = await api("/api/orca-cloud"); } catch { $("orca-card").hidden = true; return; }   // older server
+  showOrca(st);
+}
+async function orcaCall(path, method, body, message) {
+  cardMsg("oc-msg", "");
+  try {
+    const st = await api(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    showOrca(st);
+    if (message) cardMsg("oc-msg", typeof message === "function" ? message(st) : message);
+    return st;
+  } catch (e) { cardMsg("oc-msg", e.message, true); }
+}
+$("oc-save").onclick = () => orcaCall("/api/orca-cloud", "PUT", { client_id: $("oc-id").value.trim() || null }, t("oc_id_saved"));
+$("oc-connect").onclick = async () => {
+  const w = window.open("about:blank", "_blank");          // opened in the click, filled once the code is there
+  const st = await orcaCall("/api/orca-cloud/connect", "POST", {});
+  const url = st && st.pending && (st.pending.verification_uri_complete || st.pending.verification_uri);
+  if (w) { if (url) w.location = url; else w.close(); }
+};
+$("oc-open").onclick = () => { if (OC.url) window.open(OC.url, "_blank", "noopener"); };
+$("oc-sync").onclick = () => orcaCall("/api/orca-cloud/sync", "POST", {}, st => t("oc_synced", { n: st.count }));
+$("oc-disconnect").onclick = async () => {
+  if (!confirm(t("oc_disconnect_q"))) return;
+  const remove = confirm(t("oc_remove_presets_q"));
+  await orcaCall("/api/orca-cloud?remove_presets=" + remove, "DELETE", undefined, t("oc_disconnected"));
 };
 
 const FD = { cfg: null };

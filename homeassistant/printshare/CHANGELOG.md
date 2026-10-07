@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.43.2
+- The server's web page can pair with an Orca Cloud account too (Settings → "Orca-Cloud-Konto"): enter the Orca app
+  ID, confirm the code in Orca Cloud, sync now or unpair - the same as in the app.
+
 ## 0.43.1
 - Orca Cloud account: quality presets (Orca Cloud calls them "print") are taken over too instead of being skipped
   when they carry no other hint of their kind.

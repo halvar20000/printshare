@@ -409,7 +409,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   rotating refresh tokens under a lock, saved before use; full `sync/pull` every 6 h in `_orca_sync_loop` for every
   connected config dir incl. cloud users; presets through `user_profiles.store_presets`, vanished ones removed unless in
   `printers.d` use). client_id = env `ORCA_CLOUD_CLIENT_ID` or entered by the user (app `orca-account.tsx`, Settings →
-  Erweitert and the printer page); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
+  Erweitert and the printer page; since 0.43.2 also the PWA settings card "Orca-Cloud-Konto", checked with Chromium against a
+  simulated Orca Cloud); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
   by hand in the app, test only) - a real pairing with a real account has not been run yet.
 - **Before 0.42.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
   (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow
