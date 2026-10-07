@@ -14,7 +14,7 @@ import { NoAddressError, printerFileName, printerStatus, relayJob, viaServer } f
 import { getItem, setItem } from "@/lib/storage";
 import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
-import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
+import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSlotSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
 import { cancelScan, matchSpool, nfcStatus, scanSpool } from "@/lib/nfc";
 import { tagLabel, type OpenPrintTag } from "@/lib/openprinttag";
 import { plateSummary } from "@/lib/plate";
@@ -203,8 +203,12 @@ export default function JobScreen() {
   useEffect(() => {
     if (server) loadSpoolmanUrl(server).then(setSmUrl);
   }, [server]);
+  const [slotSpools, setSlotSpools] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (server && printerId) loadLastSpools(server, printerId).then(setLastSpools);
+    if (server && printerId) {
+      loadLastSpools(server, printerId).then(setLastSpools);
+      loadSlotSpools(server, printerId).then(setSlotSpools);
+    }
   }, [server, printerId]);
   // reloaded whenever the screen comes back (e.g. after adding a spool for a scanned tag)
   useFocusEffect(useCallback(() => {
@@ -222,11 +226,13 @@ export default function JobScreen() {
       let id: number | null;
       if (afcSpools) id = lane?.spool_id ?? null;
       else if (col.index in spoolChoice) id = spoolChoice[col.index];
-      else id = lane?.spool_id ?? (printerBooks ? tracker?.spool_id : null) ?? lastSpools[String(col.index)] ?? null;
+      // the spool assigned to the chosen slot (filament menu) comes first, then what AFC / Moonraker / the last print say
+      else id = lane?.spool_id ?? (lane?.tool != null ? slotSpools[String(lane.tool)] : undefined)
+        ?? (printerBooks ? tracker?.spool_id : null) ?? lastSpools[String(col.index)] ?? null;
       out[col.index] = id != null && spools && !spools.some(s => s.id === id) ? null : id;
     }
     return out;
-  }, [colours, printerLanes, laneFor, afcSpools, spoolChoice, printerBooks, tracker, lastSpools, spools]);
+  }, [colours, printerLanes, laneFor, afcSpools, spoolChoice, printerBooks, tracker, lastSpools, slotSpools, spools]);
   // OpenPrintTag: hold the phone to the spool -> the matching spool for the colour that fits the tag best
   const hasNfc = useMemo(() => nfcStatus() !== "none", []);
   const [scanning, setScanning] = useState(false);

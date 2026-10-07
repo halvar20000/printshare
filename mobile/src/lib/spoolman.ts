@@ -140,6 +140,23 @@ export const loadLastSpools = async (server: Server, printer: string) =>
 export const saveLastSpools = (server: Server, printer: string, v: Record<string, number>) =>
   setJSON(`ps_spools_${sk(server)}_${printer.replace(/[^\w.-]/g, "_")}`, v);
 
+/** Which spool sits in which slot of a printer (tool number → spool id) - set in the filament menu, by NFC scan or
+ *  from the list; the print screen then proposes (and books) the slot's spool by itself. */
+const slotKey = (server: Server, printer: string) => `ps_slotspools_${sk(server)}_${printer.replace(/[^\w.-]/g, "_")}`;
+export const loadSlotSpools = async (server: Server, printer: string) =>
+  (await getJSON<Record<string, number>>(slotKey(server, printer))) ?? {};
+export async function setSlotSpool(server: Server, printer: string, tool: number, spool: number | null): Promise<Record<string, number>> {
+  const all = await loadSlotSpools(server, printer);
+  if (spool == null) delete all[String(tool)];
+  else {
+    // a spool can only be in one slot: moving it clears the old one
+    for (const [k, v] of Object.entries(all)) if (v === spool) delete all[k];
+    all[String(tool)] = spool;
+  }
+  await setJSON(slotKey(server, printer), all);
+  return all;
+}
+
 // ---------- bookings: filament to book once the print is over ----------
 export type BookingUse = { spool: number; grams: number; label: string };
 export type Booking = {

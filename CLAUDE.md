@@ -928,6 +928,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - **Live 2026-10-06:** `set` on P1S .53 tray 2 → PLA red, the printer replied `result: success`, the report showed GFL99 /
   E02020FF / 190-240. P1S generic PLA range is 190-240, PETG 220-270 (as the printer reports its own trays). Load/unload not
   yet tried on the real printer. Klipper/AFC next.
+- **Spool per slot** (app only, 2026-10-07): filament screen → "Spule" per slot: scan an OpenPrintTag (`scanSpool` +
+  `matchSpool`) or pick from the spool list (own Spoolman or cloud spools); stored on the phone (`ps_slotspools_<server>_<printer>`,
+  `setSlotSpool`: a spool sits in one slot only) and the slot is set to the spool's material/colour on the printer. The
+  print screen (`job/[id].tsx` `spoolFor`) proposes the chosen slot's spool (after AFC's own `spool_id`) and books it.
+  Neither the AMS nor the Centauri can read OpenPrintTag (AMS: only Bambu's signed MIFARE Classic tags) - the phone reads
+  the tag. Not tried with a real tag (Thomas has none yet); not in the web app (no NFC) beyond picking from the list.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
