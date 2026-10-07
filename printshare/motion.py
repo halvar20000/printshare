@@ -5,18 +5,19 @@ it. Actions:
 - "home"    axis: one of caps["home"] ("XYZ" = all)
 - "jog"     axis X/Y/Z, distance in mm (±, one of caps["jog"]["steps"] or less)
 - "extrude" distance in mm (negative = retract)
-- "load" / "unload"   the printer's own filament routine
+- "load" / "unload"   heat the nozzle to `temp` (from the material), then pull filament in / push it out
 - "motors_off"
 - "macro"   macro: one of caps["macros"] (Klipper)
 
 Never while a print runs (the API checks the printer state first). What each printer gets:
 - Centauri Carbon (stock firmware, SDCP): Cmd 402 {"Axis": "X"|"Y"|"Z"|"XYZ"} = home, Cmd 401 {"Axis", "Step": ±mm}
   = jog - read from the printer's own web page (`cbdsa-mainboard-cmp`, chunk 590: `changeZore`, `changeAxis`,
-  steps 0.1/1/10/100). The protocol has no extrude / load / unload: that stays on the printer's screen.
-- Klipper (Moonraker): G28, G91 + G1 + G90, M83 + G1 E, M84; LOAD_FILAMENT / UNLOAD_FILAMENT when the printer has
-  those macros; other macros without a leading "_" as buttons (minus the ones in SKIP_MACROS).
+  steps 0.1/1/10/100). The protocol has no extrude / load / unload command: load / unload are a tiny G-code file
+  (`filament_gcode`, name FILE_PREFIX…) uploaded and started like a print, without bed levelling.
+- Klipper (Moonraker): G28, G91 + G1 + G90, M83 + G1 E, M84; load/unload = M109 + LOAD_FILAMENT / UNLOAD_FILAMENT when
+  the printer has those macros, else `filament_gcode`; other macros without a leading "_" as buttons (minus SKIP_MACROS).
 - Bambu Lab: gcode_line like Bambu Studio's axis control (soft limits on for the jog: M211, push/pop ref mode),
-  extrude M83 + G0 E; unload through the AMS change (load needs a slot: filament screen).
+  extrude M83 + G0 E; load (slot from caps["load_slots"]) / unload through the AMS change with the temperature.
 """
 from __future__ import annotations
 
@@ -33,12 +34,34 @@ SKIP_MACROS = {
 }
 
 
+FILE_PREFIX = "pp3d-filament-"     # Centauri load/unload files: not shown as jobs, no time-lapse
+DEFAULT_TEMP = 220
+LOAD_MM, LOAD_FEED = 90, 240        # pull in slowly: the user still pushes the filament into the extruder
+UNLOAD_PUSH, UNLOAD_TIP, UNLOAD_MM = 10, 20, 80
+
+
+def filament_gcode(action: str, temp: int) -> str:
+    """Heat, then pull the filament in (load) or push a little and pull it out (unload, shaped tip); nozzle off at the
+    end. Used as a script (Klipper) or as a file started like a print (Centauri)."""
+    head = f"; PocketPrint3D filament {action} at {temp} C\nM104 S{temp}\nM109 S{temp}\nM83\n"
+    if action == "load":
+        body = f"G1 E{LOAD_MM} F{LOAD_FEED}\n"
+    else:
+        body = f"G1 E{UNLOAD_PUSH} F300\nG1 E-{UNLOAD_TIP} F2400\nG1 E-{UNLOAD_MM} F1200\n"
+    return head + body + "M104 S0\n"
+
+
+def is_filament_file(name: str | None) -> bool:
+    from pathlib import Path
+    return bool(name) and Path(str(name)).name.startswith(FILE_PREFIX)
+
+
 class MotionError(ValueError):
     pass
 
 
 def check(caps: dict, action: str, axis: str | None = None, distance: float | None = None,
-          macro: str | None = None) -> None:
+          macro: str | None = None, slot: int | None = None) -> None:
     """Raise MotionError when the printer can't do this (caps from adapter.motion())."""
     if action not in ACTIONS:
         raise MotionError(f"action must be one of {', '.join(ACTIONS)}")
@@ -60,6 +83,11 @@ def check(caps: dict, action: str, axis: str | None = None, distance: float | No
     elif action == "macro":
         if macro not in (caps.get("macros") or []):
             raise MotionError("unknown macro")
+    elif action == "load" and caps.get("load_slots") is not None:
+        if not caps.get("load"):
+            raise MotionError("this printer can't load filament from PocketPrint3D")
+        if slot not in {s.get("tool") for s in caps["load_slots"]}:
+            raise MotionError("which slot to load? (slot)")
     elif not caps.get(action):
         raise MotionError(f"this printer can't {action.replace('_', ' ')} from PocketPrint3D")
 

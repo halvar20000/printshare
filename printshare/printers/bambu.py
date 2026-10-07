@@ -575,14 +575,21 @@ class Bambu:
             raise ValueError(f"can't adjust {kind} {target!r}")
 
     # ---------- moving by hand (0.43.0, printshare/motion.py) ----------
-    def motion(self) -> dict[str, Any]:
+    async def motion(self) -> dict[str, Any]:
+        lk = await self._link()
+        st = status_from(lk.snapshot())
+        slots = [{k: s.get(k) for k in ("tool", "id", "name", "material", "color", "loaded")}
+                 for s in (st.get("lanes") or []) + ([st["external"]] if st.get("external") else [])]
         return {"home": ["XYZ"], "jog": {"axes": ["X", "Y", "Z"], "steps": [1, 10, 50]}, "extrude": True,
-                "load": False, "unload": True, "motors_off": True, "macros": []}
+                "load": True, "unload": True, "filament_temp": True, "load_slots": slots, "motors_off": True,
+                "macros": []}
 
     async def move(self, action: str, axis: str | None = None, distance: float | None = None,
-                   macro: str | None = None) -> dict[str, Any]:
+                   macro: str | None = None, temp: int | None = None, slot: int | None = None) -> dict[str, Any]:
         if action == "unload":
-            return await self.filament("unload")
+            return await self.filament("unload", temp=temp)
+        if action == "load":
+            return await self.filament("load", slot, temp=temp)
         gcode = {"home": lambda: "G28 \n", "jog": lambda: motion.bambu_jog(str(axis), float(distance)),
                  "extrude": lambda: f"M83 \nG0 E{float(distance):.1f} F{motion.EXTRUDE_FEED}\n",
                  "motors_off": lambda: "M18 \n"}.get(action)

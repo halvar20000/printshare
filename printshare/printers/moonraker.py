@@ -192,15 +192,25 @@ class Moonraker:
             objects = await self._objects(client, base)
         names = {o.split(" ", 1)[1].strip().upper() for o in objects if o.lower().startswith("gcode_macro ")}
         return {"home": ["XYZ", "X", "Y", "Z"], "jog": {"axes": ["X", "Y", "Z"], "steps": [0.1, 1, 10, 50]},
-                "extrude": True, "load": "LOAD_FILAMENT" in names, "unload": "UNLOAD_FILAMENT" in names,
+                "extrude": True, "load": True, "unload": True, "filament_temp": True,
                 "motors_off": True, "macros": motion.klipper_macros(objects)}
 
     async def move(self, action: str, axis: str | None = None, distance: float | None = None,
-                   macro: str | None = None) -> dict[str, Any]:
+                   macro: str | None = None, temp: int | None = None, slot: int | None = None) -> dict[str, Any]:
+        t = int(temp or motion.DEFAULT_TEMP)
+
+        async def filament_script(name: str) -> str:
+            # the printer's own macro when it has one (heated first), else heat + extrude / retract
+            async with httpx.AsyncClient(timeout=15) as c:
+                objects = await self._objects(c, await self._resolve_base(c))
+            has = any(o.strip().upper() == f"GCODE_MACRO {name}" for o in objects)
+            return f"M109 S{t}\n{name}" if has else motion.filament_gcode(action, t)
+        if action in ("load", "unload"):
+            text = await filament_script("LOAD_FILAMENT" if action == "load" else "UNLOAD_FILAMENT")
         script = {"home": lambda: motion.home_gcode(str(axis)),
                   "jog": lambda: motion.jog_gcode(str(axis), float(distance)),
                   "extrude": lambda: motion.extrude_gcode(float(distance)),
-                  "load": lambda: "LOAD_FILAMENT", "unload": lambda: "UNLOAD_FILAMENT",
+                  "load": lambda: text, "unload": lambda: text,
                   "motors_off": lambda: "M84", "macro": lambda: str(macro)}.get(action)
         if script is None:
             raise ValueError(f"unknown action {action!r}")

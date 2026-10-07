@@ -597,9 +597,14 @@ Home, jog, extrude, filament routines, motors off and Klipper macros (`printshar
   "distance"? (mm, ± up to the biggest step / 100 for extrude), "macro"?, "confirm"?}` → `{"ok": true, …}`;
   load/unload/macro need `confirm: true` (409 otherwise); 400 for anything the printer can't do; the printer's own
   refusal (e.g. Klipper "Must home axis first") comes back as 502 with its message.
-- Centauri (stock): home + jog only (SDCP Cmd 402 / 401, steps 0.1/1/10/100); Klipper: everything, load/unload when the
-  printer has LOAD_FILAMENT / UNLOAD_FILAMENT, macros = user macros without "_"; Bambu: home (all), jog 1/10/50, extrude,
-  unload (AMS), motors off.
+- Load / unload (0.44.0): `"material"` (one of `materials`, its `load_temp`) or `"temp"` (170-300 °C) - the nozzle is
+  heated first; Bambu also needs `"slot"` (one of `load_slots[].tool`) for load. GET adds `filament_temp`, `materials`,
+  `load_slots` (Bambu), `filament_as_job` (Centauri).
+- Centauri (stock): home + jog (SDCP Cmd 402 / 401, steps 0.1/1/10/100); load/unload = a tiny G-code file
+  `pp3d-filament-load|unload.gcode` uploaded and started without levelling (not shown as a job, no time-lapse).
+  Klipper: everything; load/unload = M109 + LOAD_FILAMENT / UNLOAD_FILAMENT when the printer has them, else heat +
+  extrude/retract; macros = user macros without "_". Bambu: home (all), jog 1/10/50 (refused until homed), extrude,
+  load (slot) / unload through the AMS, motors off.
 
 ## Filament per slot (0.37.0)
 Bambu Lab (AMS trays + external spool) so far; through a bridge as `printer.filament.info` / `printer.filament`.

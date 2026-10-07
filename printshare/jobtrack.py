@@ -77,8 +77,8 @@ def external(jobs: list[dict[str, Any]], printer_id: str, status: dict[str, Any]
     if not status or kind not in ("active", "paused"):
         return None
     name = status.get("file")
-    if not isinstance(name, str) or not name.strip():
-        return None
+    if not isinstance(name, str) or not name.strip() or Path(name).name.startswith("pp3d-filament-"):
+        return None       # empty, or the Centauri's load/unload file (motion.FILE_PREFIX)
     now = now or time.time()
     for job in jobs:
         state = job.get("state")

@@ -134,7 +134,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.43.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.44.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1893,6 +1893,9 @@ class MotionRequest(BaseModel):
     axis: str | None = Field(default=None, max_length=3)  # home: X/Y/Z/XYZ, jog: X/Y/Z
     distance: float | None = None                        # jog / extrude: mm, negative = back / retract
     macro: str | None = Field(default=None, max_length=80)
+    temp: int | None = Field(default=None, ge=170, le=300)  # load / unload: nozzle °C …
+    material: str | None = Field(default=None, max_length=20)  # … or the material's load temperature
+    slot: int | None = Field(default=None, ge=0, le=255)    # load on printers with slots (Bambu AMS / external 254)
     confirm: bool = False
 
 
@@ -1915,7 +1918,8 @@ async def motion_info(printer_id: str, acct: Account = Depends(auth)) -> dict[st
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     return {"supported": bool(caps), "home": [], "jog": None, "extrude": False, "load": False, "unload": False,
-            "motors_off": False, "macros": [], **caps}
+            "filament_temp": False, "load_slots": None, "motors_off": False, "macros": [],
+            "materials": filament_mod.materials_json(), **caps}
 
 
 @app.post("/api/printers/{printer_id}/motion")
@@ -1929,13 +1933,19 @@ async def motion_action(printer_id: str, req: MotionRequest, acct: Account = Dep
     axis = (req.axis or "").upper() or None
     try:
         caps = await _motion_caps(adapter)
-        motion_mod.check(caps, req.action, axis, req.distance, req.macro)
+        motion_mod.check(caps, req.action, axis, req.distance, req.macro, req.slot)
     except motion_mod.MotionError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     if req.action in ("load", "unload", "macro") and not req.confirm:
         raise HTTPException(409, "this runs on its own and may heat the nozzle - confirm (confirm=true)")
+    temp = req.temp
+    if req.action in ("load", "unload") and temp is None:
+        m = filament_mod.material(req.material) if req.material else None
+        if req.material and m is None:
+            raise HTTPException(400, "choose a material from the list")
+        temp = m.load_temp if m else motion_mod.DEFAULT_TEMP
     try:
         st = await adapter.status()
     except Exception as e:  # noqa: BLE001
@@ -1943,7 +1953,7 @@ async def motion_action(printer_id: str, req: MotionRequest, acct: Account = Dep
     if printer_kind(st.get("state")) in ("active", "paused"):
         raise HTTPException(409, "a print is running - move the printer when it is over")
     try:
-        return {"ok": True, **await adapter.move(req.action, axis, req.distance, req.macro)}
+        return {"ok": True, **await adapter.move(req.action, axis, req.distance, req.macro, temp=temp, slot=req.slot)}
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001

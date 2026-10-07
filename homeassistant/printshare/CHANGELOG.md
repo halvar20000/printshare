@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.0
+- Load and unload filament from the app on every printer: choose the material, the nozzle heats to its temperature,
+  then the filament is pulled in or out. On the Centauri Carbon this runs as a short job on the printer.
+- Bambu: moving an axis is refused until the printer is homed (the printer ignored it silently before).
+
 ## 0.43.0
 - Move the printer by hand from the app: home, jog X/Y/Z, extrude and retract, load and unload filament, motors off and
   the printer's own macros (Klipper) - never while a print runs. The Centauri Carbon (stock firmware) can home and

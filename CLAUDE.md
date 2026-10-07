@@ -997,6 +997,12 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   at home, no visible move), X +10 / −10 clearly moved and back. P1S .53: after a print `home_flag & 7 == 0` (not homed) →
   a jog is answered "success" but nothing moves (soft limits) → the adapter now refuses jogs until homed; `G28` homed in
   48 s (`home_flag & 7 == 7`), then X +10 / −10 moved and back. Not tried yet: Z, extrude, unload, motors off, COSMOS.
+- **Load / unload everywhere (0.44.0, Thomas: "heat the nozzle, then load or unload - above all for the CC"):** material
+  picker in the app → `load_temp`. Centauri: no SDCP command → `motion.filament_gcode()` (M104/M109, M83, load E90 F240 /
+  unload E10, E-20 F2400, E-80 F1200, M104 S0) as `pp3d-filament-<action>.gcode`, uploaded and started like a print
+  without levelling (`jobtrack.external` ignores the prefix → no job, no time-lapse). Klipper: `M109 S<t>` + its
+  LOAD/UNLOAD_FILAMENT macro, else the same G-code as a script. Bambu: load with a slot (`load_slots`) / unload through
+  `ams_change_filament` with the temperature. **The Centauri file approach is not tried on the real printer yet.**
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

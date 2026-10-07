@@ -4,7 +4,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
-import { Banner, Button, Divider, Row, Section, Segmented, confirmAsync, tap } from "@/components/ui";
+import { Banner, Button, Divider, PickerSheet, Row, Section, Segmented, confirmAsync, tap } from "@/components/ui";
 import { errorText, type Api, type Motion, type MotionAction } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { space, useColors } from "@/lib/theme";
@@ -27,6 +27,10 @@ export function MotionPanel({ api, id, caps, printing, nozzle, onHeat }: Props) 
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
+  const materials = caps.materials ?? [];
+  const [material, setMaterial] = useState("PLA");
+  const [pick, setPick] = useState<"material" | "slot" | null>(null);
+  const temp = materials.find(m => m.name === material)?.load_temp ?? 220;
 
   const run = async (key: string, body: MotionAction, ask?: string) => {
     if (ask && !(await confirmAsync(ask, t("motionGo"), t("cancelBtn"), false))) return;
@@ -138,24 +142,40 @@ export function MotionPanel({ api, id, caps, printing, nozzle, onHeat }: Props) 
               </View>
             </View>
           ) : null}
-          {caps.load ? (
+          {caps.load || caps.unload ? (
             <>
               {caps.extrude ? <Divider /> : null}
-              <Row icon="enter-outline" label={t("motionLoad")} onPress={off ? undefined
-                : () => run("load", { action: "load" }, t("motionLoadQ"))}
-                right={busy === "load" ? <ActivityIndicator /> : undefined} />
-            </>
-          ) : null}
-          {caps.unload ? (
-            <>
-              {caps.extrude || caps.load ? <Divider /> : null}
-              <Row icon="exit-outline" label={t("motionUnload")} onPress={off ? undefined
-                : () => run("unload", { action: "unload" }, t("motionUnloadQ"))}
-                right={busy === "unload" ? <ActivityIndicator /> : undefined} />
+              {caps.filament_temp && materials.length ? <>
+                <Row icon="thermometer-outline" label={t("motionMaterial")} value={`${material} · ${temp} °C`}
+                  onPress={off ? undefined : () => setPick("material")} />
+                <Divider />
+              </> : null}
+              <View style={{ flexDirection: "row", gap: 8, padding: 12 }}>
+                {caps.load ? <Button kind="secondary" icon="enter-outline" title={t("motionLoad")} style={{ flex: 1 }}
+                  disabled={off} loading={busy === "load"} onPress={() => (caps.load_slots ? setPick("slot")
+                    : run("load", { action: "load", material }, t("motionLoadQ", { m: material, t: temp })))} /> : null}
+                {caps.unload ? <Button kind="secondary" icon="exit-outline" title={t("motionUnload")} style={{ flex: 1 }}
+                  disabled={off} loading={busy === "unload"}
+                  onPress={() => run("unload", { action: "unload", material }, t("motionUnloadQ", { m: material, t: temp }))} /> : null}
+              </View>
+              {caps.filament_as_job ? <Text style={{ color: c.sub, fontSize: 13, paddingHorizontal: 12, paddingBottom: 12 }}>
+                {t("motionAsJob")}</Text> : null}
             </>
           ) : null}
         </Section>
       ) : null}
+
+      <PickerSheet visible={pick === "material"} title={t("motionMaterial")} value={material}
+        choices={materials.map(m => ({ value: m.name, label: m.name, sub: `${m.load_temp} °C` }))}
+        onPick={v => { setMaterial(v); setPick(null); }} onClose={() => setPick(null)}
+        searchLabel={t("search")} closeLabel="OK" />
+      <PickerSheet visible={pick === "slot"} title={t("motionLoadSlot")} value={null}
+        choices={(caps.load_slots ?? []).map(s => ({ value: String(s.tool),
+          label: s.tool === 254 ? t("filamentExternal") : `${t("filamentSlot")} ${s.id ?? s.tool + 1}`,
+          sub: [s.material, s.name].filter(Boolean).join(" · ") || undefined }))}
+        onPick={v => { setPick(null); run("load", { action: "load", material, slot: Number(v) },
+          t("motionLoadQ", { m: material, t: temp })); }}
+        onClose={() => setPick(null)} searchLabel={t("search")} closeLabel="OK" />
 
       {caps.macros.length ? (
         <Section title={t("macrosTitle")} footer={t("macrosHint")}>
