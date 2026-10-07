@@ -123,6 +123,13 @@ def test_home_server_tells_the_printer_from_spoolman(home, monkeypatch):
     assert c.get("/api/spool-source", headers=h).json() == {"source": "spoolman", "spoolman_url": None,
                                                            "server_reaches_spoolman": False}
     assert c.put("/api/spool-source", headers=h, json={"source": "cloud"}).status_code == 400   # home: Spoolman only
+    # connection test for the web page: unreachable / bad address → 400, never saved
+    assert c.post("/api/spool-source/test", headers=h, json={"source": "spoolman",
+                                                             "spoolman_url": f"127.0.0.1:{port}"}).status_code == 400
+    assert c.post("/api/spool-source/test", headers=h, json={"source": "spoolman", "spoolman_url": "ftp://x y"}).status_code == 400
+    with BackgroundFake(FakeSpoolman(port)):
+        r = c.post("/api/spool-source/test", headers=h, json={"source": "spoolman", "spoolman_url": f"127.0.0.1:{port}/"})
+        assert r.json() == {"url": f"http://127.0.0.1:{port}", "version": "0.22.1", "spools": 2}   # archived not counted
     with BackgroundFake(FakeSpoolman(port)):
         r = c.put("/api/spool-source", headers=h, json={"source": "spoolman", "spoolman_url": f"127.0.0.1:{port}"})
         assert r.json()["server_reaches_spoolman"] is True
@@ -144,6 +151,8 @@ def test_cloud_account_chooses_spoolman(cloud):  # noqa: F811
     with TestClient(api.app) as c:
         a = login(api, c, "a@example.com")
         assert c.get("/api/spool-source", headers=a).json()["source"] == "cloud"
+        assert c.post("/api/spool-source/test", headers=a, json={"source": "spoolman",
+                                                                 "spoolman_url": "192.168.1.20"}).status_code == 409
         r = c.put("/api/spool-source", headers=a, json={"source": "spoolman", "spoolman_url": "192.168.1.20"})
         assert r.json()["source"] == "spoolman" and r.json()["bridges_set"] == 0      # no bridge online
         c.post("/api/printers", headers=a, json={"name": "CC", "type": "elegoo_sdcp"})

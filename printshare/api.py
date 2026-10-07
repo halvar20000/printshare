@@ -10,7 +10,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/machines   OrcaSlicer printer models [{"name", "vendor"}] (model choice for Prusa/OctoPrint printers)
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
-  GET|PUT|DELETE /api/orca-cloud, POST /api/orca-cloud/connect|sync   sync own presets from an Orca Cloud account (0.41.0)
+  GET|PUT|DELETE /api/orca-cloud, POST /api/orca-cloud/connect|sync   sync own presets from an Orca Cloud account (0.42.0)
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
   GET|PUT|DELETE /api/failure-detection/config · /api/printers/{id}/watch/frame|mute   AI failure detection (0.23.0, own servers)
@@ -127,13 +127,13 @@ async def _lifespan(_app):
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
-    _spawn(_orca_sync_loop())      # own presets from Orca Cloud accounts (0.41.0)
+    _spawn(_orca_sync_loop())      # own presets from Orca Cloud accounts (0.42.0)
     yield
     await BRIDGE_CLIENT.stop()
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.41.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.42.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -2051,6 +2051,17 @@ async def spool_source_set(req: SpoolSourceRequest, acct: Account = Depends(auth
     return {**spool_source_get(acct), "bridges_set": bridges_set}
 
 
+@app.post("/api/spool-source/test")
+async def spool_source_test(req: SpoolSourceRequest, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Can this server reach that Spoolman? (Web page of an own server; the app tests from the phone.)"""
+    if acct.cloud:
+        raise HTTPException(409, "the cloud can't reach a Spoolman at home - the app or a bridge tests it")
+    try:
+        return await spool_source.check(spool_source.check_url(req.spoolman_url or ""))
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+
+
 @app.get("/api/printers/{printer_id}/reader-key")
 def reader_key_state(printer_id: str, request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
     """Is an NFC reader set up for this printer? (The key itself is shown only when it is created.)"""
@@ -2348,7 +2359,7 @@ async def profiles_orca_cloud(req: OrcaCloudImport, acct: Account = Depends(auth
         raise HTTPException(400, str(e))
 
 
-# ---------- own presets from an Orca Cloud account (issue #7, 0.41.0, printshare/orca_sync.py) ----------
+# ---------- own presets from an Orca Cloud account (issue #7, 0.42.0, printshare/orca_sync.py) ----------
 ORCA_SYNC = orca_sync.OrcaSync(lambda: _library(), app.version)
 
 

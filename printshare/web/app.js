@@ -42,6 +42,32 @@ const I18N = {
     profile_delete: "Löschen", profile_delete_q: "Profil „{name}“ löschen?",
     profile_based_on: "basiert auf {name}", profile_own_start: "eigener Startcode", profile_in_use: "verwendet von {printers}",
     profile_kinds: { machine: "Drucker", process: "Qualität", filament: "Material", unknown: "unbekannt" },
+    tl_title: "Zeitraffer", tl_always: "Zeitraffer immer erstellen",
+    tl_always_hint: "Bei jedem Druck mit Kamera, auch bei Drucken, die direkt am Drucker gestartet wurden (zum Beispiel aus OrcaSlicer). Vor dem Drucken lässt er sich für einen Druck abschalten.",
+    sm_title: "Filament-Spulen (Spoolman)", sm_url: "Spoolman-Adresse", sm_test: "Verbindung testen",
+    sm_hint: "Adresse deines Spoolman-Servers im Heimnetz, z. B. 192.168.1.20:7912. Der Server liest daraus, welche Spule in welchem Slot liegt (NFC-Chips, NFC-Leser). Die App fragt Spoolman selbst – dort die Adresse unter Einstellungen → Filament-Spulen eintragen.",
+    sm_env: "Die Adresse ist in der Server-Konfiguration gesetzt (PRINTSHARE_SPOOLMAN_URL) und gilt vor dieser Einstellung.",
+    sm_ok: "Spoolman {version} · {n} Spulen", sm_saved: "Gespeichert.", sm_remove: "Spoolman entfernen",
+    sm_remove_q: "Spoolman-Adresse vom Server entfernen?",
+    rd_title: "NFC-Leser am Drucker",
+    rd_hint: "Ein NFC-Leser im Spulenhalter (ESP32 + PN5180) meldet, welche Spule in welchem Slot liegt – ohne Handy.",
+    rd_on: "Eingerichtet (seit {since}).", rd_off: "Nicht eingerichtet.", rd_url: "Adresse", rd_key: "Schlüssel",
+    rd_create: "Schlüssel erzeugen", rd_renew: "Neuer Schlüssel", rd_remove: "Leser entfernen",
+    rd_key_hint: "Adresse und Schlüssel in den Leser eintragen. Der Schlüssel wird nur jetzt angezeigt.",
+    rd_renew_q: "Neuen Schlüssel erzeugen? Der bisherige Leser funktioniert dann erst mit dem neuen Schlüssel wieder.",
+    rd_remove_q: "NFC-Leser für {printer} entfernen? Sein Schlüssel funktioniert dann nicht mehr.",
+    mf_title: "Eigene Modell-Bibliothek (Manyfold)", mf_url: "Manyfold-Adresse", mf_key: "API-Key",
+    mf_hint: "Adresse deines Manyfold (z. B. http://192.168.1.20:3214) und ein API-Key (in Manyfold: dein Name → API-Keys, Bereich „read“). Der Server prüft beides; deine Modelle erscheinen dann in der App unter „Entdecken“.",
+    mf_key_kept: "gespeichert (leer = behalten)", mf_ok: "Verbunden – {n} Modelle in deiner Bibliothek.",
+    mf_remove: "Manyfold trennen", mf_remove_q: "Manyfold-Verbindung entfernen?", mf_removed: "Entfernt.",
+    fd_title: "KI-Fehlererkennung", fd_ml: "Adresse der ML-API", fd_token: "ML_API_TOKEN (optional)",
+    fd_server: "Adresse dieses Servers für die ML-API",
+    fd_hint: "Erkennt Fehldrucke (Spaghetti, Ablösen) im Kamerabild. Starte nur den Dienst „ml_api“ von Obico (github.com/TheSpaghettiDetective/obico-server, docker compose up -d ml_api, Port 3333, ca. 4 GB RAM). Er holt die Kamerabilder von diesem Server – daher die Server-Adresse, wie der Container sie erreicht. Beim Speichern wird ein Testbild geprüft.",
+    fd_sens: "Empfindlichkeit", fd_sens_low: "Niedrig", fd_sens_medium: "Mittel", fd_sens_high: "Hoch",
+    fd_action: "Bei Verdacht", fd_act_notify: "Nur melden", fd_act_pause: "Pausieren",
+    fd_note: "Die Warnung erscheint in der App (noch keine Push-Mitteilung).",
+    fd_ok: "Verbunden – die ML-API hat das Testbild geprüft.", fd_token_kept: "gespeichert (leer = behalten)",
+    fd_remove: "Fehlererkennung ausschalten", fd_remove_q: "Fehlererkennung ausschalten?", fd_removed: "Ausgeschaltet.",
     bridge_title: "Unterwegs drucken",
     bridge_hint: "Verbindet diesen Server mit deinem kostenlosen PocketPrint3D-Cloud-Konto. Dann erreicht die App seine Drucker von überall – nur über eine ausgehende Verbindung, nichts muss im Router freigegeben werden.",
     bridge_on: "Mit PocketPrint3D Cloud verbinden",
@@ -139,6 +165,32 @@ const I18N = {
     profile_delete: "Delete", profile_delete_q: "Delete profile “{name}”?",
     profile_based_on: "based on {name}", profile_own_start: "own start code", profile_in_use: "used by {printers}",
     profile_kinds: { machine: "Printer", process: "Quality", filament: "Material", unknown: "unknown" },
+    tl_title: "Time-lapse", tl_always: "Always make a time-lapse",
+    tl_always_hint: "For every print with a camera, also prints started on the printer itself (for example from OrcaSlicer). You can still switch it off for one print before printing.",
+    sm_title: "Filament spools (Spoolman)", sm_url: "Spoolman address", sm_test: "Test connection",
+    sm_hint: "Address of your Spoolman server on the home network, e.g. 192.168.1.20:7912. The server reads from it which spool sits in which slot (NFC chips, NFC readers). The app asks Spoolman itself – enter the address there under Settings → Filament spools.",
+    sm_env: "The address is set in the server configuration (PRINTSHARE_SPOOLMAN_URL) and wins over this setting.",
+    sm_ok: "Spoolman {version} · {n} spools", sm_saved: "Saved.", sm_remove: "Remove Spoolman",
+    sm_remove_q: "Remove the Spoolman address from the server?",
+    rd_title: "NFC reader at the printer",
+    rd_hint: "An NFC reader in the spool holder (ESP32 + PN5180) reports which spool sits in which slot – no phone needed.",
+    rd_on: "Set up (since {since}).", rd_off: "Not set up.", rd_url: "Address", rd_key: "Key",
+    rd_create: "Create key", rd_renew: "New key", rd_remove: "Remove reader",
+    rd_key_hint: "Enter the address and key in the reader. The key is shown only now.",
+    rd_renew_q: "Create a new key? The current reader works again only with the new key.",
+    rd_remove_q: "Remove the NFC reader of {printer}? Its key stops working.",
+    mf_title: "Own model library (Manyfold)", mf_url: "Manyfold address", mf_key: "API key",
+    mf_hint: "Address of your Manyfold (e.g. http://192.168.1.20:3214) and an API key (in Manyfold: your name → API keys, scope “read”). The server checks both; your models then show up in the app under “Discover”.",
+    mf_key_kept: "stored (empty = keep)", mf_ok: "Connected – {n} models in your library.",
+    mf_remove: "Disconnect Manyfold", mf_remove_q: "Remove the Manyfold connection?", mf_removed: "Removed.",
+    fd_title: "AI failure detection", fd_ml: "ML API address", fd_token: "ML_API_TOKEN (optional)",
+    fd_server: "This server's address for the ML API",
+    fd_hint: "Spots failed prints (spaghetti, detaching) in the camera picture. Run only Obico's “ml_api” service (github.com/TheSpaghettiDetective/obico-server, docker compose up -d ml_api, port 3333, about 4 GB RAM). It fetches the camera pictures from this server – hence this server's address as the container reaches it. Saving checks a test picture.",
+    fd_sens: "Sensitivity", fd_sens_low: "Low", fd_sens_medium: "Medium", fd_sens_high: "High",
+    fd_action: "On suspicion", fd_act_notify: "Notify only", fd_act_pause: "Pause",
+    fd_note: "The warning shows in the app (no push notification yet).",
+    fd_ok: "Connected – the ML API checked the test picture.", fd_token_kept: "stored (empty = keep)",
+    fd_remove: "Turn failure detection off", fd_remove_q: "Turn failure detection off?", fd_removed: "Turned off.",
     bridge_title: "Print from anywhere",
     bridge_hint: "Connects this server to your free PocketPrint3D Cloud account. The app then reaches its printers from anywhere – through an outgoing connection only, nothing has to be opened in your router.",
     bridge_on: "Connect to PocketPrint3D Cloud",
@@ -265,7 +317,7 @@ function show(view) {
   });
   if (view === "jobs") loadJobs();
   if (view === "printer") pollPrinters();
-  if (view === "settings") { loadPairing(); loadProfiles(); loadPower(); loadBridge(); }
+  if (view === "settings") { loadPairing(); loadProfiles(); loadPower(); loadBridge(); loadAppSettings(); }
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
@@ -988,6 +1040,172 @@ $("bridge-reset").onclick = async () => {
   if (!confirm(t("bridge_reset_q", { account: B.state?.account || "?" }))) return;
   try { await post("/api/bridge/reset", {}); } catch (e) { alert(e.message); }
   setTimeout(loadBridge, 1500);
+};
+
+// ---------- settings the app has too (0.41.0): time-lapse, Spoolman, NFC reader, Manyfold, failure detection ----------
+function cardMsg(id, text, error = false) {
+  $(id).textContent = text || "";
+  $(id).className = error ? "error" : "hint";
+  $(id).hidden = !text;
+}
+async function loadAppSettings() {
+  if (!store.get("ps_token")) {
+    for (const c of ["timelapse-card", "spoolman-card", "reader-card", "manyfold-card", "failure-card"]) $(c).hidden = true;
+    return;
+  }
+  loadTimelapse(); loadSpoolman(); loadReader(); loadManyfold(); loadFailure();
+}
+
+async function loadTimelapse() {
+  cardMsg("tl-msg", "");
+  try { $("tl-always").checked = (await api("/api/timelapse/config")).always; }
+  catch { $("timelapse-card").hidden = true; return; }        // older server (404) or cloud (409)
+  $("timelapse-card").hidden = false;
+}
+$("tl-always").onchange = async () => {
+  const on = $("tl-always").checked;
+  cardMsg("tl-msg", "");
+  try { $("tl-always").checked = (await api("/api/timelapse/config", { method: "PUT", body: JSON.stringify({ always: on }) })).always; }
+  catch (e) { $("tl-always").checked = !on; cardMsg("tl-msg", e.message, true); }
+};
+
+async function loadSpoolman() {
+  cardMsg("sm-msg", "");
+  let r;
+  try { r = await api("/api/spool-source"); } catch { $("spoolman-card").hidden = true; return; }
+  $("spoolman-card").hidden = false;
+  $("sm-url").value = r.spoolman_url || "";
+  $("sm-remove").hidden = !r.spoolman_url;
+  $("sm-env").hidden = true;
+}
+async function testSpoolman() {
+  const r = await post("/api/spool-source/test", { source: "spoolman", spoolman_url: $("sm-url").value.trim() });
+  cardMsg("sm-msg", t("sm_ok", { version: r.version || "?", n: r.spools }));
+  return r;
+}
+$("sm-test").onclick = async () => {
+  cardMsg("sm-msg", "");
+  try { await testSpoolman(); } catch (e) { cardMsg("sm-msg", e.message, true); }
+};
+$("sm-save").onclick = async () => {
+  cardMsg("sm-msg", "");
+  try {
+    const tested = await testSpoolman();      // only an address this server reaches
+    const r = await api("/api/spool-source", { method: "PUT",
+      body: JSON.stringify({ source: "spoolman", spoolman_url: tested.url }) });
+    $("sm-url").value = r.spoolman_url || "";
+    $("sm-remove").hidden = !r.spoolman_url;
+    // PRINTSHARE_SPOOLMAN_URL wins over the stored address
+    $("sm-env").hidden = !r.spoolman_url || r.spoolman_url === tested.url;
+    cardMsg("sm-msg", t("sm_ok", { version: tested.version || "?", n: tested.spools }) + " · " + t("sm_saved"));
+  } catch (e) { cardMsg("sm-msg", e.message, true); }
+};
+$("sm-remove").onclick = async () => {
+  if (!confirm(t("sm_remove_q"))) return;
+  try {
+    const r = await api("/api/spool-source", { method: "PUT", body: JSON.stringify({ source: "spoolman", spoolman_url: null }) });
+    $("sm-url").value = r.spoolman_url || "";
+    $("sm-remove").hidden = !r.spoolman_url;
+    $("sm-env").hidden = !r.spoolman_url;       // still set: it comes from the server configuration
+    cardMsg("sm-msg", "");
+  } catch (e) { cardMsg("sm-msg", e.message, true); }
+};
+
+const readerBase = () => `/api/printers/${encodeURIComponent($("rd-printer").value)}/reader-key`;
+async function loadReader() {
+  try { if (!S.printers.length) S.printers = await api("/api/printers"); } catch { /* shown by the other cards */ }
+  if (!S.printers.length) { $("reader-card").hidden = true; return; }
+  const sel = $("rd-printer");
+  fillSelect(sel, S.printers.map(p => [p.id, p.name]), sel.value || S.printers[0].id);
+  $("rd-printer-row").hidden = S.printers.length < 2;
+  await loadReaderState();
+}
+async function loadReaderState() {
+  cardMsg("rd-msg", "", true);
+  $("rd-new").hidden = true;
+  $("rd-key").value = "";
+  let r;
+  try { r = await api(readerBase()); } catch { $("reader-card").hidden = true; return; }   // older server
+  $("reader-card").hidden = false;
+  $("rd-state").textContent = r.enabled
+    ? t("rd_on", { since: r.created ? new Date(r.created * 1000).toLocaleDateString(lang) : "?" }) : t("rd_off");
+  $("rd-create").textContent = t(r.enabled ? "rd_renew" : "rd_create");
+  $("rd-create").dataset.enabled = r.enabled ? "1" : "";
+  $("rd-remove").hidden = !r.enabled;
+}
+$("rd-printer").onchange = loadReaderState;
+$("rd-create").onclick = async () => {
+  if ($("rd-create").dataset.enabled && !confirm(t("rd_renew_q"))) return;
+  try {
+    const r = await post(readerBase(), {});
+    await loadReaderState();
+    $("rd-url").value = r.url;
+    $("rd-key").value = r.key;                   // shown once: the server keeps only its hash
+    $("rd-new").hidden = false;
+  } catch (e) { cardMsg("rd-msg", e.message, true); }
+};
+$("rd-remove").onclick = async () => {
+  const name = S.printers.find(p => p.id === $("rd-printer").value)?.name || "";
+  if (!confirm(t("rd_remove_q", { printer: name }))) return;
+  try { await api(readerBase(), { method: "DELETE" }); await loadReaderState(); }
+  catch (e) { cardMsg("rd-msg", e.message, true); }
+};
+for (const id of ["rd-url", "rd-key"]) $(id).onfocus = () => $(id).select();
+
+const MF = { cfg: null };
+async function loadManyfold() {
+  cardMsg("mf-msg", "");
+  try { MF.cfg = await api("/api/manyfold/config"); } catch { $("manyfold-card").hidden = true; return; }
+  $("manyfold-card").hidden = false;
+  $("mf-url").value = MF.cfg.url || "";
+  $("mf-key").value = "";
+  $("mf-key").placeholder = MF.cfg.token_set ? t("mf_key_kept") : "";
+  $("mf-remove").hidden = !MF.cfg.configured;
+}
+$("mf-save").onclick = async () => {
+  cardMsg("mf-msg", "");
+  const body = { url: $("mf-url").value.trim() };
+  if ($("mf-key").value.trim()) body.token = $("mf-key").value.trim();      // empty = keep the stored key
+  try {
+    const r = await api("/api/manyfold/config", { method: "PUT", body: JSON.stringify(body) });
+    await loadManyfold();
+    cardMsg("mf-msg", t("mf_ok", { n: r.models }));
+  } catch (e) { cardMsg("mf-msg", e.message, true); }
+};
+$("mf-remove").onclick = async () => {
+  if (!confirm(t("mf_remove_q"))) return;
+  try { await api("/api/manyfold/config", { method: "DELETE" }); await loadManyfold(); cardMsg("mf-msg", t("mf_removed")); }
+  catch (e) { cardMsg("mf-msg", e.message, true); }
+};
+
+const FD = { cfg: null };
+async function loadFailure() {
+  cardMsg("fd-msg", "");
+  try { FD.cfg = await api("/api/failure-detection/config"); } catch { $("failure-card").hidden = true; return; }
+  $("failure-card").hidden = false;
+  $("fd-ml").value = FD.cfg.ml_url || "";
+  $("fd-token").value = "";
+  $("fd-token").placeholder = FD.cfg.token_set ? t("fd_token_kept") : "";
+  $("fd-server").value = FD.cfg.server_url || location.origin;
+  buildSeg($("fd-sens"), ["low", "medium", "high"], "fd_sens_", FD.cfg.sensitivity || "medium");
+  buildSeg($("fd-action"), ["notify", "pause"], "fd_act_", FD.cfg.action || "notify");
+  $("fd-remove").hidden = !FD.cfg.configured;
+}
+$("fd-save").onclick = async () => {
+  cardMsg("fd-msg", "");
+  const body = { ml_url: $("fd-ml").value.trim(), server_url: $("fd-server").value.trim(),
+    interval: FD.cfg?.interval || 15, sensitivity: segValue($("fd-sens")), action: segValue($("fd-action")) };
+  if ($("fd-token").value.trim()) body.ml_token = $("fd-token").value.trim();     // empty = keep the stored token
+  try {
+    await api("/api/failure-detection/config", { method: "PUT", body: JSON.stringify(body) });
+    await loadFailure();
+    cardMsg("fd-msg", t("fd_ok"));
+  } catch (e) { cardMsg("fd-msg", e.message, true); }
+};
+$("fd-remove").onclick = async () => {
+  if (!confirm(t("fd_remove_q"))) return;
+  try { await api("/api/failure-detection/config", { method: "DELETE" }); await loadFailure(); cardMsg("fd-msg", t("fd_removed")); }
+  catch (e) { cardMsg("fd-msg", e.message, true); }
 };
 
 // ---------- pairing code for the app (issue #10) ----------

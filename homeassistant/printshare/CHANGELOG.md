@@ -1,9 +1,13 @@
 # Changelog
 
-## 0.41.0
+## 0.42.0
 - Orca Cloud account: pair once, and your own OrcaSlicer printer, quality and material presets are taken over
   automatically (every 6 hours, read only). Needs an Orca app ID (client_id), entered in the app or set as
   `ORCA_CLOUD_CLIENT_ID` on the server.
+
+## 0.41.0
+- The server's web page shows the settings that were only in the app so far: time-lapse "always", Spoolman address
+  (with a connection test from the server), NFC reader key per printer, Manyfold library and AI failure detection.
 
 ## 0.40.0
 - Prints started elsewhere (e.g. sent from OrcaSlicer straight to the printer) now show up in the app's job list and

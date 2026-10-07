@@ -1,4 +1,4 @@
-// Own OrcaSlicer presets from an Orca Cloud account (server 0.41.0, issue #7). Orca Cloud lets apps read a user's synced
+// Own OrcaSlicer presets from an Orca Cloud account (server 0.42.0, issue #7). Orca Cloud lets apps read a user's synced
 // presets after a pairing (code confirmed in the Orca Cloud settings); each app needs an "app ID" (client_id) from the
 // Orca Cloud team. PocketPrint3D has none yet, so the user enters one (unless the server sets it). The server keeps the
 // tokens and pulls the presets now and every 6 hours; they then show up like uploaded presets.

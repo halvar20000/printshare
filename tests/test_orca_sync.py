@@ -69,8 +69,8 @@ def fake():
 
 def sync_for(fake, lib):  # noqa: F811
     http = httpx.AsyncClient(transport=httpx.MockTransport(fake.handler),
-                             headers={"User-Agent": orca_sync.user_agent("0.41.0")})
-    return orca_sync.OrcaSync(lambda: lib, "0.41.0", http=http)
+                             headers={"User-Agent": orca_sync.user_agent("0.42.0")})
+    return orca_sync.OrcaSync(lambda: lib, "0.42.0", http=http)
 
 
 def test_pair_sync_refresh_and_disconnect(tmp_path, fake, lib, monkeypatch):  # noqa: F811

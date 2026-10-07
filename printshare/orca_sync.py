@@ -1,4 +1,4 @@
-"""Sync a user's own OrcaSlicer presets from their Orca Cloud account (issue #7, 0.41.0).
+"""Sync a user's own OrcaSlicer presets from their Orca Cloud account (issue #7, 0.42.0).
 
 Orca Cloud lets external apps read a user's synced presets ("External App Pairing"):
 - Pairing = OAuth 2.0 Device Authorization Grant (RFC 8628): `POST /oauth/device/code` (form: client_id, scope

@@ -571,7 +571,7 @@ export class Api {
   uploadProfile = (uri: string, name: string) =>
     this.rawUpload<UserProfile[]>(`/api/profiles?filename=${encodeURIComponent(name)}`, uri);
 
-  /** Own presets from an Orca Cloud account (server 0.41.0, issue #7): app ID, pairing, sync. */
+  /** Own presets from an Orca Cloud account (server 0.42.0, issue #7): app ID, pairing, sync. */
   orcaAccount = () => this.request<OrcaAccount>("/api/orca-cloud");
   setOrcaClientId = (client_id: string | null) =>
     this.request<OrcaAccount>("/api/orca-cloud", { method: "PUT", body: { client_id } });

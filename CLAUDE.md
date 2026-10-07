@@ -404,14 +404,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   `tests/data/orca_cloud_cosmos_bundle.json`). Orca Cloud has only Public and Private bundles - private ones open only for
   whitelisted logged-in users ("Only whitelisted users can access this private bundle link"), no link-only mode → import
   is for public bundles; texts say so since build 24.
-- **Orca Cloud account sync built (0.41.0, 2026-10-07)**, waiting for an own client_id: `printshare/orca_sync.py` (device flow
+- **Orca Cloud account sync built (0.42.0, 2026-10-07)**, waiting for an own client_id: `printshare/orca_sync.py` (device flow
   form-encoded - checked against the real API's error answers: JSON body → invalid_request, unknown id → invalid_client;
   rotating refresh tokens under a lock, saved before use; full `sync/pull` every 6 h in `_orca_sync_loop` for every
   connected config dir incl. cloud users; presets through `user_profiles.store_presets`, vanished ones removed unless in
   `printers.d` use). client_id = env `ORCA_CLOUD_CLIENT_ID` or entered by the user (app `orca-account.tsx`, Settings →
   Erweitert and the printer page); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
   by hand in the app, test only) - a real pairing with a real account has not been run yet.
-- **Before 0.41.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
+- **Before 0.42.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
   (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow
   (device code, `sync:read`, rotating refresh token, Cloudflare UA) are in issue #7. Plan once we have it: store
   the pulled presets as `profiles/` files (kind prefix) so everything above works unchanged.
@@ -972,6 +972,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   (status, progress, printer, file, camera, time-lapse, no "print again"); Settings → "Zeitraffer immer erstellen"
   (`lib/timelapse.ts`: phone copy `ps_timelapse_always_<server>`, own server via `/api/timelapse/config`, 404 = older
   server hint); the review switch starts on with it, and a print start always sends `timelapse` true/false. Same as iOS 0.9.3.
+
+## App settings on the web page (2026-10-07, server 0.41.0, Dominique)
+- The PWA settings got the cards the app had alone: time-lapse "always" (`/api/timelapse/config`), Spoolman address
+  (`/api/spool-source`; new `POST /api/spool-source/test` = connection test from the server, saving needs it to pass,
+  cloud 409), NFC reader key per printer (`/reader-key`, key shown once), Manyfold, AI failure detection. Each card hides
+  itself when its endpoint fails (older server). Cloud-only things (account, bridges, cloud spools, phone-side printer
+  addresses/passwords) stay in the app: the PWA only runs on own servers. Checked with Chromium against fake
+  Moonraker + FakeSpoolman.
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

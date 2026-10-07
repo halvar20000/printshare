@@ -622,6 +622,9 @@ spool number from a chip or a reader means the right spool.
   `PRINTSHARE_SPOOLMAN_URL` or set from the app, stored in `<config dir>/spools.yaml`).
 - `PUT /api/spool-source` `{"source", "spoolman_url"?}` → as GET (+ `bridges_set` in the cloud: the address was passed to
   that many online bridges with the bridge method `spoolman.config`). 400 for `cloud` on a home server or a bad address.
+- `POST /api/spool-source/test` `{"source": "spoolman", "spoolman_url"}` (0.41.0, own servers; cloud: 409) → `{"url" (the
+  address that answered, :7912 added when no port was given), "version", "spools"}`; 400 when this server can't reach it.
+  Used by the server's web page before saving.
 - `printer_set` of slot-spools / reader scans: cloud spools → the cloud tells bridge printers; Spoolman spools → the home
   server reads the spool from its Spoolman, and the cloud asks the printer's bridge (`printer.slot.sync {printer, tool,
   spool}`). Printers reached by the phone are told by the app (`printer_set: false`).
@@ -716,7 +719,7 @@ preset `inherits` the printer's system model (`GET /api/printers/{id}/profile` �
 `kind`: `machine` (printer), `process` (quality), `filament` (material). Printer presets are assigned per printer
 (`PUT /api/printers/{id}/profile`); quality/material presets appear in `/options` under `own`.
 
-### Own presets from an Orca Cloud account (0.41.0, issue #7)
+### Own presets from an Orca Cloud account (0.42.0, issue #7)
 Orca Cloud's "External App Pairing" (OAuth device flow, scope `sync:read`, read only). Each app needs a `client_id`
 from the Orca Cloud team: server env `ORCA_CLOUD_CLIENT_ID` (wins), else the one the user enters. Tokens stay on the
 server (`<config dir>/orca_cloud.yaml`, 0600); presets are stored like uploaded ones and show up in `/api/profiles`,
