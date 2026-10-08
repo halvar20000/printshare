@@ -1007,7 +1007,11 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   "printing", ~0.5 mm came out), test C (Orca header + `M6211 A1 L200 T0 Q220 R220 S220`, Elegoo's own start-code
   command: heated, then "completed", extruder never turned). The firmware reports `TotalExtrusion` parsed from the file
   but `CurrentExtrusion` stays 0. Elegoo's screen load: head to the rear right, 260 °C, "insert filament", "hold the
-  filament", done. Thomas switches to COSMOS next (load/unload via macros there). The rest of the stock checklist worked
+  filament", done. **Inconclusive:** right after switching to COSMOS (26.09.0, same IP, Moonraker :80, no AFC) the
+  extruder rattled and nothing came out - a hard blockage in the toolhead (filament couldn't be pushed through by hand
+  at 250 °C with the extruder motor off), cleared by Thomas 2026-10-08. It was most likely there during the stock tests
+  too (test B: 32 mm commanded, ~0.5 mm out), so stock load/unload by file may work after all - retest only if someone
+  with a stock CC asks for it. Thomas' CC now runs COSMOS (load/unload via its LOAD_FILAMENT / UNLOAD_FILAMENT macros). The rest of the stock checklist worked
   2026-10-08 (heaters, fans, light, speed modes, Z/Y jog, thumbnail on the screen, pause/resume/cancel, job tracking). Klipper: `M109 S<t>` + its
   LOAD/UNLOAD_FILAMENT macro, else the same G-code as a script. Bambu: load with a slot (`load_slots`) / unload through
   `ams_change_filament` with the temperature. **The Centauri file approach is not tried on the real printer yet.**
