@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.2
+- Centauri Carbon (stock firmware): no load / unload buttons any more. Tried on a real printer: the firmware only heats
+  the nozzle for it and doesn't move the filament - load and unload on the printer's screen (with COSMOS/Klipper it
+  works through the printer's macros). Klipper: the plain load/unload G-code moves in steps of at most 25 mm.
+
 ## 0.44.1
 - Centauri Carbon (stock firmware): loading and unloading filament now really moves the filament. The printer only
   heated before: its firmware drops extrude moves longer than 50 mm, so they are now split into short steps.

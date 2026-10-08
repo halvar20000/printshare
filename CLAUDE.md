@@ -1000,10 +1000,14 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
 - **Load / unload everywhere (0.44.0, Thomas: "heat the nozzle, then load or unload - above all for the CC"):** material
   picker in the app → `load_temp`. Centauri: no SDCP command → `motion.filament_gcode()` (M104/M109, M83, load E90 F240 /
   unload E10, E-20 F2400, E-80 F1200, M104 S0) as `pp3d-filament-<action>.gcode`, uploaded and started like a print
-  without levelling (`jobtrack.external` ignores the prefix → no job, no time-lapse). **Tried on Thomas' CC 2026-10-08:**
-  "G-code start" on the screen, nozzle heated, but the filament never moved → 0.44.1 splits the E moves into ≤ 25 mm
-  (`MAX_E_MOVE`; the CC firmware is Klipper-based, Klipper's `max_extrude_only_distance` default is 50 mm and an error
-  ends the file). Fix not yet confirmed on the printer. Everything else of the stock-firmware checklist worked
+  without levelling (`jobtrack.external` ignores the prefix → no job, no time-lapse). **Does NOT work on the stock CC
+  (Thomas' CC, FW V0.3.0-o, 2026-10-08) → removed in 0.44.2** (`load/unload: False`, filament stays on the printer's
+  screen). Tried from here by SDCP upload+start, Thomas watching: 0.44.0 (G1 E90), 0.44.1 (≤ 25 mm steps), test A
+  (G28, Z100, park X202 Y264.5, pure G1 E5 ×6), test B (G28, Z100, mid-bed, G1 X±40 E8 ×4: head moved, state
+  "printing", ~0.5 mm came out), test C (Orca header + `M6211 A1 L200 T0 Q220 R220 S220`, Elegoo's own start-code
+  command: heated, then "completed", extruder never turned). The firmware reports `TotalExtrusion` parsed from the file
+  but `CurrentExtrusion` stays 0. Elegoo's screen load: head to the rear right, 260 °C, "insert filament", "hold the
+  filament", done. Thomas switches to COSMOS next (load/unload via macros there). The rest of the stock checklist worked
   2026-10-08 (heaters, fans, light, speed modes, Z/Y jog, thumbnail on the screen, pause/resume/cancel, job tracking). Klipper: `M109 S<t>` + its
   LOAD/UNLOAD_FILAMENT macro, else the same G-code as a script. Bambu: load with a slot (`load_slots`) / unload through
   `ams_change_filament` with the temperature. **The Centauri file approach is not tried on the real printer yet.**

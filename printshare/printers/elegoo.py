@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,6 @@ from pycentauri import Printer
 from pycentauri.discovery import discover
 from pycentauri.models import PrintStatus
 
-from .. import motion
 from ..camera import Camera
 from ..config import PrinterConfig
 
@@ -122,22 +120,15 @@ class ElegooSDCP:
 
     # ---------- moving by hand (0.43.0): SDCP Cmd 401 jog / 402 home, as the printer's own web page does ----------
     def motion(self) -> dict[str, Any]:
-        # load / unload: no SDCP command - a tiny G-code file started like a print (motion.filament_gcode)
+        # No load / unload / extrude: SDCP has no command for it, and the stock firmware doesn't drive the extruder from
+        # a file outside a real print - pure G1 E, G1 X… E… and Elegoo's own M6211 all heated and then moved (almost)
+        # nothing (three tries on Thomas' CC, FW V0.3.0-o, 2026-10-08). Filament stays on the printer's screen.
         return {"home": ["XYZ", "X", "Y", "Z"], "jog": {"axes": ["X", "Y", "Z"], "steps": [0.1, 1, 10, 100]},
-                "extrude": False, "load": True, "unload": True, "filament_temp": True, "motors_off": False,
-                "macros": [], "filament_as_job": True}
+                "extrude": False, "load": False, "unload": False, "filament_temp": False, "motors_off": False,
+                "macros": []}
 
     async def move(self, action: str, axis: str | None = None, distance: float | None = None,
                    macro: str | None = None, temp: int | None = None, slot: int | None = None) -> dict[str, Any]:
-        if action in ("load", "unload"):
-            t = int(temp or motion.DEFAULT_TEMP)
-            with tempfile.TemporaryDirectory() as d:
-                path = Path(d) / f"{motion.FILE_PREFIX}{action}.gcode"
-                path.write_text(motion.filament_gcode(action, t), encoding="utf-8")
-                async with await self._connect(enable_control=True) as p:
-                    remote = await p.upload_file(path)
-                    await self._start(p, remote, False)          # no bed levelling for this
-            return {"action": action, "temp": t, "file": remote}
         if action == "home":
             cmd, data = 402, {"Axis": axis}
         elif action == "jog":

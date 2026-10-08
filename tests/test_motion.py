@@ -75,17 +75,14 @@ def test_centauri_home_and_jog():
         await ad.move("jog", "Z", -0.1)
         with pytest.raises(ValueError, match="can't extrude"):
             await ad.move("extrude", None, 5)
-        return await ad.move("unload", temp=250)
-    out = run(fk, go)
+        for action in ("load", "unload"):             # the stock firmware can't (tried on the real CC)
+            with pytest.raises(ValueError, match="can't"):
+                await ad.move(action, temp=220)
+    run(fk, go)
     sent = [(c["Cmd"], c["Data"]) for c in fk.commands if c["Cmd"] in (401, 402)]
     assert sent == [(402, {"Axis": "XYZ"}), (401, {"Axis": "Z", "Step": -0.1})]
     assert ad.motion()["extrude"] is False and ad.motion()["jog"]["steps"] == [0.1, 1, 10, 100]
-    # unload: a tiny G-code file uploaded and started like a print, without bed levelling
-    assert out["file"] == "pp3d-filament-unload.gcode" and fk.printing == "pp3d-filament-unload.gcode"
-    gcode = fk.files["pp3d-filament-unload.gcode"].decode()
-    assert "M109 S250" in gcode and "G1 E-25 F1200\nG1 E-25 F1200\nG1 E-25 F1200\nG1 E-5 F1200\n" in gcode and gcode.endswith("M104 S0\n")
-    start = next(c for c in fk.commands if c["Cmd"] == 128)
-    assert start["Data"].get("Calibration_switch") in (0, False)
+    assert ad.motion()["load"] is False and ad.motion()["unload"] is False and not fk.files
 
 
 def test_filament_files_are_not_jobs():

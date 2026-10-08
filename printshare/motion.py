@@ -12,8 +12,8 @@ it. Actions:
 Never while a print runs (the API checks the printer state first). What each printer gets:
 - Centauri Carbon (stock firmware, SDCP): Cmd 402 {"Axis": "X"|"Y"|"Z"|"XYZ"} = home, Cmd 401 {"Axis", "Step": ±mm}
   = jog - read from the printer's own web page (`cbdsa-mainboard-cmp`, chunk 590: `changeZore`, `changeAxis`,
-  steps 0.1/1/10/100). The protocol has no extrude / load / unload command: load / unload are a tiny G-code file
-  (`filament_gcode`, name FILE_PREFIX…) uploaded and started like a print, without bed levelling.
+  steps 0.1/1/10/100). No extrude / load / unload: the protocol has no command, and a G-code file started like a print
+  only heats (0.44.0/0.44.1 tried that; pure E moves, E with X moves and Elegoo's M6211 moved no filament).
 - Klipper (Moonraker): G28, G91 + G1 + G90, M83 + G1 E, M84; load/unload = M109 + LOAD_FILAMENT / UNLOAD_FILAMENT when
   the printer has those macros, else `filament_gcode`; other macros without a leading "_" as buttons (minus SKIP_MACROS).
 - Bambu Lab: gcode_line like Bambu Studio's axis control (soft limits on for the jog: M211, push/pop ref mode),
@@ -34,12 +34,11 @@ SKIP_MACROS = {
 }
 
 
-FILE_PREFIX = "pp3d-filament-"     # Centauri load/unload files: not shown as jobs, no time-lapse
+FILE_PREFIX = "pp3d-filament-"     # old Centauri load/unload files (0.44.x): still not shown as jobs, no time-lapse
 DEFAULT_TEMP = 220
 LOAD_MM, LOAD_FEED = 90, 240        # pull in slowly: the user still pushes the filament into the extruder
 UNLOAD_PUSH, UNLOAD_TIP, UNLOAD_MM = 10, 20, 80
-# Klipper (also inside the Centauri's stock firmware) refuses an extrude-only move longer than max_extrude_only_distance
-# (default 50 mm) and drops the rest of the file: the nozzle heated, but the filament never moved (Thomas' CC, 2026-10-08)
+# Klipper refuses an extrude-only move longer than max_extrude_only_distance (default 50 mm) and drops the rest
 MAX_E_MOVE = 25
 
 
@@ -55,7 +54,7 @@ def _e_moves(mm: float, feed: int) -> str:
 
 def filament_gcode(action: str, temp: int) -> str:
     """Heat, then pull the filament in (load) or push a little and pull it out (unload, shaped tip); nozzle off at the
-    end. Used as a script (Klipper) or as a file started like a print (Centauri)."""
+    end. Used as a script on Klipper printers without LOAD/UNLOAD_FILAMENT macros."""
     head = f"; PocketPrint3D filament {action} at {temp} C\nM104 S{temp}\nM109 S{temp}\nM83\nG92 E0\n"
     if action == "load":
         body = _e_moves(LOAD_MM, LOAD_FEED)
