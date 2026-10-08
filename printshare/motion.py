@@ -38,17 +38,30 @@ FILE_PREFIX = "pp3d-filament-"     # Centauri load/unload files: not shown as jo
 DEFAULT_TEMP = 220
 LOAD_MM, LOAD_FEED = 90, 240        # pull in slowly: the user still pushes the filament into the extruder
 UNLOAD_PUSH, UNLOAD_TIP, UNLOAD_MM = 10, 20, 80
+# Klipper (also inside the Centauri's stock firmware) refuses an extrude-only move longer than max_extrude_only_distance
+# (default 50 mm) and drops the rest of the file: the nozzle heated, but the filament never moved (Thomas' CC, 2026-10-08)
+MAX_E_MOVE = 25
+
+
+def _e_moves(mm: float, feed: int) -> str:
+    """One extrude (mm > 0) or retract (mm < 0) split into moves of at most MAX_E_MOVE mm."""
+    out, left = [], abs(mm)
+    while left > 1e-9:
+        step = min(left, MAX_E_MOVE)
+        out.append(f"G1 E{'-' if mm < 0 else ''}{step:g} F{feed}\n")
+        left -= step
+    return "".join(out)
 
 
 def filament_gcode(action: str, temp: int) -> str:
     """Heat, then pull the filament in (load) or push a little and pull it out (unload, shaped tip); nozzle off at the
     end. Used as a script (Klipper) or as a file started like a print (Centauri)."""
-    head = f"; PocketPrint3D filament {action} at {temp} C\nM104 S{temp}\nM109 S{temp}\nM83\n"
+    head = f"; PocketPrint3D filament {action} at {temp} C\nM104 S{temp}\nM109 S{temp}\nM83\nG92 E0\n"
     if action == "load":
-        body = f"G1 E{LOAD_MM} F{LOAD_FEED}\n"
+        body = _e_moves(LOAD_MM, LOAD_FEED)
     else:
-        body = f"G1 E{UNLOAD_PUSH} F300\nG1 E-{UNLOAD_TIP} F2400\nG1 E-{UNLOAD_MM} F1200\n"
-    return head + body + "M104 S0\n"
+        body = _e_moves(UNLOAD_PUSH, 300) + _e_moves(-UNLOAD_TIP, 2400) + _e_moves(-UNLOAD_MM, 1200)
+    return head + body + "M400\nM104 S0\n"
 
 
 def is_filament_file(name: str | None) -> bool:

@@ -60,7 +60,8 @@ def test_moonraker_motion_with_cosmos_macros():
     assert not {"PRINT_START", "SAVE_CONFIG", "UNLOAD_FILAMENT", "M600", "_CG28"} & set(caps["macros"])
     assert fk.scripts[:5] == ["G28", "G91\nG1 X10 F3000\nG90", "M83\nG1 E-2 F300", "M84", "CLEAN_NOZZLE"]
     assert fk.scripts[5] == "M109 S250\nUNLOAD_FILAMENT"
-    assert fk.scripts[6].startswith("; PocketPrint3D filament load at 220 C\nM104 S220\nM109 S220\nM83\nG1 E90 F240")
+    assert fk.scripts[6].startswith("; PocketPrint3D filament load at 220 C\nM104 S220\nM109 S220\nM83\nG92 E0\n"
+                                     "G1 E25 F240\nG1 E25 F240\nG1 E25 F240\nG1 E15 F240\n")
     assert fk.scripts[6].endswith("M104 S0\n")
     assert "Must home axis first" in err
 
@@ -82,7 +83,7 @@ def test_centauri_home_and_jog():
     # unload: a tiny G-code file uploaded and started like a print, without bed levelling
     assert out["file"] == "pp3d-filament-unload.gcode" and fk.printing == "pp3d-filament-unload.gcode"
     gcode = fk.files["pp3d-filament-unload.gcode"].decode()
-    assert "M109 S250" in gcode and "G1 E-80 F1200" in gcode and gcode.endswith("M104 S0\n")
+    assert "M109 S250" in gcode and "G1 E-25 F1200\nG1 E-25 F1200\nG1 E-25 F1200\nG1 E-5 F1200\n" in gcode and gcode.endswith("M104 S0\n")
     start = next(c for c in fk.commands if c["Cmd"] == 128)
     assert start["Data"].get("Calibration_switch") in (0, False)
 
@@ -132,3 +133,14 @@ def test_api_motion(client):  # noqa: F811
                            json={"action": "unload", "material": "Wood", "confirm": True}).status_code == 400
         assert fk.scripts[-2:] == ["G28", "M109 S250\nUNLOAD_FILAMENT"]
         assert any(m["name"] == "PETG" for m in caps["materials"])
+
+
+def test_filament_moves_stay_below_klippers_limit():
+    # Klipper's max_extrude_only_distance (default 50 mm) drops longer extrude-only moves - and the rest of the file
+    for action in ("load", "unload"):
+        moves = [l for l in motion.filament_gcode(action, 220).splitlines() if l.startswith("G1 E")]
+        lengths = [abs(float(l.split()[1][1:])) for l in moves]
+        assert lengths and max(lengths) <= motion.MAX_E_MOVE
+    unload = motion.filament_gcode("unload", 220)
+    total = sum(float(l.split()[1][1:]) for l in unload.splitlines() if l.startswith("G1 E"))
+    assert total == motion.UNLOAD_PUSH - motion.UNLOAD_TIP - motion.UNLOAD_MM

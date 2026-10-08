@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.1
+- Centauri Carbon (stock firmware): loading and unloading filament now really moves the filament. The printer only
+  heated before: its firmware drops extrude moves longer than 50 mm, so they are now split into short steps.
+
 ## 0.44.0
 - Load and unload filament from the app on every printer: choose the material, the nozzle heats to its temperature,
   then the filament is pulled in or out. On the Centauri Carbon this runs as a short job on the printer.
