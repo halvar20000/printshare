@@ -1,8 +1,22 @@
 # Changelog
 
-## 0.43.2
+## 0.44.3
 - The server's web page can pair with an Orca Cloud account too (Settings → "Orca-Cloud-Konto"): enter the Orca app
   ID, confirm the code in Orca Cloud, sync now or unpair - the same as in the app.
+
+## 0.44.2
+- Centauri Carbon (stock firmware): no load / unload buttons any more. Tried on a real printer: the firmware only heats
+  the nozzle for it and doesn't move the filament - load and unload on the printer's screen (with COSMOS/Klipper it
+  works through the printer's macros). Klipper: the plain load/unload G-code moves in steps of at most 25 mm.
+
+## 0.44.1
+- Centauri Carbon (stock firmware): loading and unloading filament now really moves the filament. The printer only
+  heated before: its firmware drops extrude moves longer than 50 mm, so they are now split into short steps.
+
+## 0.44.0
+- Load and unload filament from the app on every printer: choose the material, the nozzle heats to its temperature,
+  then the filament is pulled in or out. On the Centauri Carbon this runs as a short job on the printer.
+- Bambu: moving an axis is refused until the printer is homed (the printer ignored it silently before).
 
 ## 0.43.1
 - Orca Cloud account: quality presets (Orca Cloud calls them "print") are taken over too instead of being skipped

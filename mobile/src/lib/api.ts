@@ -166,10 +166,16 @@ export const isExternal = (j: { kind: string }) => j.kind === "external";
 export type Motion = {
   supported: boolean; home: string[]; jog: { axes: string[]; steps: number[] } | null; extrude: boolean; load: boolean;
   unload: boolean; motors_off: boolean; macros: string[];
+  /** load/unload heat to the chosen material's temperature (`materials[].load_temp`) */
+  filament_temp?: boolean; materials?: { name: string; load_temp: number }[];
+  /** Bambu: load needs a slot (AMS tray / external 254) */
+  load_slots?: { tool: number; id?: string; name?: string; material?: string | null; color?: string | null }[] | null;
+  /** Centauri: load/unload run as a short print job on the printer */
+  filament_as_job?: boolean;
 };
 export type MotionAction = {
   action: "home" | "jog" | "extrude" | "load" | "unload" | "motors_off" | "macro"; axis?: string; distance?: number;
-  macro?: string;
+  macro?: string; material?: string; slot?: number;
 };
 export type OrcaAccount = {
   client_id: string | null; client_id_from: "server" | "user" | null; connected: boolean; connected_at?: number | null;

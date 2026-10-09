@@ -409,7 +409,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   rotating refresh tokens under a lock, saved before use; full `sync/pull` every 6 h in `_orca_sync_loop` for every
   connected config dir incl. cloud users; presets through `user_profiles.store_presets`, vanished ones removed unless in
   `printers.d` use). client_id = env `ORCA_CLOUD_CLIENT_ID` or entered by the user (app `orca-account.tsx`, Settings →
-  Erweitert and the printer page; since 0.43.2 also the PWA settings card "Orca-Cloud-Konto", checked with Chromium against a
+  Erweitert and the printer page; since 0.44.3 also the PWA settings card "Orca-Cloud-Konto", checked with Chromium against a
   simulated Orca Cloud); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
   by hand in the app, test only) - a real pairing with a real account has not been run yet.
 - **Before 0.42.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
@@ -993,7 +993,31 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   320-323, 386, 387, 401-403. **No load/unload/extrude in the CC1 protocol** (only on its screen).
 - Bambu: gcode_line like Bambu Studio (`M211 S / M211 X1 Y1 Z1 / M1002 push_ref_mode / G91 / G1 … / M1002 pop_ref_mode /
   M211 R`), home `G28`, extrude `M83 / G0 E`, motors `M18`, unload = AMS change 255. COSMOS: UNLOAD_FILAMENT macro, no
-  LOAD_FILAMENT (its load is screen-driven). **Not yet tried on a real printer** (none of the moves).
+  LOAD_FILAMENT (its load is screen-driven).
+- **Live 2026-10-07 (checked with the printers' cameras, Thomas present):** Centauri .144: home XYZ acked (head was already
+  at home, no visible move), X +10 / −10 clearly moved and back. P1S .53: after a print `home_flag & 7 == 0` (not homed) →
+  a jog is answered "success" but nothing moves (soft limits) → the adapter now refuses jogs until homed; `G28` homed in
+  48 s (`home_flag & 7 == 7`), then X +10 / −10 moved and back. Not tried yet: Z, extrude, unload, motors off, COSMOS.
+- **Load / unload everywhere (0.44.0, Thomas: "heat the nozzle, then load or unload - above all for the CC"):** material
+  picker in the app → `load_temp`. Centauri: no SDCP command → `motion.filament_gcode()` (M104/M109, M83, load E90 F240 /
+  unload E10, E-20 F2400, E-80 F1200, M104 S0) as `pp3d-filament-<action>.gcode`, uploaded and started like a print
+  without levelling (`jobtrack.external` ignores the prefix → no job, no time-lapse). **Does NOT work on the stock CC
+  (Thomas' CC, FW V0.3.0-o, 2026-10-08) → removed in 0.44.2** (`load/unload: False`, filament stays on the printer's
+  screen). Tried from here by SDCP upload+start, Thomas watching: 0.44.0 (G1 E90), 0.44.1 (≤ 25 mm steps), test A
+  (G28, Z100, park X202 Y264.5, pure G1 E5 ×6), test B (G28, Z100, mid-bed, G1 X±40 E8 ×4: head moved, state
+  "printing", ~0.5 mm came out), test C (Orca header + `M6211 A1 L200 T0 Q220 R220 S220`, Elegoo's own start-code
+  command: heated, then "completed", extruder never turned). The firmware reports `TotalExtrusion` parsed from the file
+  but `CurrentExtrusion` stays 0. Elegoo's screen load: head to the rear right, 260 °C, "insert filament", "hold the
+  filament", done. **Inconclusive:** right after switching to COSMOS (26.09.0, same IP, Moonraker :80, no AFC) the
+  extruder rattled and nothing came out - a hard blockage in the toolhead (filament couldn't be pushed through by hand
+  at 250 °C with the extruder motor off), cleared by Thomas 2026-10-08 by repeating the screen load at 250 °C until it
+  suddenly went through. **First Benchy on Thomas' COSMOS CC printed successfully 2026-10-08**, started from the
+  PocketPrint3D app on his phone, sliced with an uploaded COSMOS profile. It was most likely there during the stock tests
+  too (test B: 32 mm commanded, ~0.5 mm out), so stock load/unload by file may work after all - retest only if someone
+  with a stock CC asks for it. Thomas' CC now runs COSMOS (load/unload via its LOAD_FILAMENT / UNLOAD_FILAMENT macros). The rest of the stock checklist worked
+  2026-10-08 (heaters, fans, light, speed modes, Z/Y jog, thumbnail on the screen, pause/resume/cancel, job tracking). Klipper: `M109 S<t>` + its
+  LOAD/UNLOAD_FILAMENT macro, else the same G-code as a script. Bambu: load with a slot (`load_slots`) / unload through
+  `ams_change_filament` with the temperature. **The Centauri file approach is not tried on the real printer yet.**
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

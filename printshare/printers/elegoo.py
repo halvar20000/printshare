@@ -120,11 +120,15 @@ class ElegooSDCP:
 
     # ---------- moving by hand (0.43.0): SDCP Cmd 401 jog / 402 home, as the printer's own web page does ----------
     def motion(self) -> dict[str, Any]:
+        # No load / unload / extrude: SDCP has no command for it, and the stock firmware doesn't drive the extruder from
+        # a file outside a real print - pure G1 E, G1 X… E… and Elegoo's own M6211 all heated and then moved (almost)
+        # nothing (three tries on Thomas' CC, FW V0.3.0-o, 2026-10-08). Filament stays on the printer's screen.
         return {"home": ["XYZ", "X", "Y", "Z"], "jog": {"axes": ["X", "Y", "Z"], "steps": [0.1, 1, 10, 100]},
-                "extrude": False, "load": False, "unload": False, "motors_off": False, "macros": []}
+                "extrude": False, "load": False, "unload": False, "filament_temp": False, "motors_off": False,
+                "macros": []}
 
     async def move(self, action: str, axis: str | None = None, distance: float | None = None,
-                   macro: str | None = None) -> dict[str, Any]:
+                   macro: str | None = None, temp: int | None = None, slot: int | None = None) -> dict[str, Any]:
         if action == "home":
             cmd, data = 402, {"Axis": axis}
         elif action == "jog":
