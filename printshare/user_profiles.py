@@ -185,9 +185,17 @@ def resolve_preset(lib: ProfileLibrary, config_dir: str | Path | None, kind: str
         return lib.resolve(kind, name, overrides)
     data = load_user_preset(path, None, lib, kind)
     data.update(name=name, type=kind, instantiation="true")
+    if isinstance(data.get("compatible_printers"), str):
+        data["compatible_printers"] = printer_list(data["compatible_printers"])
     if overrides:
         data.update(overrides)
     return data
+
+
+def printer_list(value: str) -> list[str]:
+    """Orca's serialised string list (`"A";"B"`, as Orca Cloud sends `compatible_printers`) as a list."""
+    items = [i.replace('\\"', '"') for i in re.findall(r'"((?:[^"\\]|\\.)*)"', value)]
+    return items or [i.strip() for i in value.split(";") if i.strip()]
 
 
 def compatible_user_presets(lib: ProfileLibrary, config_dir: str | Path | None, kind: str,

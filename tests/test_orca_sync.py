@@ -166,3 +166,18 @@ def test_quality_presets_of_type_print_are_kept(tmp_path, lib):  # noqa: F811
     out = orca_sync.store(tmp_path, up, lib)
     assert out["skipped"] == [] and len(out["files"]) == 1 and out["files"][0].startswith("process-")
     assert [p["name"] for p in user_profiles.list_profiles(tmp_path, lib)] == ["My Quality"]
+
+
+def test_filament_presets_with_a_printer_string_are_offered(tmp_path, lib):  # noqa: F811
+    # Orca Cloud sends compatible_printers as Orca's serialised string ('"A";"B"'), not as a JSON list
+    up = [{"id": f"f{i}", "name": n, "content": {"name": n, "type": "filament", "from": "User",
+                                                  "inherits": "Elegoo PLA @ECC", "compatible_printers": cp}}
+          for i, (n, cp) in enumerate([("CC PLA", '"Elegoo Centauri Carbon 0.4 nozzle"'),
+                                       ("Two PLA", '"Other Printer";"Elegoo Centauri Carbon 0.4 nozzle"'),
+                                       ("Other PLA", '"Other Printer"')])]
+    assert orca_sync.store(tmp_path, up, lib)["skipped"] == []
+    cc = "Elegoo Centauri Carbon 0.4 nozzle"
+    assert user_profiles.compatible_user_presets(lib, tmp_path, "filament", [cc]) == ["CC PLA", "Two PLA"]
+    assert user_profiles.resolve_preset(lib, tmp_path, "filament", "Two PLA")["compatible_printers"] == [
+        "Other Printer", cc]
+    assert user_profiles.printer_list("A;B") == ["A", "B"] and user_profiles.printer_list("") == []

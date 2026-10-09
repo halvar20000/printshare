@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.4
+- Orca Cloud account: own filament and quality presets made for your printer now show up when preparing a print.
+  Orca Cloud sends their printer list as text, which wasn't recognised, so they were hidden.
+
 ## 0.44.3
 - The server's web page can pair with an Orca Cloud account too (Settings → "Orca-Cloud-Konto"): enter the Orca app
   ID, confirm the code in Orca Cloud, sync now or unpair - the same as in the app.
