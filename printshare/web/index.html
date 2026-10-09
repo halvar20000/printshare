@@ -261,6 +261,28 @@
       <button type="button" id="fd-save" class="primary" data-t="save">Speichern</button>
       <button type="button" id="fd-remove" class="danger" data-t="fd_remove" hidden>Fehlererkennung ausschalten</button>
     </div>
+    <div class="card" id="orca-card" hidden>
+      <h2 data-t="oc_title">Orca-Cloud-Konto</h2>
+      <p class="hint" data-t="oc_hint"></p>
+      <div id="oc-id-row">
+        <label for="oc-id" data-t="oc_id">Orca-App-ID</label>
+        <input id="oc-id" autocomplete="off" spellcheck="false" placeholder="oc_app_…">
+        <p class="hint" data-t="oc_id_hint"></p>
+        <button type="button" id="oc-save" class="ghost" data-t="save">Speichern</button>
+      </div>
+      <p id="oc-id-server" class="hint" data-t="oc_id_server" hidden></p>
+      <div id="oc-pair" hidden>
+        <p id="oc-code" class="code"></p>
+        <p id="oc-pair-hint" class="hint" data-t="oc_pair_hint"></p>
+        <p id="oc-pair-state" class="hint"></p>
+        <button type="button" id="oc-open" class="ghost" data-t="oc_open" hidden>Orca Cloud öffnen</button>
+      </div>
+      <p id="oc-state" class="hint" style="white-space: pre-line" hidden></p>
+      <p id="oc-msg" class="hint" hidden></p>
+      <button type="button" id="oc-connect" class="primary" data-t="oc_connect">Mit Orca Cloud koppeln</button>
+      <button type="button" id="oc-sync" class="ghost" data-t="oc_sync" hidden>Jetzt synchronisieren</button>
+      <button type="button" id="oc-disconnect" class="danger" data-t="oc_disconnect" hidden>Kopplung trennen</button>
+    </div>
     <!-- bridge mode: the app reaches these printers from anywhere through PocketPrint3D Cloud (docs/BRIDGE.md) -->
     <div class="card" id="bridge-card" hidden>
       <h2 data-t="bridge_title">Unterwegs drucken</h2>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.44.3
+- The server's web page can pair with an Orca Cloud account too (Settings → "Orca-Cloud-Konto"): enter the Orca app
+  ID, confirm the code in Orca Cloud, sync now or unpair - the same as in the app.
+
 ## 0.44.2
 - Centauri Carbon (stock firmware): no load / unload buttons any more. Tried on a real printer: the firmware only heats
   the nozzle for it and doesn't move the filament - load and unload on the printer's screen (with COSMOS/Klipper it
