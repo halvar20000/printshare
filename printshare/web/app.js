@@ -69,7 +69,7 @@ const I18N = {
     fd_ok: "Verbunden – die ML-API hat das Testbild geprüft.", fd_token_kept: "gespeichert (leer = behalten)",
     fd_remove: "Fehlererkennung ausschalten", fd_remove_q: "Fehlererkennung ausschalten?", fd_removed: "Ausgeschaltet.",
     oc_title: "Orca-Cloud-Konto",
-    oc_hint: "Deine eigenen Drucker-, Qualitäts- und Materialprofile aus OrcaSlicer kommen automatisch hierher: einmal koppeln, danach holt der Server sie alle 6 Stunden ab. Nur lesen – an deinen Profilen in Orca Cloud ändert sich nichts.",
+    oc_hint: "Deine eigenen Drucker-, Qualitäts- und Materialprofile aus OrcaSlicer kommen automatisch hierher: einmal koppeln, danach holt der Server sie selbst ab. Nur lesen – an deinen Profilen in Orca Cloud ändert sich nichts.",
     oc_id: "Orca-App-ID",
     oc_id_hint: "Orca Cloud verlangt für jede App eine eigene ID (client_id), die das Orca-Team vergibt. Trage hier die ID ein, die du bekommen hast.",
     oc_id_server: "Die App-ID ist auf dem Server eingestellt (ORCA_CLOUD_CLIENT_ID).", oc_id_saved: "App-ID gespeichert.",
@@ -82,6 +82,9 @@ const I18N = {
     oc_disconnect: "Kopplung trennen", oc_disconnect_q: "Die Kopplung mit Orca Cloud trennen?",
     oc_remove_presets_q: "Auch die übernommenen Profile löschen? Profile, die ein Drucker gerade nutzt, bleiben. (Abbrechen = behalten)",
     oc_disconnected: "Kopplung getrennt.",
+    oc_interval: "Automatisch synchronisieren", oc_every_0: "Nur von Hand", oc_every_1: "Stündlich",
+    oc_every_6: "Alle 6 Stunden", oc_every_24: "Täglich",
+    oc_prepare: "Beim Vorbereiten eines Drucks neue Profile holen (wenn der letzte Abgleich über 10 Minuten her ist)",
     bridge_title: "Unterwegs drucken",
     bridge_hint: "Verbindet diesen Server mit deinem kostenlosen PocketPrint3D-Cloud-Konto. Dann erreicht die App seine Drucker von überall – nur über eine ausgehende Verbindung, nichts muss im Router freigegeben werden.",
     bridge_on: "Mit PocketPrint3D Cloud verbinden",
@@ -206,7 +209,7 @@ const I18N = {
     fd_ok: "Connected – the ML API checked the test picture.", fd_token_kept: "stored (empty = keep)",
     fd_remove: "Turn failure detection off", fd_remove_q: "Turn failure detection off?", fd_removed: "Turned off.",
     oc_title: "Orca Cloud account",
-    oc_hint: "Your own printer, quality and material presets from OrcaSlicer come here automatically: pair once, then the server fetches them every 6 hours. Read only – nothing changes in Orca Cloud.",
+    oc_hint: "Your own printer, quality and material presets from OrcaSlicer come here automatically: pair once, then the server fetches them on its own. Read only – nothing changes in Orca Cloud.",
     oc_id: "Orca app ID",
     oc_id_hint: "Orca Cloud requires an own ID (client_id) for every app, given out by the Orca team. Enter the ID you received.",
     oc_id_server: "The app ID is set on the server (ORCA_CLOUD_CLIENT_ID).", oc_id_saved: "App ID saved.",
@@ -219,6 +222,9 @@ const I18N = {
     oc_disconnect: "Unpair", oc_disconnect_q: "Unpair from Orca Cloud?",
     oc_remove_presets_q: "Delete the taken-over presets too? Presets a printer uses stay. (Cancel = keep)",
     oc_disconnected: "Unpaired.",
+    oc_interval: "Sync automatically", oc_every_0: "Only by hand", oc_every_1: "Every hour",
+    oc_every_6: "Every 6 hours", oc_every_24: "Daily",
+    oc_prepare: "Fetch new presets when preparing a print (if the last sync is older than 10 minutes)",
     bridge_title: "Print from anywhere",
     bridge_hint: "Connects this server to your free PocketPrint3D Cloud account. The app then reaches its printers from anywhere – through an outgoing connection only, nothing has to be opened in your router.",
     bridge_on: "Connect to PocketPrint3D Cloud",
@@ -1240,6 +1246,13 @@ function showOrca(st) {
   $("oc-connect").disabled = !st.client_id;
   $("oc-connect").textContent = t(p ? "oc_connect_again" : "oc_connect");
   $("oc-sync").hidden = !st.connected;
+  $("oc-schedule").hidden = !st.connected || st.interval_h === undefined;      // older server: no schedule
+  if (st.interval_h !== undefined) {
+    const sel = $("oc-interval");
+    sel.replaceChildren(...(st.intervals || [0, 1, 6, 24]).map(h => new Option(t("oc_every_" + h), h)));
+    sel.value = String(st.interval_h);
+    $("oc-prepare").checked = !!st.on_prepare;
+  }
   $("oc-disconnect").hidden = !st.connected;
   clearTimeout(OC.timer);
   if (p && !p.error) OC.timer = setTimeout(refreshOrca, 3000);       // follow the pairing until it is confirmed
@@ -1272,6 +1285,8 @@ $("oc-connect").onclick = async () => {
 };
 $("oc-open").onclick = () => { if (OC.url) window.open(OC.url, "_blank", "noopener"); };
 $("oc-sync").onclick = () => orcaCall("/api/orca-cloud/sync", "POST", {}, st => t("oc_synced", { n: st.count }));
+$("oc-interval").onchange = () => orcaCall("/api/orca-cloud/schedule", "PUT", { interval_h: Number($("oc-interval").value) });
+$("oc-prepare").onchange = () => orcaCall("/api/orca-cloud/schedule", "PUT", { on_prepare: $("oc-prepare").checked });
 $("oc-disconnect").onclick = async () => {
   if (!confirm(t("oc_disconnect_q"))) return;
   const remove = confirm(t("oc_remove_presets_q"));

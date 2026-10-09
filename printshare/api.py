@@ -11,6 +11,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   /spoolman/api/v1/info|spool|spool/{id}|spool/{id}/use   the account's spools in Spoolman's shapes (0.17.0)
   POST /api/profiles/orca-cloud {"link"}   import a bundle shared on cloud.orcaslicer.com (#7, 0.18.0)
   GET|PUT|DELETE /api/orca-cloud, POST /api/orca-cloud/connect|sync   sync own presets from an Orca Cloud account (0.42.0)
+  PUT /api/orca-cloud/schedule {interval_h, on_prepare}   how often it syncs (0.45.0)
   GET  /api/filament-db/brands · /api/filament-db/filaments?brand=&diameter=   SpoolmanDB presets for spools (0.19.0)
   GET|PUT|DELETE /api/manyfold/config · GET /api/manyfold/image/{model}/{file}   own Manyfold library (0.21.0, not in the cloud)
   GET|PUT|DELETE /api/failure-detection/config · /api/printers/{id}/watch/frame|mute   AI failure detection (0.23.0, own servers)
@@ -134,7 +135,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.44.3", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.45.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1452,6 +1453,8 @@ def _own_presets(acct: "Account", printer: PrinterConfig, kind: str, lib: Profil
 @app.get("/api/printers/{printer_id}/options")
 async def options(printer_id: str, process: str | None = None, acct: Account = Depends(auth)) -> dict[str, Any]:
     printer = _printer(acct, printer_id)
+    if acct.settings.config_dir and not process:     # first load of the prepare screen, not a quality change
+        await ORCA_SYNC.before_prepare(acct.settings.config_dir)   # newest own presets from Orca Cloud (0.45.0)
     lib = await asyncio.to_thread(_library)
     machine = printer.slicing.machine
     materials, processes = await asyncio.gather(
@@ -2438,18 +2441,21 @@ ORCA_SYNC = orca_sync.OrcaSync(lambda: _library(), app.version)
 
 
 async def _orca_sync_loop() -> None:
-    """Every 6 h: pull the presets of every connected account (home server: its own; cloud: each user's)."""
+    """Pull the presets of every connected account whose own interval has passed (home server: its own; cloud:
+    each user's). Checked every 5 min; "only by hand" accounts are never pulled here."""
     await asyncio.sleep(120)
     while True:
-        for d in await asyncio.to_thread(orca_sync.connected_dirs, settings.config_dir, settings.cloud):
+        dirs = await asyncio.to_thread(orca_sync.connected_dirs, settings.config_dir, settings.cloud)
+        for d in [d for d in dirs if orca_sync.due(d)]:
             try:
-                await ORCA_SYNC.sync(d)
+                await ORCA_SYNC.sync_once(d)
             except orca_sync.OrcaSyncError as e:
                 orca_sync.update(d, last_error=str(e))
             except Exception:  # noqa: BLE001
                 logging.getLogger(__name__).exception("Orca Cloud sync failed")
+                orca_sync.update(d, last_sync=time.time())   # don't retry a broken account every 5 min
             await asyncio.sleep(2)
-        await asyncio.sleep(orca_sync.SYNC_EVERY_S)
+        await asyncio.sleep(300)
 
 
 def _orca_error(e: orca_sync.OrcaSyncError) -> HTTPException:
@@ -2476,6 +2482,20 @@ def orca_cloud_set_id(req: OrcaClientId, acct: Account = Depends(auth)) -> dict[
     if cid != st.get("client_id") and (st.get("refresh_token") or st.get("access_token")):
         orca_sync.disconnect(acct.settings.config_dir)     # tokens belong to the old app ID
     orca_sync.update(acct.settings.config_dir, client_id=cid)
+    return orca_sync.status(acct.settings.config_dir)
+
+
+class OrcaSchedule(BaseModel):
+    interval_h: int | None = None       # 0 = only by hand, else 1 / 6 / 24
+    on_prepare: bool | None = None      # pull first when preparing a print (last sync older than 10 min)
+
+
+@app.put("/api/orca-cloud/schedule")
+def orca_cloud_schedule(req: OrcaSchedule, acct: Account = Depends(auth)) -> dict[str, Any]:
+    try:
+        orca_sync.set_schedule(acct.settings.config_dir, req.interval_h, req.on_prepare)
+    except orca_sync.OrcaSyncError as e:
+        raise _orca_error(e)
     return orca_sync.status(acct.settings.config_dir)
 
 

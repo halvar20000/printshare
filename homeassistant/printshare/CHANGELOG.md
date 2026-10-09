@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.45.0
+- Orca Cloud account: choose how often the server fetches your presets (every hour, every 6 hours, daily or only by
+  hand), on the web page and in the Android app. Preparing a print fetches new presets first when the last sync is
+  older than 10 minutes (can be switched off).
+
+## 0.44.4
+- Orca Cloud account: own filament and quality presets made for your printer now show up when preparing a print.
+  Orca Cloud sends their printer list as text, which wasn't recognised, so they were hidden.
+
 ## 0.44.3
 - The server's web page can pair with an Orca Cloud account too (Settings → "Orca-Cloud-Konto"): enter the Orca app
   ID, confirm the code in Orca Cloud, sync now or unpair - the same as in the app.

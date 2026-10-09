@@ -42,7 +42,10 @@ SCOPE = "sync:read"
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 MAX_PRESETS = 500
 MAX_PAGES = 20
-SYNC_EVERY_S = 6 * 3600
+INTERVALS_H = (0, 1, 6, 24)     # automatic sync every N hours; 0 = only by hand (and when preparing a print, if on)
+DEFAULT_INTERVAL_H = 6
+PREPARE_MAX_AGE_S = 10 * 60     # preparing a print pulls first when the last sync is older than this
+PREPARE_WAIT_S = 8              # how long the options request waits for that sync (it goes on in the background)
 
 
 def user_agent(version: str) -> str:
@@ -134,6 +137,35 @@ def _error_text(r: httpx.Response) -> tuple[str, str]:
     return str(err or ""), str(body.get("error_description") or err or f"HTTP {r.status_code}")
 
 
+def schedule(st: dict[str, Any]) -> tuple[int, bool]:
+    """(interval in hours, sync when preparing a print) of an account's state."""
+    h = st.get("interval_h")
+    return (h if h in INTERVALS_H else DEFAULT_INTERVAL_H), st.get("on_prepare") is not False
+
+
+def is_connected(st: dict[str, Any]) -> bool:
+    return bool(st.get("refresh_token") or st.get("access_token"))
+
+
+def due(config_dir: str | Path, now: float | None = None) -> bool:
+    """The automatic sync of this account is due (connected, not "only by hand", interval passed)."""
+    st = load(config_dir)
+    hours, _ = schedule(st)
+    return is_connected(st) and hours > 0 and (now or time.time()) - float(st.get("last_sync") or 0) >= hours * 3600
+
+
+def set_schedule(config_dir: str | Path, interval_h: int | None = None, on_prepare: bool | None = None) -> None:
+    if interval_h is not None and interval_h not in INTERVALS_H:
+        raise OrcaSyncError(f"interval_h must be one of {', '.join(map(str, INTERVALS_H))}")
+    changes: dict[str, Any] = {}
+    if interval_h is not None:
+        changes["interval_h"] = interval_h
+    if on_prepare is not None:
+        changes["on_prepare"] = on_prepare
+    if changes:
+        update(config_dir, **changes)
+
+
 class OrcaSync:
     """All calls for one server; `http` can be replaced in tests (base URL included)."""
 
@@ -142,6 +174,39 @@ class OrcaSync:
         self.base = base.rstrip("/")
         self.version = version
         self._http = http
+        self._running: dict[str, asyncio.Task] = {}   # one sync per account at a time
+        self._tried: dict[str, float] = {}            # last sync attempt from preparing a print, per account
+
+    async def sync_once(self, config_dir: str) -> dict[str, Any]:
+        """Like sync(), but a sync already running for this account is joined instead of starting a second one."""
+        task = self._running.get(config_dir)
+        if task is None or task.done():
+            task = asyncio.ensure_future(self.sync(config_dir))
+            self._running[config_dir] = task
+            task.add_done_callback(lambda t, d=config_dir: self._running.pop(d, None) if self._running.get(d) is t else None)
+        return await asyncio.shield(task)
+
+    async def before_prepare(self, config_dir: str, wait: float = PREPARE_WAIT_S) -> bool:
+        """Preparing a print: pull new presets first when the last sync is older than PREPARE_MAX_AGE_S. Waits at most
+        `wait` seconds (the sync goes on in the background); errors are recorded, never raised. True = synced now."""
+        st = load(config_dir)
+        now = time.time()
+        if not is_connected(st) or not schedule(st)[1] or config_dir in PENDING:
+            return False
+        if now - float(st.get("last_sync") or 0) < PREPARE_MAX_AGE_S or now - self._tried.get(config_dir, 0) < PREPARE_MAX_AGE_S:
+            return False
+        self._tried[config_dir] = now
+        try:
+            await asyncio.wait_for(self.sync_once(config_dir), wait)
+            return True
+        except asyncio.TimeoutError:
+            return False
+        except OrcaSyncError as e:
+            if e.status >= 500:
+                update(config_dir, last_error=str(e))
+        except Exception:  # noqa: BLE001
+            log.exception("Orca Cloud sync before preparing a print failed")
+        return False
 
     def _client(self) -> httpx.AsyncClient:
         return self._http or httpx.AsyncClient(timeout=20, follow_redirects=False,
@@ -333,6 +398,7 @@ def status(config_dir: str) -> dict[str, Any]:
             "connected": bool(st.get("refresh_token") or st.get("access_token")),
             "connected_at": st.get("connected_at"), "last_sync": st.get("last_sync"), "count": st.get("count") or 0,
             "skipped": st.get("skipped") or [], "last_error": st.get("last_error"),
+            "interval_h": schedule(st)[0], "on_prepare": schedule(st)[1], "intervals": list(INTERVALS_H),
             "pending": public_pending(p) if p else None}
 
 
@@ -351,7 +417,7 @@ def disconnect(config_dir: str, remove_presets: bool = False) -> dict[str, Any]:
                     removed.append(f)
                 except (user_profiles.ProfileUploadError, OSError):
                     pass
-    save(config_dir, {"client_id": st.get("client_id")})
+    save(config_dir, {k: st.get(k) for k in ("client_id", "interval_h", "on_prepare")})
     return {"removed": removed}
 
 

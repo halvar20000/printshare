@@ -410,7 +410,10 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   connected config dir incl. cloud users; presets through `user_profiles.store_presets`, vanished ones removed unless in
   `printers.d` use). client_id = env `ORCA_CLOUD_CLIENT_ID` or entered by the user (app `orca-account.tsx`, Settings →
   Erweitert and the printer page; since 0.44.3 also the PWA settings card "Orca-Cloud-Konto", checked with Chromium against a
-  simulated Orca Cloud); never in the source. Thomas wanted to test with Bambuddy's public client_id (entered
+  simulated Orca Cloud); never in the source. Since 0.45.0 a schedule per account (`interval_h` 0/1/6/24, default 6, loop checks
+  every 5 min; `on_prepare`: `/options` without `process` syncs first when the last sync is > 10 min old, waits ≤ 8 s,
+  `OrcaSync.sync_once` joins a running sync). 0.44.4: Orca Cloud sends `compatible_printers` as Orca's text form
+  `"A";"B"` → `user_profiles.printer_list` (before, synced filament presets were missing from the prepare screen). Thomas wanted to test with Bambuddy's public client_id (entered
   by hand in the app, test only) - a real pairing with a real account has not been run yet.
 - **Before 0.42.0 the Orca Cloud *account* sync was blocked:** it needs a `client_id` registered with the Orca Cloud team and their
   (non-public) "External App Pairing" guide; no self-service registration found (2026-09-30). Details of the flow

@@ -741,15 +741,20 @@ preset `inherits` the printer's system model (`GET /api/printers/{id}/profile` �
 Orca Cloud's "External App Pairing" (OAuth device flow, scope `sync:read`, read only). Each app needs a `client_id`
 from the Orca Cloud team: server env `ORCA_CLOUD_CLIENT_ID` (wins), else the one the user enters. Tokens stay on the
 server (`<config dir>/orca_cloud.yaml`, 0600); presets are stored like uploaded ones and show up in `/api/profiles`,
-`/options` etc. Synced every 6 h; presets gone from Orca Cloud are removed unless a printer uses them.
+`/options` etc. Synced on the account's schedule (0.45.0: every 1 / 6 / 24 h or only by hand, default 6 h) and, unless
+switched off, when `/api/printers/{id}/options` is loaded (without `process`) and the last sync is older than 10 min
+(the request waits up to 8 s for it); presets gone from Orca Cloud are removed unless a printer uses them.
+Compatible-printer lists that Orca Cloud sends as text (`"A";"B"`) are read as lists (0.44.4).
 - `GET /api/orca-cloud` → `{"client_id" (masked when from the server), "client_id_from": "server"|"user"|null,
   "connected", "connected_at", "last_sync", "count", "skipped": [{name, error}], "last_error",
+  "interval_h": 0|1|6|24, "on_prepare": bool, "intervals": [0, 1, 6, 24] (0.45.0),
   "pending": {"user_code", "verification_uri", "verification_uri_complete", "expires_in", "error": null|"denied"|"expired"|text} | null}`
 - `PUT /api/orca-cloud {"client_id" | null}` (400 bad format; a different ID ends an existing pairing)
 - `POST /api/orca-cloud/connect` → status with `pending` (409 without an ID, 400 unknown ID); the server polls Orca
   Cloud in the background - the app polls `GET` until `connected`.
+- `PUT /api/orca-cloud/schedule {"interval_h"?: 0|1|6|24, "on_prepare"?: bool}` → status (0.45.0; 400 other intervals)
 - `POST /api/orca-cloud/sync` → status + `removed` (409 not connected / pairing ended)
-- `DELETE /api/orca-cloud?remove_presets=true|false` → status + `removed` (the app ID is kept)
+- `DELETE /api/orca-cloud?remove_presets=true|false` → status + `removed` (the app ID and the schedule are kept)
 
 ## Web-page-only endpoints
 Settings that are made on the web page, not in the apps: `/api/printers/{id}/power/config` (GET/PUT/DELETE),

@@ -180,6 +180,8 @@ export type MotionAction = {
 export type OrcaAccount = {
   client_id: string | null; client_id_from: "server" | "user" | null; connected: boolean; connected_at?: number | null;
   last_sync?: number | null; count: number; skipped: { name: string; error: string }[]; last_error?: string | null;
+  /** server 0.45.0: automatic sync every N hours (0 = only by hand), and before preparing a print */
+  interval_h?: number; on_prepare?: boolean; intervals?: number[];
   pending: { user_code: string; verification_uri?: string | null; verification_uri_complete?: string | null;
              expires_in: number; error?: string | null } | null;
 };
@@ -594,6 +596,8 @@ export class Api {
   orcaAccount = () => this.request<OrcaAccount>("/api/orca-cloud");
   setOrcaClientId = (client_id: string | null) =>
     this.request<OrcaAccount>("/api/orca-cloud", { method: "PUT", body: { client_id } });
+  setOrcaSchedule = (body: { interval_h?: number; on_prepare?: boolean }) =>
+    this.request<OrcaAccount>("/api/orca-cloud/schedule", { method: "PUT", body });
   connectOrca = () => this.request<OrcaAccount>("/api/orca-cloud/connect", { method: "POST", timeout: 30000 });
   syncOrca = () => this.request<OrcaAccount & { removed: string[] }>("/api/orca-cloud/sync", { method: "POST", timeout: 120000 });
   disconnectOrca = (removePresets: boolean) =>
