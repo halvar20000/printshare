@@ -75,7 +75,6 @@ def sync_for(fake, lib):  # noqa: F811
 
 def test_pair_sync_refresh_and_disconnect(tmp_path, fake, lib, monkeypatch):  # noqa: F811
     monkeypatch.delenv("ORCA_CLOUD_CLIENT_ID", raising=False)
-    monkeypatch.setattr(orca_sync, "SYNC_EVERY_S", 1)
     cfg = str(tmp_path)
     s = sync_for(fake, lib)
 
@@ -181,3 +180,61 @@ def test_filament_presets_with_a_printer_string_are_offered(tmp_path, lib):  # n
     assert user_profiles.resolve_preset(lib, tmp_path, "filament", "Two PLA")["compatible_printers"] == [
         "Other Printer", cc]
     assert user_profiles.printer_list("A;B") == ["A", "B"] and user_profiles.printer_list("") == []
+
+
+def test_schedule_and_sync_before_preparing(tmp_path, fake, lib, monkeypatch):  # noqa: F811
+    cfg = str(tmp_path)
+    orca_sync.update(cfg, client_id="app_test", access_token="oc_ext_1", access_expires=time.time() + 3600,
+                     refresh_token="oc_ext_rt_1")
+    st = orca_sync.status(cfg)
+    assert (st["interval_h"], st["on_prepare"], st["intervals"]) == (6, True, [0, 1, 6, 24])   # defaults
+    assert orca_sync.due(cfg)                                                 # never synced
+    with pytest.raises(orca_sync.OrcaSyncError, match="interval_h"):
+        orca_sync.set_schedule(cfg, interval_h=3)
+    orca_sync.set_schedule(cfg, interval_h=0)
+    assert not orca_sync.due(cfg)                                             # only by hand
+    orca_sync.set_schedule(cfg, interval_h=1)
+    orca_sync.update(cfg, last_sync=time.time() - 1800)
+    assert not orca_sync.due(cfg) and orca_sync.due(cfg, time.time() + 1801)
+    s = sync_for(fake, lib)
+    pulls = []
+    real_pull = s.pull
+
+    async def counting_pull(d):
+        pulls.append(d)
+        await asyncio.sleep(0.05)
+        return await real_pull(d)
+    monkeypatch.setattr(s, "pull", counting_pull)
+
+    async def run():
+        assert await s.before_prepare(cfg)                                    # last sync 30 min ago → pulled
+        assert len(pulls) == 1 and orca_sync.status(cfg)["count"] == 2
+        assert not await s.before_prepare(cfg)                                # fresh: not again
+        orca_sync.update(cfg, last_sync=time.time() - 3600)
+        assert not await s.before_prepare(cfg)                                # tried < 10 min ago
+        s._tried.clear()
+        orca_sync.set_schedule(cfg, on_prepare=False)
+        assert not await s.before_prepare(cfg) and len(pulls) == 1            # switched off
+        # the loop and a manual sync at the same time share one pull
+        await asyncio.gather(s.sync_once(cfg), s.sync_once(cfg))
+        assert len(pulls) == 2
+
+    asyncio.run(run())
+    orca_sync.disconnect(cfg)
+    assert orca_sync.load(cfg) == {"client_id": "app_test", "interval_h": 1, "on_prepare": False}   # kept
+
+
+def test_schedule_api(tmp_path, monkeypatch):
+    import importlib
+    from fastapi.testclient import TestClient
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(f"api_token: t\nwork_dir: {tmp_path / 'w'}\ngcode_dir: {tmp_path / 'g'}\nprinters: []\n")
+    monkeypatch.setenv("PRINTSHARE_CONFIG", str(cfg))
+    api = importlib.reload(importlib.import_module("printshare.api"))
+    c = TestClient(api.app)
+    h = {"Authorization": "Bearer t"}
+    assert c.put("/api/orca-cloud/schedule", headers=h, json={"interval_h": 5}).status_code == 400
+    r = c.put("/api/orca-cloud/schedule", headers=h, json={"interval_h": 24}).json()
+    assert (r["interval_h"], r["on_prepare"]) == (24, True)
+    r = c.put("/api/orca-cloud/schedule", headers=h, json={"on_prepare": False}).json()
+    assert (r["interval_h"], r["on_prepare"]) == (24, False)

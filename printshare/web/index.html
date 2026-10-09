@@ -278,6 +278,14 @@
         <button type="button" id="oc-open" class="ghost" data-t="oc_open" hidden>Orca Cloud öffnen</button>
       </div>
       <p id="oc-state" class="hint" style="white-space: pre-line" hidden></p>
+      <div id="oc-schedule" hidden>
+        <label for="oc-interval" data-t="oc_interval">Automatisch synchronisieren</label>
+        <select id="oc-interval"></select>
+        <label class="check">
+          <input type="checkbox" id="oc-prepare">
+          <span data-t="oc_prepare">Beim Vorbereiten eines Drucks neue Profile holen</span>
+        </label>
+      </div>
       <p id="oc-msg" class="hint" hidden></p>
       <button type="button" id="oc-connect" class="primary" data-t="oc_connect">Mit Orca Cloud koppeln</button>
       <button type="button" id="oc-sync" class="ghost" data-t="oc_sync" hidden>Jetzt synchronisieren</button>

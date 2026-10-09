@@ -1,11 +1,12 @@
 // Own OrcaSlicer presets from an Orca Cloud account (server 0.42.0, issue #7). Orca Cloud lets apps read a user's synced
 // presets after a pairing (code confirmed in the Orca Cloud settings); each app needs an "app ID" (client_id) from the
 // Orca Cloud team. PocketPrint3D has none yet, so the user enters one (unless the server sets it). The server keeps the
-// tokens and pulls the presets now and every 6 hours; they then show up like uploaded presets.
+// tokens and pulls the presets now and then on the chosen schedule (server 0.45.0: every 1/6/24 h or only by hand, and
+// before a print is prepared); they then show up like uploaded presets.
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Switch, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Divider, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
 import { errorText, type OrcaAccount } from "@/lib/api";
@@ -59,6 +60,7 @@ export default function OrcaAccountScreen() {
     setDone(t("orcaSynced", { n: r.count }));
     return r;
   });
+  const schedule = (body: { interval_h?: number; on_prepare?: boolean }) => api && act("schedule", () => api.setOrcaSchedule(body));
   const disconnect = async () => {
     if (!api || !(await confirmAsync(t("orcaDisconnectQ"), t("orcaDisconnect"), t("cancelBtn")))) return;
     const remove = await confirmAsync(t("orcaRemovePresetsQ"), t("del"), t("orcaKeepPresets"));
@@ -130,7 +132,24 @@ export default function OrcaAccountScreen() {
           <Divider />
           <Row icon="log-out-outline" label={t("orcaDisconnect")} danger onPress={disconnect} />
         </Section>
-      ) : (
+      ) : null}
+      {st.connected && st.interval_h !== undefined ? (      // older servers have no schedule
+        <Section title={t("orcaScheduleTitle")} footer={t("orcaOnPrepareHint")}>
+          {(st.intervals ?? [0, 1, 6, 24]).map((h, i) => (
+            <View key={h}>
+              {i ? <Divider /> : null}
+              <Row icon="time-outline" label={t(`orcaEvery${h}` as "orcaEvery6")}
+                onPress={busy || h === st.interval_h ? undefined : () => { tap(); schedule({ interval_h: h }); }}
+                right={h === st.interval_h ? <Text style={{ color: c.accent, fontSize: 17 }}>✓</Text> : undefined} />
+            </View>
+          ))}
+          <Divider />
+          <Row icon="construct-outline" label={t("orcaOnPrepare")}
+            right={<Switch value={!!st.on_prepare} disabled={!!busy} trackColor={{ true: c.accent, false: c.track }}
+              onValueChange={v => { tap(); schedule({ on_prepare: v }); }} />} />
+        </Section>
+      ) : null}
+      {st.connected ? null : (
         <Button title={t(p ? "orcaConnectAgain" : "orcaConnect")} icon="link-outline" onPress={() => { tap(); connect(); }}
           loading={busy === "connect"} disabled={!st.client_id} />
       )}
