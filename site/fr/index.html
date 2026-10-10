@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PocketPrint3D – l'imprimante 3D dans votre poche</title>
+<meta name="description" content="Imprimez des modèles de Printables, Thingiverse et MakerWorld sur votre propre imprimante 3D, directement depuis votre téléphone. Pour Elegoo Centauri Carbon, Bambu Lab, Klipper, Prusa et OctoPrint. Cloud gratuit ou votre propre serveur, open source.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="alternate" hreflang="en" href="https://pocketprint3d.com/">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/fr/">PocketPrint3D</a>
+    <nav><a class="opt" href="#comment">Comment ça marche</a><a href="/help/">Aide</a><a class="opt" href="https://github.com/halvar20000/printshare">GitHub</a><a href="/" hreflang="en" title="English">EN</a><a href="/de/" hreflang="de" title="Deutsch">DE</a></nav>
+  </header>
+
+  <section class="hero">
+    <h1>L'imprimante 3D<br>dans votre poche.</h1>
+    <p class="lead">Trouvez un modèle sur Printables, Thingiverse ou MakerWorld, appuyez sur « Imprimer » – PocketPrint3D le
+      tranche avec OrcaSlicer et l'envoie à votre propre imprimante. Pour les imprimantes ouvertes, sans cloud du fabricant.
+      Gratuit et open source.</p>
+    <div class="buttons">
+      <a class="btn primary" href="#comment">Commencer</a>
+      <a class="btn" href="https://app.pocketprint3d.com/">Ouvrir dans le navigateur</a>
+      <a class="btn" href="https://github.com/halvar20000/printshare">Code source</a>
+    </div>
+    <p class="soon">Application Android en test bêta · dans le navigateur sur app.pocketprint3d.com · application iOS en développement · cloud gratuit ou votre propre serveur (Unraid, Home Assistant, Docker) · l'application est pour l'instant en allemand et en anglais</p>
+  </section>
+
+  <section>
+    <h2>Ce que ça fait</h2>
+    <div class="grid">
+      <div class="card"><h3>Aussi sur l'ordinateur</h3><p>La même application et le même compte dans le navigateur sur <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> : recherche, préparation, aperçu 3D, bobines – il suffit de glisser un fichier de modèle sur la page. L'impression depuis le navigateur passe par un pont à la maison.</p></div>
+      <div class="card"><h3>Envoyer depuis OrcaSlicer</h3><p>Vous tranchez sur l'ordinateur ? Ajoutez PocketPrint3D dans OrcaSlicer comme imprimante physique (Octo/Klipper). Vos impressions apparaissent comme des tâches, arrivent à l'imprimante via votre pont et décomptent la bonne bobine – toutes les impressions au même endroit.</p></div>
+      <div class="card"><h3>Prêt en quelques secondes</h3><p>Quand vous ajoutez une imprimante, l'application cherche sur votre Wi-Fi : Centauri Carbon, Bambu Lab, Klipper/COSMOS, Prusa (PrusaLink) et OctoPrint apparaissent dans une liste. Un appui et c'est configuré – pas d'adresse IP à chercher. (Android ; iOS suivra.)</p></div>
+      <div class="card"><h3>Trouver et imprimer</h3><p>Cherchez sur Printables et Thingiverse dans l'application, ou ouvrez printables.com avec votre propre compte pour retrouver vos favoris et collections. Les modèles MakerWorld aussi : ouvrez le lien dans l'application, téléchargez le 3MF sur MakerWorld et partagez-le avec l'application.</p></div>
+      <div class="card"><h3>Votre propre bibliothèque</h3><p>Vous utilisez Manyfold à la maison ? Votre collection de modèles apparaît comme source de recherche à côté de Printables – recherche, images, impression.</p></div>
+      <div class="card"><h3>Tranché pour vous</h3><p>OrcaSlicer 2.4.2 avec le bon profil pour votre imprimante – environ 1000 modèles d'imprimantes et une grande bibliothèque de filaments intégrés. Durée d'impression, filament, vue 3D du modèle et aperçu 2D/3D des couches avant que quoi que ce soit ne démarre.</p></div>
+      <div class="card"><h3>Une image sur l'imprimante</h3><p>Le G-code contient une image d'aperçu dans les tailles et formats attendus par l'écran de votre imprimante (PNG, QOI pour Prusa) – vous voyez ce qui s'imprime directement sur l'imprimante.</p></div>
+      <div class="card"><h3>Durées exactes pour Klipper</h3><p>Pour les imprimantes Klipper, la durée d'impression est recalculée avec les limites de vitesse et d'accélération de votre imprimante (klipper_estimator) – souvent 10 à 20 % plus juste que le trancheur.</p></div>
+      <div class="card"><h3>Votre imprimante en direct</h3><p>Progression, températures, pause, reprise et annulation. Vos tâches suivent l'impression – « En cours », puis « Imprimé » ou « Annulé » – et se relancent d'un appui. Une page par imprimante pour tout piloter : prise d'origine, déplacement des axes, chargement et déchargement du filament (la buse chauffe à la température du matériau), extrusion, macros. Avec votre propre serveur ou un pont : caméra, courbes de température, ventilateurs, éclairage, vitesse et mise en marche ou arrêt de l'imprimante via Home Assistant.</p></div>
+      <div class="card"><h3>Imprimer de partout</h3><p>Votre serveur PocketPrint3D à la maison – Unraid, Home Assistant, Docker ou un petit Raspberry Pi – devient un pont : saisissez une fois son code dans l'application et vous accédez à ses imprimantes de partout. État, images de la caméra, commandes et impression en données mobiles. Connexion sortante uniquement : pas de redirection de port, pas de VPN, vos imprimantes restent hors d'Internet.</p></div>
+      <div class="card"><h3>Timelapse</h3><p>Activez-le avant d'imprimer : une image de la caméra par couche, une courte vidéo à la fin – à regarder et télécharger dans l'application ou le navigateur. Avec votre propre serveur ou un pont et la caméra de l'imprimante.</p></div>
+      <div class="card"><h3>Détection d'erreurs par IA</h3><p>Avec l'API ML d'Obico sur votre serveur, les images de la caméra sont analysées pendant l'impression ; un échec probable (spaghetti, pièce décollée) s'affiche dans l'application et peut mettre l'impression en pause – aussi sur la Centauri Carbon avec le firmware d'origine.</p></div>
+      <div class="card"><h3>Multicolore</h3><p>Choisissez pour chaque couleur l'emplacement de votre unité AFC (p. ex. CANVAS) ou le bac de votre AMS Bambu – le matériau suit le filament de l'emplacement.</p></div>
+      <div class="card"><h3>Bambu Lab en mode LAN</h3><p>P1S, P1P, X1 et A1 : état, bacs de l'AMS, pause/reprise/annulation, températures, ventilateurs, éclairage, caméra – et impression avec le bac de votre choix. À la maison directement depuis l'application Android, de partout via un pont. Nécessite le mode LAN uniquement de l'imprimante (plus le mode développeur sur les firmwares récents) et son code d'accès.</p></div>
+      <div class="card"><h3>Votre propre caméra</h3><p>Caméra intégrée en panne ou trop limitée ? Donnez à n'importe quelle imprimante une caméra IP : une adresse RTSP (p. ex. Eufy, Wyze, Tapo, Reolink, une caméra Raspberry Pi) ou l'adresse d'une webcam. Utilisée pour l'image dans l'application, le timelapse et la détection d'erreurs.</p></div>
+      <div class="card"><h3>Spoolman et bobines NFC</h3><p>Choisissez la bobine pour chaque couleur, soyez averti quand elle ne suffira pas, le filament utilisé est décompté après l'impression. Ajoutez des bobines depuis la base ouverte SpoolmanDB ou en approchant le téléphone d'une bobine NFC OpenPrintTag. Pas de Spoolman à la maison ? Gardez vos bobines dans votre compte – vous choisissez.</p></div>
+      <div class="card"><h3>Vos propres profils</h3><p>Importez vos profils d'imprimante, de qualité et de matériau OrcaSlicer – ou collez le lien d'un bundle Orca Cloud public. Ils servent tout de suite au tranchage.</p></div>
+      <div class="card"><h3>Sûr par conception</h3><p>Rien ne démarre sans votre confirmation. Votre imprimante n'est jamais exposée à Internet ; avec le cloud, son adresse et ses mots de passe restent sur votre téléphone – ou, avec un pont, sont chiffrés pour que seul votre serveur à la maison puisse les lire.</p></div>
+      <div class="card"><h3>Gratuit</h3><p>Pas d'abonnement, pas de publicité, pas de pistage. Open source sous licence MIT.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Imprimantes prises en charge</h2>
+    <div class="table-wrap">
+    <table>
+      <tr><th>Imprimante</th><th>Connexion</th></tr>
+      <tr><td>Elegoo Centauri Carbon (firmware d'origine)</td><td>SDCP – testée avec de vraies imprimantes</td></tr>
+      <tr><td>Imprimantes Klipper, p. ex. Centauri Carbon avec OpenCentauri COSMOS</td><td>Moonraker – testée avec une vraie COSMOS + CANVAS</td></tr>
+      <tr><td>Prusa MK4 / MK4S / CORE One / XL / MINI</td><td>PrusaLink – tranchage vérifié avec les profils Prusa, pas encore testée avec une vraie imprimante</td></tr>
+      <tr><td>Toute imprimante avec OctoPrint (Ender, Anycubic, Prusa MK3S …)</td><td>API OctoPrint – pas encore testée avec une vraie imprimante</td></tr>
+      <tr><td>Bambu Lab P1S / P1P / X1 / A1 (mode LAN uniquement)</td><td>MQTT + FTPS – testée avec deux vraies P1S via un pont ; directement depuis l'application Android : nouveau</td></tr>
+    </table>
+    </div>
+    <p style="color:var(--muted)">Toutes fonctionnent avec le cloud et avec votre propre serveur. Les testeurs avec une Prusa ou OctoPrint sont les bienvenus.</p>
+  </section>
+
+  <section id="comment">
+    <h2>Deux façons de l'utiliser</h2>
+    <h3>PocketPrint3D Cloud – rien à installer à la maison</h3>
+    <ol class="steps">
+      <li><strong>Installez l'application</strong> et connectez-vous avec votre adresse e-mail (vous recevez un code à 6 chiffres, pas de mot de passe).</li>
+      <li><strong>Ajoutez votre imprimante</strong> : l'application la trouve sur votre Wi-Fi – appuyez dessus, c'est fait (ou saisissez son adresse vous-même). L'adresse reste sur votre téléphone.</li>
+      <li><strong>Imprimez</strong> : le tranchage tourne sur notre serveur en Allemagne ; à la maison, l'application envoie le G-code par votre Wi-Fi directement à l'imprimante.</li>
+      <li><strong>Sur l'ordinateur (facultatif)</strong> : ouvrez <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> et connectez-vous avec la même adresse e-mail. Vous tranchez dans OrcaSlicer ? Dans l'application, imprimante → <em>Send from OrcaSlicer</em> vous donne l'adresse et la clé pour l'imprimante physique d'OrcaSlicer.</li>
+      <li><strong>Hors de chez vous (facultatif)</strong> : faites tourner un pont à la maison – p. ex. sur un Raspberry Pi pour environ 60 € (<a href="/bridge/">guide pas à pas, en anglais</a>), la petite image Docker <code>printshare-bridge</code> ou votre propre serveur PocketPrint3D avec <em>Connect to PocketPrint3D Cloud</em> activé – et saisissez son code dans l'application sous <em>Settings → Advanced → Print from anywhere</em>.</li>
+    </ol>
+    <h3>Votre propre serveur – tout reste à la maison</h3>
+    <ol class="steps">
+      <li><strong>Installez le serveur PocketPrint3D</strong> sur Unraid (modèle), Home Assistant (module complémentaire) ou n'importe quel hôte Docker.</li>
+      <li><strong>Connectez l'application</strong> : ouvrez la page web du serveur, allez dans <em>Settings → Connect the app</em> et scannez le code QR.</li>
+      <li><strong>Imprimez</strong> – à la maison et de partout : activez <em>Connect to PocketPrint3D Cloud</em> et votre serveur devient un pont pour votre compte cloud (ou utilisez Tailscale). Uniquement avec votre propre serveur : votre bibliothèque Manyfold, les durées exactes pour Klipper et la détection d'erreurs par IA.</li>
+    </ol>
+    <p style="color:var(--muted)">Les deux sont gratuits. Pas à pas : <a href="/help/">Aide</a> (en anglais ; débutants et avancés). Installation de votre propre serveur : <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
+  </section>
+
+  <footer>
+    <a href="/help/">Aide</a><a href="/privacy/">Confidentialité</a><a href="/impressum/">Mentions légales</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
+    <div style="margin-top:10px">PocketPrint3D est un projet open source indépendant (licence MIT), sans lien avec un fabricant d'imprimantes, Printables, Thingiverse, MakerWorld, OrcaSlicer, Obico, Manyfold ou Spoolman.</div>
+  </footer>
+</div>
+</body>
+</html>
