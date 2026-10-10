@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aide – PocketPrint3D</title>
+<meta name="description" content="Utiliser PocketPrint3D : bien démarrer en 7 étapes, puis les fonctions avancées – pont, navigateur, OrcaSlicer, bobines, multicolore, serveur personnel.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="alternate" hreflang="en" href="https://pocketprint3d.com/help/">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/hilfe/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/aide/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap help">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/fr/">PocketPrint3D</a>
+    <nav><a class="opt" href="#demarrer">Bien démarrer</a><a class="opt" href="#avance">Avancé</a><a href="/help/" hreflang="en" title="English">EN</a><a href="/de/hilfe/" hreflang="de" title="Deutsch">DE</a></nav>
+  </header>
+
+  <h1>Aide</h1>
+  <p style="color:var(--muted);margin:0 0 18px">Deux guides : commencez par le premier. Le second explique tout ce que vous pouvez
+    ajouter plus tard – tout y est facultatif.</p>
+  <div class="tip">L'application est pour l'instant en anglais et en allemand. Les noms des menus sont donc indiqués ici en anglais,
+    tels que vous les voyez dans l'application.</div>
+  <div class="tiles">
+    <a class="tile" href="#demarrer"><span class="tag">Débutants</span><strong>Bien démarrer</strong><span>De l'installation de l'application à votre première impression – 7 étapes, environ 10 minutes.</span></a>
+    <a class="tile" href="#avance"><span class="tag">Avancé</span><strong>Plus de possibilités</strong><span>Imprimer de partout, sur l'ordinateur, depuis OrcaSlicer, bobines, multicolore, serveur personnel.</span></a>
+  </div>
+
+  <!-- ================= DÉBUTANTS ================= -->
+  <section id="demarrer">
+    <h2>Bien démarrer</h2>
+    <div class="tip"><strong>Il vous faut :</strong> votre imprimante 3D allumée et connectée à votre Wi-Fi (Elegoo Centauri Carbon,
+      une imprimante Klipper, une Prusa avec PrusaLink, une Bambu Lab en mode LAN ou une installation OctoPrint), votre téléphone
+      sur le <strong>même Wi-Fi</strong> et une adresse e-mail. Rien à installer à la maison.</div>
+    <ol class="big">
+      <li><strong>Installez l'application</strong>
+        <p>Android : actuellement en test bêta sur Google Play. iPhone : bientôt. Sur un ordinateur, vous pouvez utiliser
+          <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> avec le même compte.</p></li>
+      <li><strong>Inscrivez-vous – juste avec votre e-mail</strong>
+        <p>Appuyez sur <span class="path">Sign up for free</span>, saisissez votre e-mail puis le code à 6 chiffres que vous recevez.
+          Pas de mot de passe.</p></li>
+      <li><strong>Ajoutez votre imprimante</strong>
+        <p>Appuyez sur <span class="path">Add printer</span>. L'application cherche sur votre Wi-Fi et affiche votre imprimante –
+          appuyez dessus, puis sur <span class="path">Save</span>. Prusa : saisissez aussi le mot de passe PrusaLink (écran de
+          l'imprimante → Settings → Network). OctoPrint : une clé API (OctoPrint → Settings → Application Keys). Bambu Lab : le code
+          d'accès (voir plus bas).</p></li>
+      <li><strong>Trouvez un modèle</strong>
+        <p>Dans <span class="path">Discover</span>, cherchez sur Printables ou Thingiverse. Ou partagez le lien d'un modèle depuis
+          votre navigateur avec PocketPrint3D, ou ouvrez un fichier (STL, 3MF, OBJ, STEP) avec
+          <span class="path">Choose a file</span>.</p></li>
+      <li><strong>Préparez l'impression</strong>
+        <p>Choisissez le matériau et la qualité – les réglages par défaut conviennent à la plupart des modèles. Des supports
+          seulement pour les surplombs. Puis <span class="path">Prepare print</span> : après environ une minute, vous voyez la durée
+          d'impression, le filament et un aperçu.</p></li>
+      <li><strong>Imprimez</strong>
+        <p>Vérifiez l'aperçu, appuyez sur <span class="path">Print</span> et confirmez que le plateau est vide et que le bon matériau
+          est chargé. Rien ne démarre jamais sans cette confirmation.</p></li>
+      <li><strong>Suivez l'impression</strong>
+        <p>L'onglet <span class="path">Printers</span> affiche la progression, le temps restant et les températures. C'est là que vous
+          mettez en pause, reprenez ou annulez. Dans <span class="path">Jobs</span>, l'impression apparaît comme « Printing », puis
+          « Printed » ou « Cancelled ». Encore une fois ? Ouvrez la tâche et appuyez sur <span class="path">Print again</span>.</p></li>
+    </ol>
+
+    <h3>Si quelque chose ne marche pas</h3>
+    <dl>
+      <dt>L'imprimante n'est pas trouvée</dt>
+      <dd>Est-elle allumée et votre téléphone est-il sur le même Wi-Fi (pas en données mobiles, pas sur un réseau invité) ? Un VPN
+        sur le téléphone (p. ex. Tailscale) peut aussi empêcher la recherche : désactivez-le un instant. Appuyez sur
+        <span class="path">Search again</span>, ou <span class="path">Enter the address yourself</span> – l'imprimante affiche son
+        adresse IP dans son menu réseau.</dd>
+      <dt>« Not reachable »</dt>
+      <dd>À la maison, l'application parle directement à l'imprimante. Hors de chez vous, cela ne marche qu'avec un pont (voir plus bas).</dd>
+      <dt>Le fichier est sur l'imprimante mais l'impression n'a pas démarré</dt>
+      <dd>Certaines imprimantes ignorent parfois l'ordre de démarrage. Lancez le fichier sur l'écran de l'imprimante – il y est déjà.</dd>
+      <dt>La tâche indique encore « Printing » alors que l'impression est finie</dt>
+      <dd>La tâche l'apprend de l'imprimante : avec un pont en moins d'une minute, sans pont quand votre téléphone est à la maison et
+        que l'application affiche l'onglet <span class="path">Printers</span>. Ouvrez-le une fois sur votre Wi-Fi.</dd>
+      <dt>Le modèle est trop grand ou le tranchage échoue</dt>
+      <dd>Essayez une taille plus petite (<span class="path">Size</span> dans « On the plate ») ou un autre fichier du modèle.</dd>
+    </dl>
+  </section>
+
+  <!-- ================= AVANCÉ ================= -->
+  <section id="avance">
+    <h2>Pour les utilisateurs avancés</h2>
+    <p style="color:var(--muted)">Tout ici est facultatif. La plupart se trouve sous <span class="path">Settings → Advanced</span>.</p>
+
+    <h3>Choisissez votre installation</h3>
+    <div class="table-wrap"><table>
+      <tr><th></th><th>Cloud seul</th><th>Cloud + pont</th><th>Serveur personnel</th></tr>
+      <tr><td>À installer à la maison</td><td>rien</td><td>un petit pont (Docker, Home Assistant, Raspberry Pi)</td><td>serveur PocketPrint3D (Unraid, Home Assistant, Docker)</td></tr>
+      <tr><td>Tranchage</td><td>dans le cloud</td><td>dans le cloud</td><td>à la maison</td></tr>
+      <tr><td>Imprimer à la maison</td><td>✓ téléphone sur le Wi-Fi</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Imprimer de partout</td><td>–</td><td>✓ aussi depuis le navigateur</td><td>✓ avec l'option pont (ou Tailscale)</td></tr>
+      <tr><td>Caméra, commandes, timelapse</td><td>–</td><td>✓</td><td>✓</td></tr>
+      <tr><td>En plus</td><td></td><td></td><td>bibliothèque de modèles, détection d'erreurs par IA, prise connectée, durées exactes pour Klipper</td></tr>
+    </table></div>
+
+    <h3>Piloter l'imprimante</h3>
+    <p>Sur l'onglet <span class="path">Printers</span>, le bouton <span class="path">Control</span> ouvre une page par imprimante
+      avec tout le reste – jamais pendant une impression :</p>
+    <ul class="plain">
+      <li><strong>Températures</strong> avec courbe, préchauffage PLA/PETG, refroidissement ; ventilateurs, éclairage, vitesse.</li>
+      <li><strong>Move :</strong> prise d'origine (<em>Home all axes</em>), puis déplacer X, Y et Z par pas de 0,1 à 100 mm.
+        Faites d'abord la prise d'origine ; attention en descendant Z, la buse peut toucher le plateau.</li>
+      <li><strong>Extruder and filament :</strong> choisissez le matériau (PLA 220 °C, PETG 250 °C …) puis <em>Load filament</em> ou
+        <em>Unload filament</em> – la buse chauffe d'abord, puis le filament est tiré vers l'intérieur ou ressorti. Pour charger,
+        poussez le filament jusqu'en butée dans l'extrudeur. Sur la Centauri Carbon cela s'exécute comme une courte tâche sur
+        l'imprimante ; sur une Bambu Lab, choisissez le bac de l'AMS.</li>
+      <li><strong>Macros</strong> (imprimantes Klipper) : les commandes configurées sur votre imprimante, p. ex. le nettoyage de la buse.</li>
+    </ul>
+
+    <h3>Imprimer de partout (pont)</h3>
+    <div class="tip">Vous débutez ? <a href="/fr/pont/"><strong>Installer un pont sur un Raspberry Pi</strong></a> – liste d'achats
+      (environ 60 €) et image de carte prête à l'emploi : l'écrire, brancher câble et alimentation, appuyer sur « Connect » dans
+      l'application.</div>
+    <ol class="steps">
+      <li>Faites tourner un pont à la maison : sur votre propre serveur PocketPrint3D, activez <em>Connect to PocketPrint3D
+        Cloud</em> (modèle Unraid, option du module Home Assistant, ou page web du serveur → Settings). Sans serveur : la petite image
+        Docker <code>ghcr.io/halvar20000/printshare-bridge</code>.</li>
+      <li>Le pont affiche un code (journal du conteneur ou sa page web).</li>
+      <li>Dans l'application : <span class="path">Settings → Advanced → Print from anywhere</span>, saisissez le code,
+        <span class="path">Connect</span>.</li>
+      <li>Les imprimantes du pont apparaissent dans votre compte, marquées « through a bridge ». D'autres imprimantes :
+        <span class="path">Add a printer through the bridge</span> – adresse et mot de passe sont chiffrés pour que seul votre pont
+        puisse les lire.</li>
+    </ol>
+    <p style="color:var(--muted);font-size:15px">Connexion sortante uniquement : rien à ouvrir sur votre box, vos imprimantes restent hors d'Internet.</p>
+
+    <h3>Sur l'ordinateur</h3>
+    <ul class="plain">
+      <li>Ouvrez <a href="https://app.pocketprint3d.com/">app.pocketprint3d.com</a> et connectez-vous avec la même adresse e-mail – mêmes imprimantes, tâches et bobines.</li>
+      <li>Glissez un fichier de modèle sur la page pour commencer.</li>
+      <li>L'impression depuis le navigateur marche pour les imprimantes derrière un pont. Les autres sont marquées « Phone only » : lancez-les dans l'application, ou téléchargez le G-code.</li>
+    </ul>
+
+    <h3>Envoyer depuis OrcaSlicer</h3>
+    <div class="tip"><strong>Pourquoi passer par PocketPrint3D ?</strong> OrcaSlicer peut souvent joindre votre imprimante
+      directement – mais alors l'impression contourne PocketPrint3D. En passant par PocketPrint3D :
+      <ul class="plain" style="margin:8px 0 0">
+        <li><strong>Les bobines restent justes :</strong> le filament utilisé est décompté comme pour toute autre impression.</li>
+        <li><strong>De partout :</strong> trancher sur le portable au travail, l'imprimante à la maison imprime – via votre pont.</li>
+        <li><strong>Une seule vue d'ensemble :</strong> l'impression apparaît dans l'application et le navigateur – aperçu, progression, caméra, pause.</li>
+        <li><strong>Vérifier d'abord, lancer ensuite :</strong> « Upload » prépare l'impression ; vous la lancez depuis le téléphone quand le plateau est libre, en choisissant bobine et emplacement.</li>
+      </ul>
+      <p style="margin:8px 0 0">Vous ne gérez pas de bobines et n'imprimez qu'à la maison ? Alors l'envoi direct depuis OrcaSlicer
+        convient tout aussi bien. Vous n'ajoutez pas de nouvelle imprimante dans OrcaSlicer – vous donnez un autre chemin à votre
+        vraie imprimante : via PocketPrint3D.</p></div>
+    <ol class="steps">
+      <li>Dans l'application ou le navigateur : <span class="path">Settings → your printer → Send from OrcaSlicer on your computer</span> →
+        <span class="path">Create access</span>. Vous obtenez une adresse et une clé (affichée une seule fois).</li>
+      <li>Dans OrcaSlicer : icône Wi-Fi à côté de l'imprimante (ajouter une imprimante physique) → type d'hôte <strong>Octo/Klipper</strong> →
+        saisir l'adresse et la clé → <em>Test</em>.</li>
+      <li>Après le tranchage : <em>Upload</em> – l'impression attend comme tâche dans l'application. <em>Upload and print</em> –
+        démarre tout de suite sur une imprimante derrière un pont et décompte la dernière bobine utilisée.</li>
+    </ol>
+
+    <h3>Bobines de filament</h3>
+    <ul class="plain">
+      <li><span class="path">Settings → Advanced → Filament spools</span> : gardez vos bobines dans votre compte PocketPrint3D, ou
+        connectez votre propre Spoolman – c'est vous qui choisissez. Vous passez à la cloud plus tard ? Un appui copie toutes les
+        bobines de votre Spoolman dans le compte.</li>
+      <li>À l'impression, choisissez la bobine pour chaque couleur. Vous êtes averti si l'une ne suffit pas ou si le matériau ne correspond pas.</li>
+      <li>Le filament utilisé est décompté à la fin de l'impression. Avec les bobines dans le compte, cela marche aussi application fermée (imprimantes derrière un pont).</li>
+      <li>Nouvelles bobines : choisissez-les dans la base de filaments, ou approchez le téléphone d'une bobine NFC OpenPrintTag (Android).
+        N'importe quel autocollant NFC peut aussi être associé une fois à une bobine.</li>
+    </ul>
+
+    <h3>Timelapse</h3>
+    <ul class="plain">
+      <li>Sur l'écran de vérification, activez <span class="path">Record a time-lapse</span> (désactivé par défaut) – ou une fois pour
+        toutes dans <span class="path">Settings → Time-lapse</span>. Le bouton apparaît pour les imprimantes avec une caméra que votre
+        serveur ou un pont peut joindre.</li>
+      <li>Pendant l'impression, une image est prise par couche (Centauri Carbon, Klipper, Bambu Lab) ou toutes les 30 secondes (Prusa, OctoPrint).</li>
+      <li>À la fin, une courte vidéo est créée. Sur la tâche : <span class="path">Watch the time-lapse</span> – avec
+        <span class="path">Download the video</span>. Elle est supprimée avec la tâche au bout de 14 jours.</li>
+    </ul>
+
+    <h3>Imprimantes Bambu Lab (P1S, P1P, X1, A1)</h3>
+    <ol class="steps">
+      <li><strong>Sur l'imprimante :</strong> <span class="path">Settings → WLAN</span>, activez <span class="path">LAN Only Mode</span> ;
+        avec les firmwares récents aussi le <span class="path">Developer Mode</span> (affiché en dessous). Le
+        <strong>code d'accès</strong> à 8 caractères est sur le même écran. Sans mode LAN, l'imprimante affiche son état mais ignore
+        les impressions venant d'autres applications. En mode LAN, elle n'est plus connectée au cloud Bambu (Bambu Handy).</li>
+      <li><strong>Dans l'application :</strong> <span class="path">Add printer</span> – l'imprimante apparaît comme « Bambu Lab P1S »
+        (Android, à la maison) ou via <span class="path">Add a printer through the bridge</span>. Saisissez le code d'accès ; le
+        modèle d'imprimante est choisi pour vous.</li>
+      <li><strong>Imprimer :</strong> choisissez le bac de l'AMS pour chaque couleur ; l'image de la caméra, le timelapse et
+        l'éclairage marchent comme sur les autres imprimantes.</li>
+    </ol>
+
+    <h3>Votre propre caméra (RTSP / webcam)</h3>
+    <p>Pour les imprimantes derrière un pont : <span class="path">Settings → your printer → Own camera</span>, saisissez p. ex.
+      <code>rtsp://utilisateur:motdepasse@192.168.1.60/live</code> (Eufy : <code>…/live0</code>, Wyze : <code>…/live</code>, un
+      Raspberry Pi avec mediamtx : <code>rtsp://IP:8554/cam</code>) ou l'adresse d'une webcam (<code>http://IP/capture</code> pour un
+      ESP32-CAM). Elle remplace la caméra intégrée pour l'image, le timelapse et la détection d'erreurs. Caméra montée de côté ?
+      Ajoutez <code>#rotate=90</code> (ou 180, 270) à l'adresse – PocketPrint3D tourne l'image dans le sens horaire ; ce n'est jamais
+      envoyé à la caméra. L'adresse est transmise chiffrée au pont. Serveur personnel : <code>camera_url:</code> dans config.yaml.</p>
+
+    <h3>Multicolore (AFC / CANVAS)</h3>
+    <p>Pour les modèles multicolores, choisissez l'emplacement de chaque couleur avant la préparation ; les emplacements vides sont
+      signalés et le matériau suit le filament de l'emplacement. Pris en charge sur les imprimantes Klipper avec AFC (p. ex. Centauri
+      Carbon avec COSMOS + CANVAS) et sur Bambu Lab avec AMS.</p>
+
+    <h3>Vos propres profils OrcaSlicer</h3>
+    <p><span class="path">Settings → your printer → Printer profile</span> : importez vos profils d'imprimante, de qualité et de
+      matériau OrcaSlicer, ou collez le lien d'un bundle Orca Cloud public. Ils servent tout de suite au tranchage.</p>
+
+    <h3>En plus avec votre propre serveur</h3>
+    <dl>
+      <dt>Votre bibliothèque de modèles</dt><dd>Manyfold à la maison apparaît comme source de recherche à côté de Printables.</dd>
+      <dt>Détection d'erreurs par IA</dt><dd>Avec l'API ML d'Obico, les images de la caméra sont analysées pendant l'impression ; un échec probable peut mettre l'impression en pause.</dd>
+      <dt>Imprimante marche/arrêt</dt><dd>Une prise connectée dans Home Assistant allume et éteint l'imprimante depuis l'application.</dd>
+      <dt>Durées exactes pour Klipper</dt><dd>Durées recalculées avec les limites propres de votre imprimante (klipper_estimator).</dd>
+    </dl>
+    <p style="color:var(--muted);font-size:15px">Installation et détails : <a href="https://github.com/halvar20000/printshare">GitHub</a> (README, en anglais).
+      Il manque quelque chose ou ça ne marche pas ? Ouvrez une « issue » là-bas.</p>
+  </section>
+
+  <footer>
+    <a href="/fr/">Accueil</a><a href="/privacy/">Confidentialité</a><a href="/impressum/">Mentions légales</a><a href="https://github.com/halvar20000/printshare">GitHub</a>
+  </footer>
+</div>
+</body>
+</html>

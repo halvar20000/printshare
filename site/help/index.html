@@ -7,6 +7,7 @@
 <meta name="description" content="How to use PocketPrint3D: getting started in 7 steps, and the advanced features – bridge, browser, OrcaSlicer, spools, multicolour, own server.">
 <link rel="icon" href="/assets/favicon.png">
 <link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/hilfe/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/aide/">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
@@ -14,7 +15,7 @@
   <header class="top">
     <img src="/assets/icon-192.png" alt="">
     <a class="brand" href="/">PocketPrint3D</a>
-    <nav><a class="opt" href="#start">Getting started</a><a class="opt" href="#advanced">Advanced</a><a href="/de/hilfe/" hreflang="de">Deutsch</a></nav>
+    <nav><a class="opt" href="#start">Getting started</a><a class="opt" href="#advanced">Advanced</a><a href="/de/hilfe/" hreflang="de" title="Deutsch">DE</a><a href="/fr/aide/" hreflang="fr" title="Français">FR</a></nav>
   </header>
 
   <h1>Help</h1>
@@ -58,7 +59,8 @@
     <h3>If something doesn't work</h3>
     <dl>
       <dt>The printer isn't found</dt>
-      <dd>Is it switched on and is your phone on the same Wi-Fi (not on mobile data, not on a guest network)? Tap
+      <dd>Is it switched on and is your phone on the same Wi-Fi (not on mobile data, not on a guest network)? A VPN on the
+        phone (e.g. Tailscale) can block the search too: switch it off for a moment. Tap
         <span class="path">Search again</span>, or <span class="path">Enter the address yourself</span> – the printer shows its IP
         address in its network menu.</dd>
       <dt>"Not reachable"</dt>
@@ -88,6 +90,20 @@
       <tr><td>Camera, controls, time-lapse</td><td>–</td><td>✓</td><td>✓</td></tr>
       <tr><td>Extras</td><td></td><td></td><td>model library, AI failure detection, smart plug, exact Klipper times</td></tr>
     </table></div>
+
+    <h3>Control the printer</h3>
+    <p>On the <span class="path">Printers</span> tab, <span class="path">Control</span> opens one page per printer with everything
+      else – never while a print runs:</p>
+    <ul class="plain">
+      <li><strong>Temperatures</strong> with a chart, preheat PLA/PETG, cool down; fans, light, speed.</li>
+      <li><strong>Move:</strong> <em>Home all axes</em>, then move X, Y and Z in steps of 0.1 to 100 mm. Home first; careful when
+        lowering Z, the nozzle can touch the bed.</li>
+      <li><strong>Extruder and filament:</strong> choose the material (PLA 220 °C, PETG 250 °C …), then <em>Load filament</em> or
+        <em>Unload filament</em> – the nozzle heats up first, then the filament is pulled in or pushed out. To load, push the filament
+        into the extruder until it stops. On the Centauri Carbon this runs as a short job on the printer; on a Bambu Lab choose the
+        AMS tray.</li>
+      <li><strong>Macros</strong> (Klipper printers): the commands set up on your printer, e.g. cleaning the nozzle.</li>
+    </ul>
 
     <h3>Print from anywhere (bridge)</h3>
     <div class="tip">New to this? <a href="/bridge/"><strong>Set up a bridge on a Raspberry Pi</strong></a> – shopping list (about €60)

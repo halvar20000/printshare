@@ -7,6 +7,7 @@
 <meta name="description" content="Unterwegs drucken mit PocketPrint3D: eine Brücke mit einem Raspberry Pi einrichten – Einkaufsliste und Anleitung Schritt für Schritt, für Einsteiger.">
 <link rel="icon" href="/assets/favicon.png">
 <link rel="alternate" hreflang="en" href="https://pocketprint3d.com/bridge/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/pont/">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
@@ -14,7 +15,7 @@
   <header class="top">
     <img src="/assets/icon-192.png" alt="">
     <a class="brand" href="/de/">PocketPrint3D</a>
-    <nav><a href="/de/hilfe/">Hilfe</a><a href="/bridge/" hreflang="en">English</a></nav>
+    <nav><a href="/de/hilfe/">Hilfe</a><a href="/bridge/" hreflang="en" title="English">EN</a><a href="/fr/pont/" hreflang="fr" title="Français">FR</a></nav>
   </header>
 
   <h1>Brücke einrichten</h1>
@@ -77,7 +78,8 @@
     <h3>Wenn etwas nicht klappt</h3>
     <dl>
       <dt>Die App findet die Brücke nicht</dt>
-      <dd>Ist das Handy im WLAN zu Hause (nicht mobile Daten)? Leuchtet die Lampe an der Netzwerkbuchse des Pi? Nach dem ersten Start
+      <dd>Ist das Handy im WLAN zu Hause (nicht mobile Daten)? Ein VPN auf dem Handy (z. B. Tailscale) verhindert die Suche:
+        kurz ausschalten. Leuchtet die Lampe an der Netzwerkbuchse des Pi? Nach dem ersten Start
         3 Minuten warten, dann <em>Erneut suchen</em> antippen. Sonst die Seite der Brücke öffnen (oben) und den Code eingeben.</dd>
       <dt>„pocketprint3d.local“ öffnet sich nicht</dt>
       <dd>Schau im Router nach der Adresse des Pi (Gerät „pocketprint3d“) und öffne diese, z. B. <code>http://192.168.1.42</code>.</dd>
@@ -89,6 +91,13 @@
     <p style="color:var(--muted);font-size:15px">Sicher gebaut: Das Image hat kein Standard-Passwort und keinen Fernzugang (SSH) –
       niemand kann sich auf dem Pi anmelden. Den Kopplungscode zeigt es nur in deinem Heimnetz. Das Image wird offen auf GitHub aus
       <a href="https://github.com/halvar20000/printshare/tree/main/pi-image">pi-image/</a> gebaut.</p>
+  </section>
+
+  <section>
+    <h3>Optional: Raspberry-Pi-Kamera</h3>
+    <p>Steckst du eine Raspberry-Pi-Kamera (z. B. Camera Module v2) an den Pi, ist sie sofort unter
+      <code>rtsp://Pi-Adresse:8554/cam</code> erreichbar – in der App als <span class="path">Eigene Kamera</span> deines Druckers
+      eintragen. Bild steht auf dem Kopf? <code>#rotate=180</code> anhängen.</p>
   </section>
 
   <section>

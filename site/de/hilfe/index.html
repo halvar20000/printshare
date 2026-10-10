@@ -7,6 +7,7 @@
 <meta name="description" content="So nutzt du PocketPrint3D: der Einstieg in 7 Schritten und die Möglichkeiten für Fortgeschrittene – Brücke, Browser, OrcaSlicer, Spulen, Mehrfarbdruck, eigener Server.">
 <link rel="icon" href="/assets/favicon.png">
 <link rel="alternate" hreflang="en" href="https://pocketprint3d.com/help/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/aide/">
 <link rel="stylesheet" href="/assets/style.css">
 </head>
 <body>
@@ -14,7 +15,7 @@
   <header class="top">
     <img src="/assets/icon-192.png" alt="">
     <a class="brand" href="/de/">PocketPrint3D</a>
-    <nav><a class="opt" href="#start">Einstieg</a><a class="opt" href="#fortgeschritten">Fortgeschritten</a><a href="/help/" hreflang="en">English</a></nav>
+    <nav><a class="opt" href="#start">Einstieg</a><a class="opt" href="#fortgeschritten">Fortgeschritten</a><a href="/help/" hreflang="en" title="English">EN</a><a href="/fr/aide/" hreflang="fr" title="Français">FR</a></nav>
   </header>
 
   <h1>Hilfe</h1>
@@ -58,7 +59,8 @@
     <h3>Wenn etwas nicht klappt</h3>
     <dl>
       <dt>Der Drucker wird nicht gefunden</dt>
-      <dd>Ist er eingeschaltet und dein Handy im selben WLAN (nicht mobile Daten, kein Gäste-WLAN)?
+      <dd>Ist er eingeschaltet und dein Handy im selben WLAN (nicht mobile Daten, kein Gäste-WLAN)? Auch ein VPN auf dem
+        Handy (z. B. Tailscale) kann die Suche verhindern: kurz ausschalten.
         <span class="path">Erneut suchen</span> antippen oder <span class="path">Adresse selbst eingeben</span> – der Drucker zeigt
         seine IP-Adresse im Netzwerk-Menü.</dd>
       <dt>„Nicht erreichbar“</dt>
@@ -88,6 +90,20 @@
       <tr><td>Kamera, Steuerung, Zeitraffer</td><td>–</td><td>✓</td><td>✓</td></tr>
       <tr><td>Extras</td><td></td><td></td><td>Modell-Bibliothek, KI-Fehlererkennung, smarte Steckdose, genaue Klipper-Zeiten</td></tr>
     </table></div>
+
+    <h3>Drucker bedienen</h3>
+    <p>Im Tab <span class="path">Drucker</span> öffnet <span class="path">Steuerung</span> eine Seite pro Drucker mit allem
+      Weiteren – nie während eines Drucks:</p>
+    <ul class="plain">
+      <li><strong>Temperaturen</strong> mit Verlauf, Vorheizen PLA/PETG, Abkühlen; Lüfter, Licht, Geschwindigkeit.</li>
+      <li><strong>Bewegen:</strong> <em>Alle Achsen homen</em>, dann X, Y und Z in Schritten von 0,1 bis 100 mm bewegen. Zuerst
+        homen; Vorsicht beim Absenken von Z, die Düse kann das Bett berühren.</li>
+      <li><strong>Extruder und Filament:</strong> Material wählen (PLA 220 °C, PETG 250 °C …), dann <em>Filament laden</em> oder
+        <em>Filament entladen</em> – erst heizt die Düse, dann wird das Filament eingezogen oder herausgezogen. Zum Laden das
+        Filament bis zum Anschlag in den Extruder schieben. Beim Centauri Carbon läuft das als kurzer Auftrag auf dem Drucker; bei
+        Bambu Lab das AMS-Fach wählen.</li>
+      <li><strong>Makros</strong> (Klipper-Drucker): die auf deinem Drucker eingerichteten Befehle, z. B. Düse reinigen.</li>
+    </ul>
 
     <h3>Unterwegs drucken (Brücke)</h3>
     <div class="tip">Neu dabei? <a href="/de/bruecke/"><strong>Brücke mit einem Raspberry Pi einrichten</strong></a> – Einkaufsliste

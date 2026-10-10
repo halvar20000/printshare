@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installer un pont – PocketPrint3D</title>
+<meta name="description" content="Imprimer de partout avec PocketPrint3D : installer un pont sur un Raspberry Pi – liste d'achats et guide pas à pas pour débutants.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="alternate" hreflang="en" href="https://pocketprint3d.com/bridge/">
+<link rel="alternate" hreflang="de" href="https://pocketprint3d.com/de/bruecke/">
+<link rel="alternate" hreflang="fr" href="https://pocketprint3d.com/fr/pont/">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<div class="wrap help">
+  <header class="top">
+    <img src="/assets/icon-192.png" alt="">
+    <a class="brand" href="/fr/">PocketPrint3D</a>
+    <nav><a href="/fr/aide/">Aide</a><a href="/bridge/" hreflang="en" title="English">EN</a><a href="/de/bruecke/" hreflang="de" title="Deutsch">DE</a></nav>
+  </header>
+
+  <h1>Installer un pont</h1>
+  <p style="color:var(--muted);margin:0 0 18px">Avec un pont à la maison, vous accédez à vos imprimantes de partout et depuis le
+    navigateur – état, caméra, impression, timelapse. Le pont se connecte uniquement <em>vers l'extérieur</em> : rien à ouvrir sur
+    votre box, vos imprimantes restent hors d'Internet.</p>
+
+  <div class="tip"><strong>Vous avez déjà un serveur Unraid, Home Assistant ou une machine Docker ?</strong> Alors pas besoin de
+    nouveau matériel : activez simplement <em>Connect to PocketPrint3D Cloud</em> dessus (modèle Unraid, option du module Home
+    Assistant) – voir l'<a href="/fr/aide/#avance">aide</a>. Cette page est pour tous les autres.</div>
+
+  <section>
+    <h2>1. Ce qu'il vous faut – environ 60 €</h2>
+    <div class="table-wrap"><table>
+      <tr><th>Élément</th><th>À quoi faire attention</th><th>env.</th></tr>
+      <tr><td><strong>Raspberry Pi 3 Model B</strong> (ou 3B+, 4, 5)</td><td>Un Pi 3 suffit largement. Il a une prise Ethernet – c'est important.</td><td>38 €</td></tr>
+      <tr><td><strong>Alimentation</strong></td><td>Pour le Pi 3 : micro-USB, 5 V, 2,5 A (idéalement l'officielle). Pi 4/5 : USB-C (3 A / 5 A).</td><td>10 €</td></tr>
+      <tr><td><strong>Carte microSD</strong></td><td>16 ou 32 Go, une carte de marque (p. ex. SanDisk, Samsung).</td><td>8 €</td></tr>
+      <tr><td><strong>Boîtier</strong></td><td>Adapté au modèle, pour éviter tout court-circuit.</td><td>6 €</td></tr>
+      <tr><td><strong>Câble réseau</strong></td><td>Du Pi à votre box (ou à un switch). Il en traîne souvent un quelque part.</td><td>3 €</td></tr>
+    </table></div>
+    <p style="color:var(--muted);font-size:15px">Disponible dans les boutiques d'électronique comme Kubii, The Pi Hut, Pimoroni ou
+      Reichelt. Une seule fois : un ordinateur avec un lecteur de cartes (ou un lecteur USB pour quelques euros).</p>
+    <div class="tip"><strong>Pourquoi un câble ?</strong> Pas de Wi-Fi à configurer, une connexion plus fiable, et le pont trouve tout
+      seul vos imprimantes sur votre réseau. Un Raspberry Pi Zero 2 W (Wi-Fi uniquement) marche aussi, mais avec la méthode décrite
+      en bas de cette page.</div>
+  </section>
+
+  <section>
+    <h2>2. Installation – environ 10 minutes, sans rien taper</h2>
+    <p>Nous fournissons une image de carte prête à l'emploi : Raspberry Pi OS avec le pont déjà installé.</p>
+    <ol class="big">
+      <li><strong>Téléchargez l'image</strong>
+        <p><a class="btn primary" href="https://github.com/halvar20000/printshare/releases/latest/download/pocketprint3d-bridge-pi.img.xz">Télécharger l'image PocketPrint3D</a>
+          (environ 750 Mo, pour les Raspberry Pi 3, 4 et 5). Inutile de la décompresser.</p></li>
+      <li><strong>Écrivez-la sur la carte</strong>
+        <p>Installez <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> sur votre ordinateur (Windows, Mac ou
+          Linux) et insérez la carte microSD. Dans l'Imager :
+          <span class="path">Appareil : votre Raspberry Pi</span> →
+          <span class="path">Système d'exploitation : Utiliser une image personnalisée → le fichier téléchargé</span> →
+          <span class="path">Stockage : votre carte SD</span> → <em>Suivant</em>. S'il propose de personnaliser les réglages :
+          <em>Non</em>. Puis <em>Écrire</em> – cela prend quelques minutes.</p></li>
+      <li><strong>Branchez le Pi</strong>
+        <p>La carte dans le Pi, le câble réseau vers la box, l'alimentation en dernier. Le premier démarrage prend environ 3 minutes.</p></li>
+      <li><strong>Connectez-le dans l'application</strong>
+        <p>Avec votre téléphone sur le Wi-Fi de la maison, ouvrez l'application PocketPrint3D :
+          <span class="path">Settings → Advanced → Print from anywhere</span>. Le pont apparaît sous
+          <span class="path">Found on your Wi-Fi</span> – appuyez dessus. Puis <span class="path">Add a printer through the bridge</span> –
+          le pont trouve vos imprimantes tout seul. C'est fait !</p></li>
+    </ol>
+    <div class="tip"><strong>Plus rien à faire ensuite.</strong> Le pont redémarre tout seul après une coupure de courant et installe
+      la nuit les nouvelles versions et les mises à jour de sécurité.</div>
+  </section>
+
+  <section>
+    <h3>Avec le navigateur au lieu du téléphone</h3>
+    <p>Sur un ordinateur du même réseau, ouvrez <a href="http://pocketprint3d.local">http://pocketprint3d.local</a>. La page affiche un
+      <strong>code d'appairage</strong> (p. ex. <code>K7Q4-M2ZX</code>) : sur app.pocketprint3d.com, allez dans
+      <span class="path">Settings → Advanced → Print from anywhere</span>, saisissez le code → <span class="path">Connect</span>.</p>
+
+    <h3>Si quelque chose ne marche pas</h3>
+    <dl>
+      <dt>L'application ne trouve pas le pont</dt>
+      <dd>Le téléphone est-il sur le Wi-Fi de la maison (pas en données mobiles) ? Un VPN sur le téléphone (p. ex. Tailscale)
+        empêche la recherche : désactivez-le un instant. Le voyant de la prise réseau du Pi est-il allumé ? Après le premier démarrage,
+        attendez 3 minutes, puis appuyez sur <em>Search again</em>. Sinon, ouvrez la page du pont (ci-dessus) et saisissez le code.</dd>
+      <dt>« pocketprint3d.local » ne s'ouvre pas</dt>
+      <dd>Cherchez l'adresse du Pi dans votre box (appareil « pocketprint3d ») et ouvrez-la, p. ex. <code>http://192.168.1.42</code>.</dd>
+      <dt>Le code a expiré</dt>
+      <dd>Il est valable 10 minutes ; la page en affiche un nouveau toute seule.</dd>
+      <dt>L'application indique « bridge offline »</dt>
+      <dd>Le Pi est-il alimenté et le câble réseau branché ? Après le branchement, il faut environ deux minutes.</dd>
+    </dl>
+    <p style="color:var(--muted);font-size:15px">Sûr par conception : l'image n'a ni mot de passe par défaut ni accès à distance (SSH)
+      – personne ne peut se connecter au Pi. Le code d'appairage n'est affiché que sur votre réseau local. L'image est construite de
+      façon transparente sur GitHub à partir de <a href="https://github.com/halvar20000/printshare/tree/main/pi-image">pi-image/</a>.</p>
+  </section>
+
+  <section>
+    <h3>Option : caméra Raspberry Pi</h3>
+    <p>Vous branchez une caméra Raspberry Pi (p. ex. Camera Module v2) sur le Pi ? Elle est disponible tout de suite à l'adresse
+      <code>rtsp://IP-du-Pi:8554/cam</code> – à saisir comme <span class="path">Own camera</span> de votre imprimante dans
+      l'application. Image à l'envers ? Ajoutez <code>#rotate=180</code>.</p>
+  </section>
+
+  <section>
+    <h3>Autre méthode : l'installer vous-même</h3>
+    <p>Pour un Raspberry Pi Zero 2 W (Wi-Fi uniquement), un Pi que vous utilisez déjà, ou n'importe quel ordinateur Debian/Ubuntu :
+      installez <em>Raspberry Pi OS Lite (64-bit)</em> avec l'Imager comme d'habitude (avec le Wi-Fi et SSH dans ses réglages),
+      connectez-vous avec <code>ssh</code> et lancez une seule commande :</p>
+    <code class="cmd">curl -fsSL https://pocketprint3d.com/install-bridge.sh | sh</code>
+    <p>Elle installe Docker et le pont dans <code>/opt/pocketprint3d-bridge</code> et affiche le code d'appairage à la fin (à nouveau
+      avec <code>pocketprint3d-code</code>). Lisez-la d'abord : <a href="/install-bridge.sh">install-bridge.sh</a>.
+      Questions ou problèmes : <a href="https://github.com/halvar20000/printshare">GitHub</a>.</p>
+  </section>
+
+  <footer>
+    <a href="/fr/">Accueil</a><a href="/fr/aide/">Aide</a><a href="/privacy/">Confidentialité</a><a href="/impressum/">Mentions légales</a>
+  </footer>
+</div>
+</body>
+</html>
