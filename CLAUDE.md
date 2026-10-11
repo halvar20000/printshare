@@ -128,9 +128,16 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - Pairing command: the Unraid template names the container `PrintShare` (docker exec is case-sensitive),
   compose / `docker run` use `printshare` → app + docs show both (PR #1).
 
-## Open issues from this test (GitHub)
-#2 profile upload + no manual config mode · #3 camera in the app · #4 G-code preview (2D layer viewer already
-in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED) · #6 AFC lane selection · #7 Orca Cloud profile sync.
+## Open issues (GitHub, checked 2026-10-11)
+- #2 profile upload, #3 camera, #4 G-code preview, #5 printer control, #6 AFC lane selection, #9 power via HA,
+  #10 pairing QR in the web UI, #12 slots before slicing, #16 Printables in the app: all **closed** 2026-10-06.
+- Still open: #7 Orca Cloud profile sync (account sync built in 0.42.0-0.45.0, waits for an own client_id) ·
+  #21 question: route the app's Spoolman access through the server instead of directly? ·
+  #24 set slots on Klipper/AFC (COSMOS + CANVAS): material, colour and spool to the AFC lane ·
+  #25 Centauri stock firmware (SDCP) + CANVAS: read and set slots · #26 set slots for printers the phone reaches
+  directly (cloud without a bridge) · #27 slots for other multicolour systems (Prusa MMU3/XL via PrusaLink, Happy Hare,
+  OctoPrint) · #28 own server behind a reverse proxy (Nginx) with a sub-path and a login in front ·
+  #30 Android: delete printer profiles by selection, not only by long press.
 
 ## Current state of the Unraid install (2026-09-26 evening)
 - `docker build` is GREEN on Unraid (image `printshare:0.1`, Orca 2.4.2 `--help` runs). Needed extra
@@ -473,7 +480,7 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   EAS slug, deep link `printshare://`, `/api/info` `"name": "PrintShare"` (API contract). The CHANGELOG history keeps the old name.
 
 ## Website pocketprint3d.com (2026-09-30)
-- `site/` (static, EN + `/de/`, `/privacy/`, `/impressum/`) published by `.github/workflows/pages.yml` to GitHub Pages;
+- `site/` (static, EN + `/de/` + `/fr/`, `/privacy/`, `/impressum/`) published by `.github/workflows/pages.yml` to GitHub Pages;
   the workflow refuses to publish while `[TODO` placeholders exist. Pages source must be "GitHub Actions"
   (Thomas enables it once in the repo settings, custom domain pocketprint3d.com, Enforce HTTPS).
 - DNS in Hetzner **konsoleH** (ns1.your-server.de / ns.second-ns.com / ns3.second-ns.de; no DNS API there):
@@ -481,6 +488,9 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   Reference zone file: `dns/pocketprint3d.com.zone`. konsoleH turns `MX 0 .` into `0.pocketprint3d.com` – don't use it.
 - Thomas lives in **France** (Kembs) → imprint = French "mentions légales" (LCEN: editor, contact, host), privacy
   authority CNIL. Privacy policy is a draft describing the self-hosted setup; extend it before a cloud service starts.
+- Pages per language (2026-10-10): homepage `/`, `/de/`, `/fr/`; help `/help/`, `/de/hilfe/`, `/fr/aide/`; bridge guide
+  `/bridge/`, `/de/bruecke/`, `/fr/pont/` (EN/DE/FR language links on every page). All languages list the control page,
+  the "switch off VPN/Tailscale on the phone" hint for printer/bridge search, and the Pi camera of the bridge image.
 
 ## Cloud server on Hetzner (2026-09-30)
 - Hetzner Console project `pocketprint3d` (Cloud API token `.hetzner-token`, scoped to that project; SSH key
@@ -902,7 +912,8 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   **Verified 2026-10-06** on Thomas' Pi 4 (image pi-image-v0.36.1, 772 MB): bridge at 192.168.86.94 (pairing), camera at
   `rtsp://192.168.86.94:8554/cam` → 1640x1232, ~112 KB, 4-6 s per picture through ffmpeg (camera opened on demand).
   The app found the Pi bridge on the Wi-Fi only with **Tailscale switched off** on the phone (the same discovery code run here
-  found it in 6 s) - todo: hint "switch off VPN/Tailscale" in the "no bridge found" / "no printer found" texts.
+  found it in 6 s) - the website help has the "switch off VPN/Tailscale" hint since 2026-10-10; **still todo in the app
+  texts** (`mobile/src/lib/i18n.ts`, "no bridge found" / "no printer found").
 - 0.36.1: own camera address option `#rotate=90|180|270` (fragment, never sent to the camera; `Camera.rotate`, Pillow
   transpose in `camera.snapshot`, a turned camera reports `stream: false`). For the ESP32-CAM mounted on its side in .20. Several Eufy cams on the LAN answer RTSP OPTIONS on 554 (.10/.123/.154/.191) - never send camera
   credentials to unconfirmed hosts.
@@ -1030,13 +1041,20 @@ in 0.5.0; 3D + live layer open) · #5 printer control (temps, graphs, fans, LED)
   counter (first local build = 17; queued cloud build 16 cancelled). Name the file after the versionCode in the log
   ("Incremented versionCode from … to …").
 
-## Next steps (in order)
-1. Native app: iOS dev build runs on Dominique's iPhone and started a real COSMOS print (2026-09-29).
-   Still open: EAS/TestFlight build for iOS (needs PR #1), share → slice flow on Thomas' phones.
-2. After the reboot: rerun `scripts/unraid-install.sh cc-thomas`; check that the parity check and the
-   hetzner-cls backup ran; then `printshare print <benchy> -p cc-thomas --no-start`, then a real
-   print — for both printers (Thomas: SDCP ✅ 2026-09-27; Dominique: COSMOS ✅ 2026-09-29).
-3. Then work down `docs/ROADMAP.md` (Phase 1 gaps from the spec first).
+## Next steps (updated 2026-10-11)
+Done since the first handover: Unraid install + first prints on both printers (stock SDCP 2026-09-27, COSMOS
+2026-09-29), Thomas' CC now runs COSMOS (first Benchy from the app 2026-10-08), cloud + bridge + Bambu live.
+1. iOS: decision Expo vs. Dominique's Swift app (`iDomi94/printshare-ios`), then a TestFlight build.
+2. Android: Play release beyond internal testing (privacy policy URL, data safety, store listing, demo access for review);
+   VPN/Tailscale hint in the app's search texts.
+3. Open slot issues #24-#27 (AFC lane write, CANVAS on stock firmware, phone-reached printers, MMU3/Happy Hare),
+   then #28 (reverse proxy), #30, #21; #7 waits for an Orca Cloud client_id.
+4. Not yet tried for real: OpenPrintTag tag, Manyfold, Obico ML API, Pi bridge image on a Pi 3B (Pi 4 works), Bambu without a
+   bridge on a phone, Bambu load/unload, Centauri stock load/unload (only if a stock CC user asks), thumbnails on a Prusa screen,
+   OrcaSlicer desktop "send to PocketPrint3D", a real Prusa/OctoPrint printer.
+5. Unraid Community Applications submission (needs `ca_profile.xml`, template polish, forum support thread, then
+   ca.unraid.net/submit) - planned 2026-09-27, not done yet.
+6. Then work down `docs/ROADMAP.md`.
 
 ## Conventions
 - Python ≥ 3.10, English code/comments/docs; user-facing texts German first later (NF-11).
