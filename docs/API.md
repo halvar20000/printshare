@@ -630,7 +630,8 @@ the user's own Spoolman). Stored per account (cloud) or on the home server (`<co
 - NFC reader at the printer: `GET|POST|DELETE /api/printers/{id}/reader-key` (`{"enabled", "url", "key"?}`, key `pp3dr_…`
   shown once); the reader sends `POST /api/reader/scan` with `Authorization: Bearer <key>` (or `X-Api-Key`)
   `{"slot": <tool>, "uid": "<hex>"}` → `{"known", "spool", "printer_set"}`. On a home server its own token works too,
-  with `"printer": "<id>"` in the body.
+  with `"printer": "<id>"` in the body. Printers without slots use slot 0. Reader firmware: `firmware/nfc-reader/`,
+  docs/NFC-READER.md.
 
 ### Where the spools are kept (0.39.0)
 Each user chooses: cloud spools or their own Spoolman (Settings → Spoolman in the app). The server needs to know it so a

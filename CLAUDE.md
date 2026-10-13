@@ -1033,6 +1033,19 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   LOAD/UNLOAD_FILAMENT macro, else the same G-code as a script. Bambu: load with a slot (`load_slots`) / unload through
   `ams_change_filament` with the temperature. **The Centauri file approach is not tried on the real printer yet.**
 
+## NFC reader firmware (step 3, 2026-10-13) – docs/NFC-READER.md
+- Thomas got two PN5180 modules; first reader for the Centauri (the P1S have the AMS reader). His board: ESP32-S3-DevKitC-1
+  clone N16R8 ("RCB@1048", UART + USB sockets) - GPIO 35-37 = PSRAM.
+- `firmware/nfc-reader/` (PlatformIO 6.1 from /tmp/esphvenv, espressif32@6.9.0, Arduino): atrappmann/PN5180 Library 1.5
+  from the PlatformIO registry has **only ISO 15693** → own ISO 14443A UID reader `src/iso14443a.h` (WUPA, cascade
+  anticollision/select, CRC on/off via CRC_RX_CONFIG / 0x19) - written from the standard, **not yet tried with a chip**.
+  WiFiManager portal "PocketPrint3D-NFC" (Wi-Fi, reader URL, key, slot; BOOT 3 s = again), POST with Bearer key, ISRG
+  X1+X2 roots (`src/certs.h`), status page on :80, RGB LED (green known / yellow unknown / red error). UIDs in Android's
+  order (15693 as received = LSB first, 14443A UID0 first). Merged images for web.esphome.io: `build.sh` (S3 header 8 MB:
+  its partition table ends at 8 MB).
+- App: `components/SpoolReader.tsx` on the control page for printers without the filament menu (slot 0: spool in the
+  printer, unknown chip → link, reader key); the job screen proposes slot 0's spool when the printer reports no lanes.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, View, useWindowDimensions } from "react-native";
 
 import { MotionPanel } from "@/components/MotionPanel";
+import { SpoolReader } from "@/components/SpoolReader";
 import { TempChart } from "@/components/tempchart";
 import {
   Banner, Button, Card, Divider, PickerSheet, Row, Screen, Section, Segmented, confirmAsync, tap,
@@ -21,7 +22,7 @@ const PRESETS = { preheatPla: { nozzle: 210, bed: 60 }, preheatPetg: { nozzle: 2
 
 export default function Control() {
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
-  const { api, t } = useApp();
+  const { api, server, t } = useApp();
   const c = useColors();
   const { width } = useWindowDimensions();
   const [caps, setCaps] = useState<Controls | null>(null);
@@ -127,6 +128,8 @@ export default function Control() {
       <Stack.Screen options={{ title: name ?? t("control") }} />
       {error ? <View style={{ marginBottom: space }}><Banner kind="error" text={error} /></View> : null}
       {printing ? <View style={{ marginBottom: space }}><Banner kind="warn" icon="warning-outline" text={t("printRunningHint")} /></View> : null}
+
+      {!filament && api && server ? <SpoolReader api={api} server={server} id={id} /> : null}
 
       {filament ? (
         <Section>

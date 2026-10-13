@@ -235,7 +235,9 @@ export default function JobScreen() {
       if (afcSpools) id = lane?.spool_id ?? null;
       else if (col.index in spoolChoice) id = spoolChoice[col.index];
       // the spool assigned to the chosen slot (filament menu) comes first, then what AFC / Moonraker / the last print say
-      else id = lane?.spool_id ?? (lane?.tool != null ? slotSpools[String(lane.tool)] : undefined)
+      // no slots reported (Centauri without CANVAS, Prusa …): the printer's one slot is tool 0 (NFC reader / control page)
+      else id = lane?.spool_id ?? (lane?.tool != null ? slotSpools[String(lane.tool)]
+                                   : !printerLanes.length && colours.length === 1 ? slotSpools["0"] : undefined)
         ?? (printerBooks ? tracker?.spool_id : null) ?? lastSpools[String(col.index)] ?? null;
       out[col.index] = id != null && spools && !spools.some(s => s.id === id) ? null : id;
     }
