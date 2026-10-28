@@ -212,3 +212,11 @@ def test_always_setting_and_external_prints(tmp_path, monkeypatch):
         assert rec.out == str(tmp_path / "g" / "cc" / job["id"] / "timelapse.mp4")
         asyncio.run(api._track_printer("local", "cc"))
         assert len(api.JOBS) == 1, "seen again: no second job"
+        # the finished video is served although the job has no G-code (bug until 0.45.1: always 404)
+        Path(rec.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(rec.out).write_bytes(b"\0\0\0\x18ftypmp42 video")
+        assert job["dir"] == str(Path(rec.out).parent)
+        r = c.get(f"/api/jobs/{job['id']}/timelapse", headers={"Range": "bytes=0-3"}, params={"token": "t"})
+        assert r.status_code == 206 and r.headers["content-type"] == "video/mp4"
+        del job["dir"]                              # recorded by an older server
+        assert c.get(f"/api/jobs/{job['id']}/timelapse", headers=h).status_code == 200

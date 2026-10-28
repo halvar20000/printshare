@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.45.1
+- Time-lapse of a print started elsewhere ("always make a time-lapse"): the video could not be played or saved
+  in the apps (the server answered "no time-lapse"). Fixed, also for videos recorded before.
+
 ## 0.45.0
 - Orca Cloud account: choose how often the server fetches your presets (every hour, every 6 hours, daily or only by
   hand), on the web page and in the Android app. Preparing a print fetches new presets first when the last sync is
