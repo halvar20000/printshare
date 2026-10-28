@@ -135,7 +135,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.45.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.45.1", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -689,10 +689,16 @@ async def _external_timelapse(job: dict[str, Any]) -> None:
         await _camera(Account("local", settings), printer_id)
     except HTTPException:
         return
-    out = Path(settings.gcode_dir) / printer_id / job["id"]
+    out = _external_dir(settings, job)
+    job["dir"] = str(out)      # job_dir(): where the endpoint finds the video and the cleanup removes it
     rec = TIMELAPSE.start(printer_id, job["id"], job["printer_file"], out)
     rec.seen_active = True
     job["timelapse"] = {"state": rec.state, "frames": 0}
+
+
+def _external_dir(s: Settings, job: dict[str, Any]) -> Path:
+    """Folder of a print started elsewhere: it has no G-code of its own, so no job_dir() before its time-lapse starts."""
+    return Path(s.gcode_dir) / job["printer"] / job["id"]
 
 
 def _bridge_printers() -> set[tuple[str, str]]:
@@ -3014,6 +3020,8 @@ def job_timelapse(job_id: str, acct: Account = Depends(auth)) -> FileResponse:
     """The time-lapse video of a print (MP4), once it is ready."""
     job = _own_job(acct, job_id)
     d = job_dir(job)
+    if d is None and job.get("kind") == jobtrack.EXTERNAL and job.get("printer"):
+        d = _external_dir(acct.settings, job)     # recorded before 0.45.1, without `dir`
     video = d / TIMELAPSE_FILE if d else None
     if video is None or not video.is_file():
         raise HTTPException(404, "no time-lapse for this job (yet)")
