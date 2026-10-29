@@ -97,3 +97,22 @@ def test_upload_and_print_through_a_bridge(cloud, monkeypatch):  # noqa: F811
         waiting = c.get("/api/bookings", headers=h).json()["waiting"]
         assert [(b["file"], b["uses"][0]["spool"], b["uses"][0]["grams"]) for b in waiting] == [("cone.gcode", spool["id"], 2.96)]
         assert asyncio.iscoroutinefunction(api._orca_print)
+
+
+def test_printer_address_for_orca_in_the_cloud(cloud):  # noqa: F811
+    """0.46.0: /orca/<printer> with the printer's upload key, in both of Orca's dialects."""
+    api = cloud
+    with TestClient(api.app) as c:
+        h = login(api, c, "anna@example.com")
+        c.post("/api/printers", json={"name": "CC", "type": "elegoo_sdcp"}, headers=h)
+        c.post("/api/printers", json={"name": "Voron", "type": "moonraker"}, headers=h)
+        key = {"X-Api-Key": c.post("/api/printers/cc/orca-upload", headers=h).json()["key"]}
+        assert c.get("/orca/cc/server/info", headers=key).json()["result"]["machine_name"] == "CC"
+        assert c.get("/orca/voron/server/info", headers=key).status_code == 403, "key of another printer"
+        assert c.get("/orca/cc/server/info").status_code == 403
+        r = c.post("/orca/cc/server/files/upload", headers=key, data={"print": "false"},
+                   files={"file": ("cone.gcode", GCODE.read_bytes(), "application/octet-stream")})
+        assert r.status_code == 201 and r.json()["result"]["print_started"] is False
+        r = c.post("/orca/cc/printer/gcode/script", headers=key, json={"script": "SDCARD_PRINT_FILE FILENAME=cone.gcode"})
+        assert r.status_code == 400 and "phone" in r.json()["detail"], "phone-only printer: started in the app"
+        assert c.get("/orca/cc/server/database/item?namespace=lane_data", headers=key).status_code == 404

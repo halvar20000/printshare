@@ -1046,6 +1046,23 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - App: `components/SpoolReader.tsx` on the control page for printers without the filament menu (slot 0: spool in the
   printer, unknown chip → link, reader key); the job screen proposes slot 0's spool when the printer reports no lanes.
 
+## OrcaSlicer straight to the server, printer switched on for the print (2026-10-29, server 0.46.0, Dominique)
+- Dominique: Orca always sends to PocketPrint3D; "Upload and Print" on a switched-off printer → plug on, wait, start.
+  Analysis: project file `analysen/konzept-druck-puffern-drucker-aus.md`.
+- Per printer `/orca/<printer id>` (own server: server token as API key; cloud: the printer's `pp3do_` key) speaks both
+  of Orca's dialects: host type Octo/Klipper (`/api/version`, `/api/files/local`) and Orca 2.4.2's **Moonraker printer
+  agent** (read in `src/slic3r/Utils/MoonrakerPrinterAgent.cpp` v2.4.2: `/server/info`, filament sync = `GET
+  /server/database/item?namespace=lane_data` (AFC's layout, `lane` = tool number), then Happy Hare `objects/query?mmu`;
+  "Send" = `/server/files/upload print=false`; "Print" = the same + `POST /printer/gcode/script SDCARD_PRINT_FILE
+  FILENAME=…`; the agent's websocket is compiled out). lane_data: the printer's own if it has one, else our `status.lanes`,
+  cached in `<config dir>/orca-lanes/` → Orca syncs the lanes while the printer is off.
+- `printshare/wake.py` + `/send` `wake`: only with `power.auto_on` (default off, checkbox on the web page's power card):
+  plug on, poll status every 5 s up to 10 min, +20 s settle (AFC/AMS), then the normal lane/busy checks; the job stays
+  `sending` (a restart → `sliced`, never started later). Bridges get `wake` through `job.send`. Also fixed: Moonraker's
+  `print_started: false` (Klippy not ready) no longer reports "started". Tested with fakes only (FakeMoonraker started
+  after the HA plug was switched); **not yet with a real Orca, plug or COSMOS**, and Orca's printer agent with a path in
+  the host address is untested (its `join_url` keeps the path).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

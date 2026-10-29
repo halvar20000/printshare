@@ -25,6 +25,8 @@ const I18N = {
     power_on: "Einschalten", power_off: "Ausschalten", power_starting: "Drucker startet …",
     power_off_q: "{printer} ausschalten? Die Steckdose wird abgeschaltet.",
     power_states: { on: "an", off: "aus", unavailable: "nicht erreichbar", unknown: "unbekannt" },
+    power_auto_on: "Bei „Hochladen und drucken“ aus OrcaSlicer einschalten",
+    power_auto_on_hint: "Ist der Drucker aus, schaltet PocketPrint3D ihn ein, wartet bis er bereit ist (höchstens 10 Minuten) und startet dann den Druck. Niemand prüft dabei die Druckplatte – nur einschalten, wenn sie nach jedem Druck geräumt wird.",
     slots_title: "Slots", slot: "Slot", color_n: "Farbe {n}", slot_empty: "leer",
     slot_empty_warn: "{what}: {slot} ist leer – Filament laden oder einen anderen Slot wählen.",
     slot_material_warn: "{what}: Profil ist {want}, in {slot} ist {have}.",
@@ -165,6 +167,8 @@ const I18N = {
     power_on: "Switch on", power_off: "Switch off", power_starting: "Printer is starting …",
     power_off_q: "Switch {printer} off? The plug will be turned off.",
     power_states: { on: "on", off: "off", unavailable: "unreachable", unknown: "unknown" },
+    power_auto_on: "Switch on for “Upload and Print” from OrcaSlicer",
+    power_auto_on_hint: "If the printer is off, PocketPrint3D switches it on, waits until it is ready (at most 10 minutes) and then starts the print. Nobody checks the build plate – only turn this on if it is cleared after every print.",
     slots_title: "Slots", slot: "Slot", color_n: "Colour {n}", slot_empty: "empty",
     slot_empty_warn: "{what}: {slot} is empty – load filament or choose another slot.",
     slot_material_warn: "{what}: the profile is {want}, {slot} holds {have}.",
@@ -973,7 +977,7 @@ function powerMsg(text, error = false) {
   $("power-msg").hidden = !text;
 }
 function powerBody() {
-  const b = { url: $("power-url").value.trim(), entity: $("power-entity").value.trim() };
+  const b = { url: $("power-url").value.trim(), entity: $("power-entity").value.trim(), auto_on: $("power-auto-on").checked };
   if ($("power-token").value.trim()) b.token = $("power-token").value.trim();   // empty = keep the stored token
   return b;
 }
@@ -992,6 +996,7 @@ async function loadPowerConfig() {
   try { PW.cfg = await api(powerBase() + "/config"); } catch (e) { return powerMsg(e.message, true); }
   $("power-url").value = PW.cfg.url || "";
   $("power-entity").value = PW.cfg.entity || "";
+  $("power-auto-on").checked = !!PW.cfg.auto_on;
   $("power-token").value = "";
   $("power-token").placeholder = PW.cfg.token_set ? t("power_token_kept") : "";
   $("power-addon").hidden = !PW.cfg.addon;

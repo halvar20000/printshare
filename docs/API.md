@@ -259,7 +259,8 @@ Live ≈ 300 KB/s: use still images away from home. Centauri: 640×360 MJPEG; Kl
 | `GET /api/printers/{id}/power` | `{"available": false, "state": null}` or `{"available": true, "state": "on"\|"off"\|"unavailable"\|"unknown", "error": null}` |
 | `POST /api/printers/{id}/power` `{"on": true}` | `{"ok": true, "state": "on"}`; off while printing → `409`; plug/HA problem → `502` |
 
-After switching on, the printer needs ~30–60 s until `/status` answers. The settings (`/power/config`, `/power/test`,
+`GET|PUT /power/config` carry `auto_on` (0.46.0, default false; PUT without it keeps the stored value): switch the printer
+on for an OrcaSlicer "Upload and Print" (see `/send` `wake`). After switching on, the printer needs ~30–60 s until `/status` answers. The settings (`/power/config`, `/power/test`,
 `/power/entities`) are made on the web page; the token is never returned (`token_set: true/false`).
 
 ### Printer profile
@@ -396,6 +397,13 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
   upload, so Moonraker books this print on that spool. `400` for other printer types. Leave it out with AFC (the lanes
   carry their own spools).
 - `409 "printer is busy - wait until the current print has finished"`.
+- `wake` (0.46.0, default false): with `start: true` and a smart plug whose `auto_on` is set, a switched-off printer is
+  switched on first and the server waits up to 10 min until it answers in a resting state (+20 s for AFC/AMS), then
+  runs the lane and busy checks and sends. The job stays `sending` meanwhile (log lines say what happens), the answer is
+  200 at once, and every failure ends in the job (`state: sliced`, `error: "Not started: …"`), not in the reply. A server
+  restart while waiting never starts the print. Without `auto_on` nothing changes. OrcaSlicer's "Upload and Print" sets it.
+- 0.46.0: when the printer answers that it did not start the print (Moonraker `print_started: false`), sending fails
+  instead of reporting `started`.
 
 ### Preview and G-code
 `GET /api/jobs/{job}/preview?format=2` – layers for a 2D viewer (gzip, 0.1–2 MB):
@@ -489,6 +497,25 @@ printer's key. PocketPrint3D answers the two OctoPrint calls OrcaSlicer makes:
   printer; other printers: the job waits for the app (note in its `log`).
 - App: `GET|POST|DELETE /api/printers/{id}/orca-upload` → `{"enabled", "url", "created"?, "last_used"?}`; POST answers the
   new `key` (`pp3do_…`, shown once, stored hashed; an older key of that printer stops working; deleted with the printer).
+
+## OrcaSlicer straight to PocketPrint3D (0.46.0, own servers, bridges and the cloud)
+Each printer has its own address that OrcaSlicer treats like the printer itself: `http://<server>:8484/orca/<printer id>`
+(cloud: `https://api.pocketprint3d.com/orca/<printer id>`). API key (`X-Api-Key`) = the server's token on an own server,
+the printer's upload key (`pp3do_…`, above) in the cloud; wrong key → 401 (own server) / 403 (cloud).
+- Host type **Octo/Klipper** ("Upload" / "Upload and Print"): `GET …/api/version`, `POST …/api/files/local` as above.
+- **Moonraker printer agent** of OrcaSlicer 2.4 (Device tab, "Send" / "Print", filament sync):
+  `GET …/server/info` (always `klippy_state: "ready"`, so Orca can send while the printer is off),
+  `GET …/server/database/item?namespace=lane_data[&key=laneN]` (filament sync: the printer's own `lane_data` when a
+  Klipper printer has one, else its `status.lanes` in AFC's layout `{"laneN": {"lane": "<tool>", "material", "color",
+  "spool_id", …}}`; the last answer is stored in `<config dir>/orca-lanes/<printer>.json` and served while the printer is
+  off; 404 while nothing is known), `POST …/server/files/upload` (multipart `file`, `print`) → `{"result": {"item",
+  "print_started"}}`, `POST …/printer/gcode/script {"script": "SDCARD_PRINT_FILE FILENAME=<name>"}` and
+  `POST …/printer/print/start {"filename"}` (start the newest not-started OrcaSlicer job of that printer with that file;
+  every other script → 400: pause/cancel stay in the apps), `GET …/printer/objects/list|query` (Klipper printers that
+  are on: the printer's own answer, e.g. Happy Hare's `mmu`; otherwise a small `print_stats` / temperatures status).
+- Every upload becomes a job like above; a start ("Upload and Print", `SDCARD_PRINT_FILE`) is `/send` with
+  `wake: true` on own servers and for printers behind a bridge (the bridge switches the plug), and waits for the app on
+  phone-only cloud printers.
 
 ## Time-lapse (0.32.0)
 Recorded where the camera is reachable: on an own server, or on the bridge for printers behind one (the cloud can't).

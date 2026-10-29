@@ -106,6 +106,7 @@ from .pipeline import JobResult, fetch_model, inspect_model, prepare_job, run_jo
 from .printers import CONTROL_ACTIONS, LEVELING_TYPES, NEEDS_MACHINE, PRINTER_TYPES, get_adapter
 from . import lanes as lane_map
 from . import power as plug
+from . import wake as wake_mod
 from . import user_profiles
 from .profiles import ProfileError, ProfileLibrary, load_user_preset
 from .search import Search
@@ -135,7 +136,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.45.1", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.46.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -835,13 +836,13 @@ def _gcode_result(printer: PrinterConfig, name: str, path: Path) -> JobResult:
 
 
 async def _orca_print(acct: Account, job: dict[str, Any]) -> None:
-    """"Upload and Print" on a printer behind a bridge: send and start, then book the spool used last on it."""
+    """"Upload and Print": send and start (switching the printer on when set up), then book the spool used last on it."""
     try:
-        await send(job["id"], SendRequest(start=True, confirm=True), acct)
+        await send(job["id"], SendRequest(start=True, confirm=True, wake=True), acct)
     except HTTPException as e:
         job["log"].append(f"Not started: {e.detail}")
         return
-    for _ in range(15 * 60):
+    for _ in range(30 * 60):             # switching on and booting the printer included (wake.WAKE_TIMEOUT_S)
         if job["state"] != "sending":
             break
         await asyncio.sleep(1)
@@ -865,6 +866,22 @@ async def _orca_print(acct: Account, job: dict[str, Any]) -> None:
 async def octoprint_upload(request: Request) -> dict[str, Any]:
     """OrcaSlicer "Upload" / "Upload and Print": multipart `file` (+ `print`, `select`, `path`)."""
     acct, printer = _octo_auth(request)
+    return await _octo_files_local(acct, printer, request)
+
+
+async def _octo_files_local(acct: Account, printer: PrinterConfig, request: Request) -> dict[str, Any]:
+    job, name, started = await _orca_receive(acct, printer, request)
+    return {"done": True, "effectiveSelect": False, "effectivePrint": started,
+            "files": {"local": {"name": name, "path": name, "origin": "local",
+                                "refs": {"resource": f"{_public_url(request)}/api/jobs/{job['id']}"}}}}
+
+
+def _orca_file_name(raw: str) -> str:
+    return re.sub(r"[^\w.\- ()]+", "_", Path(raw or "print.gcode").name).strip(" .")[:120] or "print.gcode"
+
+
+async def _orca_receive(acct: Account, printer: PrinterConfig, request: Request) -> tuple[dict[str, Any], str, bool]:
+    """A G-code from OrcaSlicer (either dialect) becomes a job; `print=true` starts it. Returns (job, name, started)."""
     limit = settings.limit_upload_mb * 1024 * 1024
     if int(request.headers.get("content-length") or 0) > limit + 1_000_000:
         raise HTTPException(413, f"the G-code is larger than {settings.limit_upload_mb} MB")
@@ -872,7 +889,7 @@ async def octoprint_upload(request: Request) -> dict[str, Any]:
     upload = form.get("file")
     if upload is None or not hasattr(upload, "read"):
         raise HTTPException(400, "no file in the upload")
-    name = re.sub(r"[^\w.\- ()]+", "_", Path(upload.filename or "print.gcode").name).strip(" .")[:120] or "print.gcode"
+    name = _orca_file_name(upload.filename or "")
     if not name.lower().endswith(GCODE_SUFFIXES):
         raise HTTPException(415, "only G-code (.gcode) can be sent - binary G-code (.bgcode) and 3MF are not supported")
     start = str(form.get("print") or "").lower() == "true"
@@ -899,14 +916,218 @@ async def octoprint_upload(request: Request) -> dict[str, Any]:
     sliced_for = result.profiles.get("machine")
     if printer.slicing.machine and sliced_for not in ("OrcaSlicer", printer.slicing.machine):
         job["log"].append(f"Sliced for {sliced_for}, this printer is set to {printer.slicing.machine}")
-    started = bool(start and printer.bridge)
-    if start and not printer.bridge:
+    return job, name, _orca_start(acct, printer, job) if start else False
+
+
+def _orca_start(acct: Account, printer: PrinterConfig, job: dict[str, Any]) -> bool:
+    """Start an OrcaSlicer job: own servers and printers behind a bridge (the phone starts the others)."""
+    if acct.cloud and not printer.bridge:
         job["log"].append("Start it in the app (this printer is reached by your phone on the Wi-Fi)")
-    if started:
-        _spawn(_orca_print(acct, job))
-    return {"done": True, "effectiveSelect": False, "effectivePrint": started,
-            "files": {"local": {"name": name, "path": name, "origin": "local",
-                                "refs": {"resource": f"{_public_url(request)}/api/jobs/{job['id']}"}}}}
+        return False
+    _spawn(_orca_print(acct, job))
+    return True
+
+
+# ---------- OrcaSlicer as if PocketPrint3D were the printer (0.46.0) ----------
+# Physical printer in OrcaSlicer: host <server>/orca/<printer id>, API key = the server's token (own server) or the
+# printer's upload key (cloud). Both of Orca's ways to talk to Klipper work there:
+# - host type "Octo/Klipper": /api/version + /api/files/local ("Upload" / "Upload and Print")
+# - Orca 2.4's Moonraker printer agent (Device tab, filament sync): /server/info, /server/database/item?namespace=
+#   lane_data (the printer's lanes, also while it is off), /server/files/upload, /printer/gcode/script with
+#   SDCARD_PRINT_FILE ("Print"), /printer/print/start, /printer/objects/list|query.
+# A start goes through /send with wake=true: a switched-off printer whose plug has auto_on is switched on first.
+MOONRAKER_INFO_VERSION = "v0.9.3-pocketprint3d"
+LANE_CACHE_DIR = "orca-lanes"
+
+
+def _orca_host(request: Request, printer_id: str) -> tuple[Account, PrinterConfig]:
+    if settings.cloud:
+        acct, printer = _octo_auth(request)
+        if printer.id != printer_id:
+            raise HTTPException(403, "this key belongs to another printer")
+        return acct, printer
+    key = request.headers.get("x-api-key") or request.query_params.get("apikey") or _token(request)
+    if settings.api_token and not (key and secrets.compare_digest(key, settings.api_token)):
+        raise HTTPException(401, "invalid API key - use the server's token (Settings → Connect app)")
+    acct = Account("local", settings)
+    return acct, _printer(acct, printer_id)
+
+
+def _moonraker_ok(result: Any) -> dict[str, Any]:
+    return {"result": result}
+
+
+@app.get("/orca/{printer_id}/api/version")
+def orca_host_version(printer_id: str, request: Request) -> dict[str, Any]:
+    _orca_host(request, printer_id)
+    return OCTO_VERSION
+
+
+@app.post("/orca/{printer_id}/api/files/local", status_code=201)
+async def orca_host_files_local(printer_id: str, request: Request) -> dict[str, Any]:
+    acct, printer = _orca_host(request, printer_id)
+    return await _octo_files_local(acct, printer, request)
+
+
+@app.get("/orca/{printer_id}/server/info")
+def orca_host_server_info(printer_id: str, request: Request) -> dict[str, Any]:
+    """Always "ready": OrcaSlicer may send while the printer itself is off."""
+    _, printer = _orca_host(request, printer_id)
+    return _moonraker_ok({"klippy_connected": True, "klippy_state": "ready", "hostname": printer.name,
+                          "machine_name": printer.name, "moonraker_version": MOONRAKER_INFO_VERSION,
+                          "api_version": [1, 5, 0], "api_version_string": "1.5.0", "components": ["database"],
+                          "failed_components": [], "registered_directories": ["gcodes"], "warnings": []})
+
+
+@app.get("/orca/{printer_id}/printer/objects/list")
+def orca_host_objects_list(printer_id: str, request: Request) -> dict[str, Any]:
+    _orca_host(request, printer_id)
+    return _moonraker_ok({"objects": ["print_stats", "virtual_sdcard", "extruder", "heater_bed", "fan"]})
+
+
+async def _orca_status(acct: Account, printer_id: str) -> dict[str, Any] | None:
+    try:
+        return await asyncio.wait_for(status(printer_id, acct), 20)
+    except Exception:  # noqa: BLE001 - off, unreachable, phone-only printer in the cloud
+        return None
+
+
+@app.get("/orca/{printer_id}/printer/objects/query")
+async def orca_host_objects_query(printer_id: str, request: Request) -> dict[str, Any]:
+    """Klipper printers that are on: the real answer (e.g. Happy Hare's `mmu` for Orca's filament sync); otherwise
+    a small status built from the adapter's (standby while the printer is off)."""
+    acct, printer = _orca_host(request, printer_id)
+    if printer.type == "moonraker" and not acct.cloud:
+        real = await _moonraker_get(printer, "/printer/objects/query", dict(request.query_params))
+        if real is not None:
+            return real
+    st = await _orca_status(acct, printer_id) or {}
+    wanted = set(request.query_params) - {"apikey", "token"}
+    state = st.get("state") if printer_kind(st.get("state")) != "unknown" else None
+    full = {"print_stats": {"state": {"idle": "standby", "done": "complete", "stopped": "cancelled", "active": "printing",
+                                      "paused": "paused"}.get(printer_kind(state), "standby"),
+                            "filename": st.get("file") or ""},
+            "virtual_sdcard": {"progress": (st.get("progress") or 0) / 100},
+            "extruder": {"temperature": st.get("nozzle") or 0, "target": st.get("nozzle_target") or 0},
+            "heater_bed": {"temperature": st.get("bed") or 0, "target": st.get("bed_target") or 0}}
+    return _moonraker_ok({"eventtime": time.time(), "status": {k: v for k, v in full.items() if k in wanted}})
+
+
+async def _moonraker_get(printer: PrinterConfig, path: str, params: dict[str, Any]) -> dict[str, Any] | None:
+    """GET on the printer's own Moonraker (read only), None when it doesn't answer."""
+    import httpx
+    adapter = get_adapter(printer)
+    params = {k: v for k, v in params.items() if k not in ("apikey", "token")}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            base = await asyncio.wait_for(adapter._resolve_base(client), 10)
+            r = await client.get(f"{base}{path}", params=params, headers=adapter.headers)
+        return r.json() if r.status_code == 200 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def lane_data(lanes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Our lanes in the layout AFC writes to Moonraker's `lane_data` namespace for OrcaSlicer (key laneN, "lane" =
+    tool number). An empty lane has no material, so Orca shows it as empty."""
+    out: dict[str, Any] = {}
+    for ln in lanes:
+        if not isinstance(ln.get("tool"), int):
+            continue
+        loaded = ln.get("loaded") is not False
+        out[f"lane{len(out) + 1}"] = {
+            "color": (ln.get("color") or "") if loaded else "", "material": (ln.get("material") or "") if loaded else "",
+            "bed_temp": None, "nozzle_temp": None, "scan_time": "", "td": "", "lane": str(ln["tool"]),
+            "spool_id": ln.get("spool_id") if isinstance(ln.get("spool_id"), int) else None}
+    return out
+
+
+def _lane_cache(acct: Account, printer_id: str) -> Path:
+    return Path(acct.settings.config_dir) / LANE_CACHE_DIR / f"{printer_id}.json"
+
+
+@app.get("/orca/{printer_id}/server/database/item")
+async def orca_host_database(printer_id: str, request: Request, namespace: str = "", key: str | None = None
+                             ) -> dict[str, Any]:
+    """OrcaSlicer's filament sync. The printer's own `lane_data` if it has one, else its lanes as PocketPrint3D sees
+    them; the last answer is kept, so Orca can sync while the printer is off."""
+    acct, printer = _orca_host(request, printer_id)
+    if namespace != "lane_data":
+        raise HTTPException(404, f"Namespace '{namespace}' not found")
+    value: dict[str, Any] | None = None
+    if printer.type == "moonraker" and not acct.cloud:
+        real = await _moonraker_get(printer, "/server/database/item", {"namespace": "lane_data"})
+        got = ((real or {}).get("result") or {}).get("value")
+        if isinstance(got, dict) and got:
+            value = got
+    if value is None:
+        st = await _orca_status(acct, printer_id)
+        if st is not None and st.get("lanes"):
+            value = lane_data(st["lanes"])
+    cache = _lane_cache(acct, printer_id)
+    if value:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(value))
+    else:
+        try:
+            value = json.loads(cache.read_text())
+        except (OSError, ValueError):
+            raise HTTPException(404, "Namespace 'lane_data' not found")
+    if key is not None:
+        if key not in value:
+            raise HTTPException(404, f"Key '{key}' in namespace 'lane_data' not found")
+        return _moonraker_ok({"namespace": namespace, "key": key, "value": value[key]})
+    return _moonraker_ok({"namespace": namespace, "value": value})
+
+
+@app.post("/orca/{printer_id}/server/files/upload", status_code=201)
+async def orca_host_upload(printer_id: str, request: Request) -> dict[str, Any]:
+    acct, printer = _orca_host(request, printer_id)
+    job, name, started = await _orca_receive(acct, printer, request)
+    return _moonraker_ok({"item": {"path": name, "root": "gcodes"}, "print_started": started,
+                          "print_queued": False, "action": "create_file"})
+
+
+def _orca_job_for(acct: Account, printer_id: str, filename: str) -> dict[str, Any]:
+    """The newest OrcaSlicer job of this printer with that file that wasn't started yet."""
+    name = _orca_file_name(filename.strip().strip('"\''))
+    for job in sorted(JOBS.values(), key=lambda j: j.get("created") or 0, reverse=True):
+        if (job.get("owner", "local") == acct.id and job.get("printer") == printer_id
+                and (job.get("request") or {}).get("source") == "orcaslicer" and job["state"] in ("sliced", "uploaded")
+                and Path((job.get("result") or {}).get("gcode") or "").name == name):
+            return job
+    raise HTTPException(400, f"File '{filename}' not found - send it from OrcaSlicer again")
+
+
+class OrcaScript(BaseModel):
+    script: str = ""
+
+
+@app.post("/orca/{printer_id}/printer/gcode/script")
+async def orca_host_script(printer_id: str, req: OrcaScript, request: Request) -> dict[str, Any]:
+    """Only the start of a file sent before (Orca's "Print": upload, then SDCARD_PRINT_FILE). Anything else - pause,
+    cancel, own G-code - belongs in the app, where it is confirmed."""
+    acct, printer = _orca_host(request, printer_id)
+    m = re.fullmatch(r"\s*SDCARD_PRINT_FILE\s+FILENAME=(.+?)\s*", req.script, re.I)
+    if not m:
+        raise HTTPException(400, "only SDCARD_PRINT_FILE is supported here - control the printer in the PocketPrint3D app")
+    job = _orca_job_for(acct, printer_id, m.group(1))
+    if not _orca_start(acct, printer, job):
+        raise HTTPException(400, "this printer is started from the PocketPrint3D app on your phone")
+    return _moonraker_ok("ok")
+
+
+class OrcaPrintStart(BaseModel):
+    filename: str
+
+
+@app.post("/orca/{printer_id}/printer/print/start")
+async def orca_host_print_start(printer_id: str, req: OrcaPrintStart, request: Request) -> dict[str, Any]:
+    acct, printer = _orca_host(request, printer_id)
+    job = _orca_job_for(acct, printer_id, req.filename)
+    if not _orca_start(acct, printer, job):
+        raise HTTPException(400, "this printer is started from the PocketPrint3D app on your phone")
+    return _moonraker_ok("ok")
 
 
 # ---------- cloud mode: bridges at home (docs/BRIDGE.md) ----------
@@ -1649,6 +1870,7 @@ class PowerSettings(BaseModel):
     url: str = ""
     token: str | None = None      # None = keep the stored token, "" = remove it
     entity: str = ""
+    auto_on: bool | None = None   # 0.46.0: switch on for "Upload and Print" from OrcaSlicer; None = keep
 
 
 def _power_cfg(acct: "Account", printer_id: str, body: PowerSettings | None = None) -> plug.PowerConfig:
@@ -1660,7 +1882,9 @@ def _power_cfg(acct: "Account", printer_id: str, body: PowerSettings | None = No
             raise HTTPException(404, "no power switch set up for this printer")
         return stored
     token = body.token if body.token is not None else (stored.token if stored else "")
-    return plug.PowerConfig(url=body.url.strip().rstrip("/"), token=token.strip(), entity=body.entity.strip())
+    auto_on = body.auto_on if body.auto_on is not None else bool(stored and stored.auto_on)
+    return plug.PowerConfig(url=body.url.strip().rstrip("/"), token=token.strip(), entity=body.entity.strip(),
+                            auto_on=auto_on)
 
 
 async def _power_call(coro_fn):
@@ -2826,6 +3050,9 @@ class SendRequest(BaseModel):
     # time-lapse video of this print (0.32.0): own servers and printers behind a bridge, needs a camera;
     # None = the server's "always" setting (0.40.0)
     timelapse: bool | None = None
+    # 0.46.0: a switched-off printer with a smart plug set to auto_on is switched on first (printshare/wake.py);
+    # without auto_on this changes nothing. Set for OrcaSlicer's "Upload and Print".
+    wake: bool = False
 
 
 @app.post("/api/jobs/{job_id}/send")
@@ -2846,7 +3073,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         # the bridge checks the rest itself (busy printer, lanes, spool) - with the same code as a home server
         job.update(state="sending", error=None)
         params = {"printer": via[1], "job": job_id, "start": req.start, "confirm": req.confirm,
-                  "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id, "timelapse": req.timelapse}
+                  "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id, "timelapse": req.timelapse,
+                  "wake": req.wake}
 
         async def forward() -> None:
             try:
@@ -2870,30 +3098,24 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         tools = lane_map.parse_mapping(req.lanes)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    if tools:
-        # the chosen lanes must exist and hold filament (DR-03)
-        try:
-            lanes = (await get_adapter(_printer(acct, result.printer)).status()).get("lanes") or []
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(502, f"printer not reachable: {e}")
-        by_tool = {ln.get("tool"): ln for ln in lanes}
-        for idx, tool in sorted(tools.items()):
-            ln = by_tool.get(tool)
-            if ln is None:
-                raise HTTPException(400, f"the printer has no lane for T{tool}")
-            if req.start and not ln.get("loaded"):
-                raise HTTPException(409, f"lane {ln.get('id')} (T{tool}) is empty - load filament or choose another lane")
-    if req.start:
-        # DR-03: never start on a printer that is still busy (an unreachable printer fails in send_job)
-        try:
-            state = (await get_adapter(_printer(acct, result.printer)).status()).get("state")
-        except Exception:  # noqa: BLE001
-            state = None
-        if printer_kind(state) in ("active", "paused"):
-            raise HTTPException(409, "printer is busy - wait until the current print has finished")
+    power = plug.load(acct.settings.config_dir, result.printer) if req.start and req.wake else None
+    wake = power is not None and power.auto_on
+    if not wake:
+        await _start_checks(acct, result.printer, tools, req.start)
     job.update(state="sending", error=None)
 
     async def worker() -> None:
+        if wake:
+            # switched off: switch on, wait, then the same checks as above - failures end up in the job, not in a reply
+            adapter = get_adapter(_printer(acct, result.printer))
+            try:
+                if await wake_mod.wake(adapter.status, printer_kind, lambda: plug.get_power(power).turn(True),
+                                       job["log"].append):
+                    job["woken"] = True
+                await _start_checks(acct, result.printer, tools, req.start)
+            except (wake_mod.WakeError, HTTPException) as e:
+                job.update(state="sliced", error=f"Not started: {e.detail if isinstance(e, HTTPException) else e}")
+                return
         try:
             await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
                            leveling=req.leveling, tools=tools, spool_id=req.spool_id)
@@ -2913,6 +3135,30 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
 
     _spawn(worker())
     return {"job": job_id}
+
+
+async def _start_checks(acct: Account, printer_id: str, tools: dict[int, int], start: bool) -> None:
+    """Before a send: the chosen lanes exist and hold filament, and a start never goes to a busy printer (DR-03)."""
+    if tools:
+        try:
+            lanes = (await get_adapter(_printer(acct, printer_id)).status()).get("lanes") or []
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"printer not reachable: {e}")
+        by_tool = {ln.get("tool"): ln for ln in lanes}
+        for idx, tool in sorted(tools.items()):
+            ln = by_tool.get(tool)
+            if ln is None:
+                raise HTTPException(400, f"the printer has no lane for T{tool}")
+            if start and not ln.get("loaded"):
+                raise HTTPException(409, f"lane {ln.get('id')} (T{tool}) is empty - load filament or choose another lane")
+    if start:
+        # an unreachable printer fails in send_job
+        try:
+            state = (await get_adapter(_printer(acct, printer_id)).status()).get("state")
+        except Exception:  # noqa: BLE001
+            state = None
+        if printer_kind(state) in ("active", "paused"):
+            raise HTTPException(409, "printer is busy - wait until the current print has finished")
 
 
 def _own_job(acct: Account, job_id: str) -> dict[str, Any]:
