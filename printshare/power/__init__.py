@@ -29,11 +29,14 @@ class PowerConfig:
     url: str = ""            # Home Assistant, e.g. http://192.168.1.5:8123 (empty inside the HA add-on)
     token: str = ""          # long-lived access token (empty inside the HA add-on)
     entity: str = ""         # switch.printer_plug, light.…, input_boolean.…
+    # 0.46.0: "Upload and Print" from OrcaSlicer on a switched-off printer switches it on, waits until it is ready
+    # and then starts (printshare/wake.py). Off by default: nobody can check the plate of a printer that was off.
+    auto_on: bool = False
 
     def public(self) -> dict[str, Any]:
         """What the app / browser may see: never the token itself."""
         return {"type": self.type, "url": self.url, "entity": self.entity, "token_set": bool(self.token),
-                "supervisor": self.supervisor}
+                "supervisor": self.supervisor, "auto_on": self.auto_on}
 
     @property
     def supervisor(self) -> bool:
@@ -45,7 +48,8 @@ def load(config_dir: str | Path, printer_id: str) -> PowerConfig | None:
     data = user_profiles.read_overlay(config_dir, printer_id).get("power")
     if not isinstance(data, dict) or not data.get("entity"):
         return None
-    return PowerConfig(**{k: str(v) for k, v in data.items() if k in PowerConfig.__dataclass_fields__})
+    return PowerConfig(**{k: (v is True if k == "auto_on" else str(v))
+                          for k, v in data.items() if k in PowerConfig.__dataclass_fields__})
 
 
 def save(config_dir: str | Path, printer_id: str, cfg: PowerConfig | None) -> None:
@@ -53,7 +57,8 @@ def save(config_dir: str | Path, printer_id: str, cfg: PowerConfig | None) -> No
     if cfg is None:
         overlay.pop("power", None)
     else:
-        overlay["power"] = {"type": cfg.type, "url": cfg.url, "token": cfg.token, "entity": cfg.entity}
+        overlay["power"] = {"type": cfg.type, "url": cfg.url, "token": cfg.token, "entity": cfg.entity,
+                            "auto_on": cfg.auto_on}
     user_profiles.write_overlay(config_dir, printer_id, overlay)
 
 

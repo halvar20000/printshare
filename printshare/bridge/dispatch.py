@@ -88,7 +88,8 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
                           leveling=params.get("leveling"), lanes=params.get("lanes") or None,
                           spool_id=params.get("spool_id"),
                           # None = the bridge's own "always" setting (0.40.0)
-                          timelapse=params["timelapse"] if isinstance(params.get("timelapse"), bool) else None)
+                          timelapse=params["timelapse"] if isinstance(params.get("timelapse"), bool) else None,
+                          wake=params.get("wake") is True)
     try:
         await _call(api.send, local["id"], req, acct)
     except MethodError:

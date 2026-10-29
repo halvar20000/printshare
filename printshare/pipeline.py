@@ -179,6 +179,9 @@ async def send_job(settings: Settings, result: JobResult, start: bool,
     finally:
         if tmp:
             shutil.rmtree(tmp, ignore_errors=True)
+    if start and sent.get("started") is False:
+        # Moonraker answers print_started false when Klippy isn't ready - the file is there, the print is not
+        raise RuntimeError(f"uploaded {sent.get('uploaded') or gcode.name}, but the printer did not start it")
     if tools:
         sent = {**sent, "tools": {str(k): v for k, v in tools.items()}}
     if spool_id is not None:
