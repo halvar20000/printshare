@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.46.0
+- OrcaSlicer can send straight to PocketPrint3D: every printer has its own address `http://<server>:8484/orca/<printer>`
+  (API key = the server's token), usable as "Octo/Klipper" or as a Moonraker printer in OrcaSlicer 2.4. "Upload" puts
+  the print into the app, "Upload and Print" starts it.
+- OrcaSlicer's filament sync works through it, including the AFC/CANVAS lanes - also while the printer is switched off
+  (the last known lanes are kept).
+- New on the web page's power card: "Switch on for Upload and Print from OrcaSlicer". If the printer is off, its
+  Home Assistant plug is switched on, the server waits until the printer is ready (at most 10 minutes), checks the
+  lanes and that it is free, then starts. Off by default - nobody checks the build plate.
+- A Klipper printer that accepted the file but didn't start it is no longer shown as "started".
+
 ## 0.45.1
 - Time-lapse of a print started elsewhere ("always make a time-lapse"): the video could not be played or saved
   in the apps (the server answered "no time-lapse"). Fixed, also for videos recorded before.
