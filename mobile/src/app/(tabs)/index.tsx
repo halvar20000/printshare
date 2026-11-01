@@ -7,7 +7,7 @@ import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Badge, Banner, Button, Card, Divider, Empty, Row, tap, useContentWidth } from "@/components/ui";
-import { WEB_APP, type JobSummary } from "@/lib/api";
+import { WEB_APP, webHome, type JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago, extractLink, jobName, makerWorldId, printTime } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
@@ -69,6 +69,17 @@ export default function Home() {
     if (mw) router.push({ pathname: "/model/[source]/[id]", params: { source: "makerworld", id: mw } });
     else router.push({ pathname: "/prepare", params: { link: found } });
   };
+  useEffect(() => {
+    if (!WEB_APP || !server || typeof location === "undefined" || !location.search) return;
+    const q = new URLSearchParams(location.search);
+    const shared = q.get("link") || extractLink([q.get("url"), q.get("text"), q.get("title")].join(" "));
+    if (!shared) return;
+    history.replaceState(null, "", location.pathname + location.hash);
+    const mw = makerWorldId(shared);
+    if (mw) router.push({ pathname: "/model/[source]/[id]", params: { source: "makerworld", id: mw } });
+    else router.push({ pathname: "/prepare", params: { link: shared } });
+  }, [server, router]);
+
   const paste = async () => {
     const found = extractLink(await Clipboard.getStringAsync().catch(() => ""));
     if (found) go(found); else setError(t("clipboardEmpty"));
@@ -79,6 +90,16 @@ export default function Home() {
     const a = res.assets[0];
     router.push({ pathname: "/prepare", params: { fileUri: a.uri, fileName: a.name } });
   };
+
+  if (!server && webHome()) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, justifyContent: "center" }}>
+        <Empty icon="cube-outline" title={t("notConnectedTitle")} sub={t("notConnectedSubWebHome")}>
+          <Button title={t("login")} icon="log-in-outline" onPress={() => router.push("/connect")} />
+        </Empty>
+      </SafeAreaView>
+    );
+  }
 
   if (!server) {
     return (

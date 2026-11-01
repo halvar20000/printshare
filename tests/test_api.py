@@ -105,8 +105,15 @@ def test_auth_required(client):
     assert client.get("/api/printers", headers=H).json()[0]["leveling"] is None
 
 
-def test_app_shell_served(client):
-    assert "PocketPrint3D" in client.get("/").text
+def test_app_shell_served(api, client, tmp_path):
+    # without a web app build (or with classic_web) the classic page is at /; it is always at /classic
+    keep = api.settings.webapp_dir
+    api.settings.webapp_dir = str(tmp_path / "missing")
+    try:
+        assert "PocketPrint3D" in client.get("/").text
+    finally:
+        api.settings.webapp_dir = keep
+    assert 'id="link"' in client.get("/classic").text
     m = client.get("/manifest.webmanifest")
     assert m.status_code == 200 and m.json()["share_target"]["action"] == "/"
     assert client.get("/sw.js").status_code == 200
@@ -334,3 +341,72 @@ def test_inspect_colours_of_an_uploaded_3mf(client, tmp_path):
     too_many = client.post("/api/jobs", headers=H, json={"link": up["link"], "printer": "dom",
                                                          "options": {"filaments": [None] * 17}})
     assert too_many.status_code == 400
+
+
+def _fake_webapp(tmp_path):
+    web = tmp_path / "webapp"
+    (web / "_expo" / "static" / "js" / "web").mkdir(parents=True)
+    (web / "index.html").write_text("<!DOCTYPE html><title>PocketPrint3D</title><div id=root></div>")
+    (web / "_expo" / "static" / "js" / "web" / "entry-abc.js").write_text("console.log(1)")
+    return web
+
+
+def test_home_server_serves_web_app(api, tmp_path):
+    """Since 0.47.0 the web app (Expo web build) is at / of home servers too; the classic page moved to /classic."""
+    keep = api.settings.webapp_dir
+    api.settings.webapp_dir = str(_fake_webapp(tmp_path))
+    try:
+        with TestClient(api.app) as c:
+            for path in ("/", "/printers", "/job/abc123"):
+                r = c.get(path)
+                assert r.status_code == 200 and "<div id=root>" in r.text, path
+                csp = r.headers["content-security-policy"]
+                # the browser may reach the user's own LAN services (own Spoolman); frames stay forbidden
+                assert "connect-src 'self' blob: data: http: https:" in csp and "frame-ancestors 'none'" in csp
+            assert c.get("/_expo/static/js/web/entry-abc.js").status_code == 200
+            assert 'id="link"' in c.get("/classic").text
+            assert c.get("/api/nothing-here").status_code == 404
+            assert c.get("/api/server").json() == {"name": "PrintShare", "version": api.app.version, "cloud": False,
+                                                  "login": "token"}
+            api.settings.classic_web = True
+            try:
+                assert 'id="link"' in c.get("/").text and c.get("/printers").status_code == 404
+            finally:
+                api.settings.classic_web = False
+    finally:
+        api.settings.webapp_dir = keep
+
+
+def test_home_web_login_cookie(api):
+    """Web app on a home server: the access token once -> HttpOnly cookie (not the token itself), changes need the
+    app's header, logout clears it. Plain http on the LAN -> no Secure flag (else the browser would drop it)."""
+    hdr = {"X-Requested-With": "pocketprint3d"}
+    with TestClient(api.app) as c:
+        assert c.get("/api/info").status_code == 401
+        assert c.post("/api/auth/token", json={"token": "wrong"}).status_code == 401
+        r = c.post("/api/auth/token", json={"token": TOKEN})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        sc = r.headers["set-cookie"].lower()
+        assert "pp3d_session=" in sc and "httponly" in sc and "samesite=strict" in sc and "secure" not in sc
+        assert TOKEN.lower() not in sc
+        assert c.get("/api/info").json()["cloud"] is False                    # reading with the cookie alone
+        assert c.post("/api/auth/logout").status_code == 403                  # changes need the header
+        r = c.post("/api/auth/logout", headers=hdr)
+        assert r.status_code == 200 and "max-age=0" in r.headers["set-cookie"].lower()
+        assert c.get("/api/info").status_code == 401
+        c.cookies.set("pp3d_session", TOKEN)                                  # the raw token is no session
+        assert c.get("/api/info").status_code == 401
+        c.cookies.clear()
+        assert c.get("/api/info", headers=H).status_code == 200              # apps: Bearer as before
+    with TestClient(api.app, base_url="https://testserver") as c:
+        assert "secure" in c.post("/api/auth/token", json={"token": TOKEN}).headers["set-cookie"].lower()
+    with TestClient(api.app, headers={"X-Forwarded-Proto": "https"}) as c:   # behind tailscale serve / a proxy
+        assert "secure" in c.post("/api/auth/token", json={"token": TOKEN}).headers["set-cookie"].lower()
+
+
+def test_numeric_access_code_from_yaml(tmp_path):
+    """password: 12345678 in config.yaml (Bambu access code) comes in as an int from YAML - keep it a string."""
+    from printshare.config import printer_from_config
+    p = printer_from_config({"id": "p1s", "type": "bambu_lan", "host": "192.168.1.5", "password": 12345678,
+                             "slicing": {"machine": "Bambu Lab P1S 0.4 nozzle"}}, tmp_path, str(tmp_path / "no-orca"))
+    assert p.password == "12345678"

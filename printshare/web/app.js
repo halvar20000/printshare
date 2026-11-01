@@ -1389,10 +1389,10 @@ async function init() {
   if (qs.get("token")) store.set("ps_token", qs.get("token"));
   const shared = qs.get("link") || extractLink([qs.get("url"), qs.get("text"), qs.get("title")].join(" "));
   if (shared) $("link").value = shared;
-  if (location.search) history.replaceState(null, "", "/" + location.hash);  // keep the token out of history
+  if (location.search) history.replaceState(null, "", location.pathname + location.hash);  // keep the token out of history
   $("token").value = store.get("ps_token");
   setPlateControls();
-  if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  // no service worker any more (0.47.0): sw.js only removes the old one
 
   show(location.hash.slice(1) || "print");
   if (!store.get("ps_token")) return showSettings(t("token_missing"));

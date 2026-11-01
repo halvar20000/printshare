@@ -233,7 +233,8 @@ def banner(info: dict[str, Any], url: str, remote: str = "") -> str:
             lines.append(buf.getvalue())
         except Exception:  # noqa: BLE001
             pass
-        lines.append(f"Web app: {url}")
+        # the token in the fragment never reaches a server log; the web app logs in with it once and removes it
+        lines.append(f"Web app: {url.rstrip('/')}/#token={info['token']}" if info["token"] else f"Web app: {url}")
     else:
         lines.append("App: enter http://<server-ip>:8484 and the token, or set the server address "
                      "(PRINTSHARE_URL / add-on option server_url) to get a QR code here.")

@@ -15,6 +15,52 @@ export const WEB_APP = Platform.OS === "web" && process.env.EXPO_PUBLIC_WEB_SAME
 export const CLOUD_URL = WEB_APP && typeof location !== "undefined" ? location.origin
   : process.env.EXPO_PUBLIC_CLOUD_URL || "https://api.pocketprint3d.com";
 
+/** Web app: which kind of server delivered the page (`GET /api/server`, public). "home" = an own server (since server
+ *  0.47.0 it serves the web app too): login with its access token, which the server turns into an HttpOnly cookie. */
+let webKind: "cloud" | "home" | null = null;
+export const webHome = () => WEB_APP && webKind === "home";
+
+async function sameOrigin(path: string, init?: RequestInit): Promise<Response | null> {
+  try {
+    return await fetch(path, { credentials: "same-origin", ...init });
+  } catch {
+    return null;
+  }
+}
+
+/** Web app start: find out the server kind; on an own server log in with `?token=` / `#token=` from the address (the
+ *  link the server prints) and answer the server to use - or null when the browser has no session there yet. */
+export async function webStart(stored: Server | null): Promise<Server | null> {
+  const r = await sameOrigin("/api/server");
+  const info = r?.ok ? await r.json().catch(() => null) : null;
+  webKind = info && info.cloud === false ? "home" : "cloud";
+  if (webKind === "cloud") return stored;
+  const url = new URL(location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const token = url.searchParams.get("token") || hash.get("token");
+  if (token) {
+    url.searchParams.delete("token");
+    hash.delete("token");
+    const rest = hash.toString();
+    const clean = url.pathname + url.search + (rest ? `#${rest}` : "");
+    // keep it out of the address bar and history; the router writes its start address back once after mounting
+    const strip = () => { if (/(^#|&|\?)token=/.test(location.hash + location.search)) history.replaceState(history.state, "", clean); };
+    strip();
+    for (const ms of [500, 1500, 4000]) setTimeout(strip, ms);
+    await webTokenLogin(token).catch(() => {});
+  }
+  const ok = await sameOrigin("/api/info");
+  return ok?.ok ? { url: location.origin, token: "" } : null;
+}
+
+/** Own server, web app: the access token once -> session cookie. */
+export async function webTokenLogin(token: string): Promise<void> {
+  const r = await sameOrigin("/api/auth/token", { method: "POST",
+    headers: { "Content-Type": "application/json", "X-Requested-With": "pocketprint3d" }, body: JSON.stringify({ token }) });
+  if (!r) throw new ApiError("offline", 0, "offline");
+  if (!r.ok) throw new ApiError("invalid token", r.status, "invalid token");
+}
+
 /** How a request proves who it is: the session token, or (web app) the cookie plus the header the server expects
  *  on changes, which a foreign page can't send. */
 export function authHeaders(server: Server): Record<string, string> {

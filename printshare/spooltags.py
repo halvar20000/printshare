@@ -58,7 +58,7 @@ def _hash(key: str) -> str:
 class SpoolTags:
     def __init__(self, path: str | Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None)
+        self.db = sqlite3.connect(str(path), check_same_thread=False, isolation_level=None, timeout=10)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)

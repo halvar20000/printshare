@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppState as RNAppState } from "react-native";
 
-import { Api, resetRoutes, type Server } from "./api";
+import { Api, resetRoutes, WEB_APP, webStart, type Server } from "./api";
 import { makeT, resolveLang, type LangPref, type T } from "./i18n";
 import { getItem, getJSON, setItem, setJSON } from "./storage";
 
@@ -25,7 +25,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [s, l] = await Promise.all([getJSON<Server>("ps_server"), getItem("ps_lang")]);
+      const [stored, l] = await Promise.all([getJSON<Server>("ps_server"), getItem("ps_lang")]);
+      // web app: the page's own server decides (cloud account, or an own server's session cookie)
+      const s = WEB_APP ? await webStart(stored?.url ? stored : null) : stored;
       if (s?.url) setServerState(s);
       if (l === "de" || l === "en" || l === "auto") setLangState(l);
       setReady(true);

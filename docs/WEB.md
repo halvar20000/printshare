@@ -9,7 +9,14 @@ The same app as on the phone, for desktop browsers, with the same cloud account:
 - **Same address as the API:** the cloud server serves the web app at `/` (and its routes `/printers`, `/job/…` →
   `index.html`; `_expo/static/…` cached for a year, `index.html` never). Caddy answers for `api.` and `app.pocketprint3d.com`
   with the same container, so the browser never makes cross-site requests (no CORS).
-- Home servers keep their classic web page (`printshare/web`) for now; the plan is to serve this web app there too.
+- **Home servers serve the same web app since 0.47.0** (Unraid, Home Assistant, Docker: `http://<server>:8484/`). The
+  page asks `GET /api/server` which kind of server it is: cloud → e-mail login as before; own server → the access token
+  once (`POST /api/auth/token`, HttpOnly cookie, `lib/api.ts` `webStart`/`webHome()`); printers, camera, control, power …
+  then all go through the server (own-server mode of the app). The start log prints `http://<server>:8484/#token=…`,
+  which logs in by itself (the fragment never reaches a server log; the page removes it from the address bar).
+  The classic page (`printshare/web`) moved to `/classic` (Settings → "Classic web page") for what the app lacks so far
+  (smart plug setup, pairing QR); `PRINTSHARE_CLASSIC_WEB=1` puts it back at `/`. Its service worker is retired:
+  `/sw.js` now removes the old caches and unregisters itself.
 
 ## Login and security
 - **Session in an HttpOnly cookie** (`pp3d_session`, `Secure`, `SameSite=Strict`, 180 days): `POST /api/auth/login` with
@@ -50,4 +57,5 @@ Open: OrcaSlicer's "Upload and print" for printers only the phone reaches (waits
 for Orca uploads, the same for home servers.
 
 ## Next (docs/BRIDGE.md, product plan)
-3. The same web app on home servers instead of the classic page.
+3. ~~The same web app on home servers instead of the classic page.~~ Done in 0.47.0; still to move from the classic
+   page into the app: smart plug setup, pairing QR for the phone app.

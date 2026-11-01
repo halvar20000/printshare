@@ -225,6 +225,7 @@ class Settings:
     lan_subnet: str = ""               # printer search when broadcasts don't work (Docker bridge network), e.g. 192.168.1.0/24
     # cloud: the web app (Expo web build, docs/WEB.md) served at / of api./app.pocketprint3d.com
     webapp_dir: str = "/opt/webapp"
+    classic_web: bool = False          # home server: the classic page at / instead of the web app (PRINTSHARE_CLASSIC_WEB=1)
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
         if not self.printers:
@@ -269,6 +270,10 @@ def _machine_defaults(sl: dict[str, Any], profiles_dir: str, printer_id: str) ->
 def printer_from_config(p: dict[str, Any], config_dir: Path, profiles_dir: str) -> PrinterConfig:
     """One printer from config.yaml (or, in cloud mode, from the account database)."""
     p = dict(p)
+    # YAML reads an all-digit Bambu access code / PrusaLink password (password: 12345678) as a number
+    for key in ("id", "password", "api_key", "serial", "mainboard_id", "host"):
+        if isinstance(p.get(key), (int, float)) and not isinstance(p.get(key), bool):
+            p[key] = str(p[key])
     sl = dict(p.pop("slicing", {}) or {})
     # settings made in the app (printers.d/<id>.yaml) win over config.yaml, which the Unraid template /
     # Home Assistant add-on may regenerate on every start
@@ -315,6 +320,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
     if os.environ.get("PRINTSHARE_BRIDGE_ONLY", "").lower() in ("1", "true", "yes"):
         s.bridge_only = True
     s.lan_subnet = os.environ.get("PRINTSHARE_LAN_SUBNET") or s.lan_subnet
+    if os.environ.get("PRINTSHARE_CLASSIC_WEB", "").lower() in ("1", "true", "yes"):
+        s.classic_web = True
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

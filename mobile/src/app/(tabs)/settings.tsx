@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Alert, Linking, Platform, Switch, Text, View } from "react-native";
 
 import { Badge, Divider, Row, Screen, Section, Segmented, confirmAsync, tap } from "@/components/ui";
-import { WEB_APP, type Me, type Printer } from "@/lib/api";
+import { WEB_APP, webHome, type Me, type Printer } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { LangPref } from "@/lib/i18n";
 import { CLOUD_SPOOLS, loadSpoolmanUrl } from "@/lib/spoolman";
@@ -45,7 +45,8 @@ export default function Settings() {
   }, [api, server]));
 
   const disconnect = () => {
-    const run = () => setServer(null);
+    // web app on an own server: log the browser out (clears the session cookie)
+    const run = async () => { if (webHome()) await api?.logout().catch(() => {}); await setServer(null); };
     if (Platform.OS === "web") { if (globalThis.confirm?.(t("disconnectQ"))) run(); return; }
     Alert.alert(t("disconnectQ"), undefined, [
       { text: t("cancelBtn"), style: "cancel" },
@@ -173,9 +174,11 @@ export default function Settings() {
             kind={online === false ? "error" : online ? "ok" : "neutral"} /> : null} />
         {server?.remoteUrl ? <><Divider /><Row icon="globe-outline" label={t("remoteUrl")}
           sub={server.remoteUrl.replace(/^https?:\/\//, "")} /></> : null}
-        <Divider />
-        <Row icon="qr-code-outline" label={server ? t("changeServer") : t("connectNow")} onPress={() => router.push("/connect")} />
-        {server ? <><Divider /><Row icon="log-out-outline" label={t("disconnect")} danger onPress={disconnect} /></> : null}
+        {!webHome() ? <><Divider />
+        <Row icon="qr-code-outline" label={server ? t("changeServer") : t("connectNow")} onPress={() => router.push("/connect")} /></> : null}
+        {webHome() ? <><Divider /><Row icon="browsers-outline" label={t("classicWeb")} sub={t("classicWebSub")}
+          onPress={() => { location.href = "/classic"; }} /></> : null}
+        {server ? <><Divider /><Row icon="log-out-outline" label={t(webHome() ? "logout" : "disconnect")} danger onPress={disconnect} /></> : null}
       </Section>
 
       {server && printers.length ? (
