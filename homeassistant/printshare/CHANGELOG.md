@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.49.0
+- Inbox folder: new model files (STL/3MF/OBJ/STEP) in a folder you mount as `/inbox` show up on the home screen of the
+  app and the web app under "New in the inbox folder" - e.g. the export folder of SolidCraft or another CAD program,
+  so a part designed there (also by an AI assistant through SolidCraft's MCP server) is one tap away from the print
+  preparation. Nothing is sliced or printed by itself. Unraid: new optional field "Inbox folder" (read only).
+  `PRINTSHARE_INBOX=off` switches it off, another path moves it. Own servers only.
+- The print preparation shows the file name of an uploaded model instead of `upload:<id>`.
+
 ## 0.48.0
 - "Open in PocketPrint3D" from CAD programs (first: SolidCraft, once they add it): the CAD program uploads the part to
   `POST /api/import` and opens the print preparation in the browser - no saving and uploading by hand. Settings →

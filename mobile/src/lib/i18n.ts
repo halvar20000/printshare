@@ -64,6 +64,8 @@ const de = {
   notConnectedSub: "Modelle finden und direkt vom Handy auf deinem 3D-Drucker drucken – kostenlos, nur mit deiner E-Mail.",
   connectNow: "Kostenlos anmelden", ownServerLink: "Eigener Server? (für Fortgeschrittene)",
   recent: "Zuletzt",
+  inboxTitle: "Neu im Eingangsordner", inboxSub: "Aus deinem CAD-Programm – tippen zum Vorbereiten.",
+  inboxDismiss: "Aus der Liste entfernen", inboxClear: "Alle entfernen",
   // prepare
   prepareTitle: "Druck vorbereiten",
   model: "Modell", file: "Datei", filesLoading: "Dateien werden gesucht …",
@@ -530,6 +532,8 @@ const en: Strings = {
   notConnectedSub: "Find models and print them on your 3D printer straight from your phone – free, just with your e-mail.",
   connectNow: "Sign up for free", ownServerLink: "Own server? (advanced)",
   recent: "Recent",
+  inboxTitle: "New in the inbox folder", inboxSub: "From your CAD program – tap to prepare.",
+  inboxDismiss: "Remove from the list", inboxClear: "Remove all",
   prepareTitle: "Prepare print",
   model: "Model", file: "File", filesLoading: "Looking up files …",
   filesMany: "{n} files – pick one", printer: "Printer", material: "Material", quality: "Quality",

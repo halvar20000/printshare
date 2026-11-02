@@ -202,6 +202,16 @@ POST   /api/printers/<id>/control   {"action": "pause|resume|cancel", "confirm":
 POST   /api/print  {"link", "printer", "file", "start"}   # one-shot slice + send (CLI, shortcuts)
 ```
 
+## 4b. Inbox folder for your CAD program (optional)
+
+Mount a folder as `/inbox` (Unraid: field *Inbox folder*; Docker: `-v /path/to/exports:/inbox:ro`). Every new
+STL/3MF/OBJ/STEP file that appears there shows up on the home screen of the app and the web page under
+*New in the inbox folder*; a tap opens the print preparation. Nothing is printed by itself.
+
+Example SolidCraft (also as a container on the same server): give PocketPrint3D SolidCraft's `/workspace` folder as
+`/inbox`. What you - or an AI assistant through SolidCraft's MCP server - export there as STL or 3MF is offered
+a few seconds later. Files that were already in the folder are not listed; `PRINTSHARE_INBOX=off` switches it off.
+
 ## 5. Switch the printer on and off (optional, Home Assistant)
 
 If the printer hangs on a smart plug that Home Assistant knows (`switch.…`, `light.…` or `input_boolean.…`),

@@ -283,7 +283,7 @@ export default function Prepare() {
       {error ? <Banner kind="error" text={error} /> : null}
 
       <Section title={t("model")}>
-        <Row icon="cube-outline" label={name || jobName(null, link)} sub={link && !link.startsWith("upload:") ? link : undefined} />
+        <Row icon="cube-outline" label={name || (link?.startsWith("upload:") && fileName) || jobName(null, link)} sub={link && !link.startsWith("upload:") ? link : undefined} />
         {files === null && link ? (
           <><Divider /><Row label={t("filesLoading")} right={<ActivityIndicator color={c.accent} />} /></>
         ) : files && files.length > 1 ? (

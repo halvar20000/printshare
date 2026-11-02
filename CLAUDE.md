@@ -1087,6 +1087,19 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `pp3dk_` account key in the `upload_keys` table under printer id `@import`). App/web: Settings → "Open from a CAD
   program" (`import-key.tsx`); `?link=` survives the login (`takeSharedSearch`). Browser-tested on a local home server.
 
+## Inbox folder + SolidCraft MCP (2026-11-02, server 0.49.0)
+- Thomas runs SolidCraft as an Unraid container (`SolidCraft`, http://192.168.86.230:8781, v0.29.0, not the official
+  nginx-only `solidcraft-web` image): MCP over HTTP at `/mcp` (Bearer token from `/data/mcp-token` in the container, copy in
+  `.secrets/solidcraft-token`), workspace `/workspace`. Connected to Claude Code on the Mac (`claude mcp add --transport http
+  -s user solidcraft …`); 24 tools (execute, batch, export, save, screenshot, skill_reference …).
+- `printshare/inbox.py`: watched folder (`inbox_dir`, default `/inbox` if it exists, env `PRINTSHARE_INBOX`, `off`); scan
+  every 5 s (subfolders ≤ 4 deep, hidden skipped, no symlinks), a file counts after two equal scans and ≥ 3 s age, then it is
+  copied into the uploads (`upload:<id>`); first run = baseline (existing files not offered); changed files offered again;
+  state `<work_dir>/inbox.json`, 30 entries. API `GET|DELETE /api/inbox`, `DELETE /api/inbox/{id}`; not in the cloud/bridge-only.
+  App/web home screen card "Neu im Eingangsordner" (polls every 5 s while focused). Unraid template field "Inbox folder" (ro).
+- Plan for Thomas: mount SolidCraft's `/workspace` host folder as PrintShare's `/inbox`. Live-checked with a local server +
+  web build in Chromium (card, tap → prepare); not yet on Tower with the real SolidCraft export.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

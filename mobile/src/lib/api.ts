@@ -42,6 +42,10 @@ export function takeSharedSearch(): string {
 export type ImportKey = { enabled: boolean; url: string; server_token: boolean; token_required?: boolean;
   created?: number; last_used?: number | null };
 
+// inbox folder of an own server (0.49.0): model files a CAD program exported there
+export type InboxItem = { id: string; name: string; path: string; size: number; modified: number; found: number; link: string };
+export type Inbox = { enabled: boolean; items: InboxItem[] };
+
 export async function webStart(stored: Server | null): Promise<Server | null> {
   // a model sent here (CAD program, share link) waits until the login is done (the login screen drops the address)
   if (/[?&](link|url|text)=/.test(location.search)) sessionStorage.setItem(SHARED_KEY, location.search);
@@ -550,6 +554,10 @@ export class Api {
   importKey = () => this.request<ImportKey>("/api/import-key");
   createImportKey = () => this.request<ImportKey & { key: string }>("/api/import-key", { method: "POST" });
   deleteImportKey = () => this.request<{ deleted: boolean }>("/api/import-key", { method: "DELETE" });
+  // inbox folder (own servers, server 0.49.0; older servers answer 404 → treat as off)
+  inbox = () => this.request<Inbox>("/api/inbox");
+  dismissInbox = (id: string) => this.request<{ removed: number }>(`/api/inbox/${encodeURIComponent(id)}`, { method: "DELETE" });
+  clearInbox = () => this.request<{ removed: number }>("/api/inbox", { method: "DELETE" });
   // spool bookings in the account (cloud spools, server 0.29.0)
   bookings = () => this.request<ServerBookings>("/api/bookings");
   createBooking = (b: { printer: string; file: string; uses: { spool: number; grams: number; label?: string }[];
