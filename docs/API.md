@@ -819,6 +819,21 @@ DELETE /api/import-key      (auth, cloud) {"deleted": bool}
 - Import keys (`pp3dk_`) don't work for OrcaSlicer's printer upload, and its `pp3do_` keys don't work here.
 - The web app keeps `?link=` over the login screen (sessionStorage) and opens the prepare page right after the login.
 
+## Inbox folder (0.49.0, own servers)
+
+A folder on the server (default `/inbox`, env `PRINTSHARE_INBOX`, `off` = never), e.g. a CAD program's export folder
+mounted read-only. New or changed model files are copied into the uploads once they stopped changing and listed here;
+files that were there when the inbox was first switched on are not. Nothing is sliced or printed by itself.
+
+```
+GET    /api/inbox        (auth) {"enabled": bool, "items": [{"id", "name", "path" (relative to the folder), "size",
+                                 "modified", "found" (unix s), "link": "upload:<id>"}]}   newest first, at most 30
+DELETE /api/inbox/{id}   (auth) {"removed": 1}   only the list entry and its copy; 404 if unknown
+DELETE /api/inbox        (auth) {"removed": n}   all entries
+```
+- `enabled: false` in the cloud, on bridge-only servers and when the folder doesn't exist (older servers: 404).
+- `link` works like an upload: `/api/files`, `/api/jobs` … The app polls every 5 s while its home screen is open.
+
 ## Web-page-only endpoints
 Settings that are made on the web page, not in the apps: `/api/printers/{id}/power/config` (GET/PUT/DELETE),
 `/power/test`, `/power/entities`. Details in `printshare/api.py`.

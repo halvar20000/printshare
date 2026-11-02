@@ -21,6 +21,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/printers/{id}/options[?process=...]   presets and defaults for the pickers
   POST /api/uploads?name=part.stl   raw file body -> {"link": "upload:<id>", ...}
   GET  /api/files?link=...  (link: http(s) URL or "upload:<id>")
+  GET|DELETE /api/inbox · DELETE /api/inbox/{id}   new model files in the watched folder (0.49.0, own servers)
   GET  /api/inspect?link=...&file=...   colours/filaments of a model (downloads it, cached for a day)
   GET  /api/model-file?link=...&file=... the model file itself, for the 3D view in the app (same cache)
   GET  /api/sources         model sources for search (Thingiverse only with a token)
@@ -57,6 +58,7 @@ import hmac
 import html as htmllib
 import ipaddress
 import json
+import logging
 import os
 import re
 import secrets
@@ -100,6 +102,7 @@ from . import motion as motion_mod
 from . import filament_db
 from . import manyfold as mf
 from . import failure_watch as fw
+from . import inbox as inbox_mod
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -130,6 +133,7 @@ async def _lifespan(_app):
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
         TIMELAPSE.start_loop()     # time-lapse recordings (0.32.0)
         _spawn(_jobs_track_loop()) # started jobs → finished / cancelled (0.33.0)
+        _spawn(_inbox_loop())      # inbox folder: new model files from a CAD program (0.49.0)
     else:
         _spawn(_bookings_loop())   # spool bookings of bridge printers (0.29.0), checked by the cloud itself
     _spawn(_jobs_loop())           # jobs survive restarts (0.30.0)
@@ -139,7 +143,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.48.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.49.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -2726,6 +2730,61 @@ def import_key_delete(acct: Account = Depends(auth)) -> dict[str, Any]:
     if not acct.cloud:
         raise HTTPException(409, "own servers use their access token")
     return {"deleted": _upload_keys().delete(acct.id, IMPORT_ID)}
+
+
+# ---------- inbox folder (0.49.0, printshare/inbox.py) ----------
+# A watched folder on own servers (`/inbox`, e.g. SolidCraft's workspace mounted read-only): new model files there are
+# copied into the uploads and listed here; the apps show them on the home screen. Nothing is sliced by itself.
+_INBOX: tuple[str, str, Any] | None = None
+
+
+def _inbox():
+    """The inbox of the current settings (rebuilt when the folder or work dir changes; settings can be reloaded)."""
+    global _INBOX
+    key = (str(settings.inbox_dir), str(settings.work_dir))
+    if _INBOX is None or _INBOX[:2] != key:
+        _INBOX = (*key, inbox_mod.for_settings(settings))
+    return _INBOX[2]
+
+
+async def _inbox_loop() -> None:
+    while True:
+        box = _inbox()
+        if box is not None:
+            try:
+                added = await asyncio.to_thread(box.scan)
+                for item in added:
+                    logging.getLogger(__name__).info("inbox: new model %s", item["path"])
+            except Exception:  # noqa: BLE001 - keep watching
+                logging.getLogger(__name__).exception("inbox scan failed")
+        await asyncio.sleep(inbox_mod.SCAN_S)
+
+
+@app.get("/api/inbox")
+def inbox_list(acct: Account = Depends(auth)) -> dict[str, Any]:
+    box = None if acct.cloud else _inbox()
+    if box is None or not box.folder.is_dir():
+        return {"enabled": False, "items": []}
+    items = [{k: i[k] for k in ("id", "name", "path", "size", "modified", "found", "link")} for i in box.items()]
+    return {"enabled": True, "items": items}
+
+
+@app.delete("/api/inbox")
+def inbox_clear(acct: Account = Depends(auth)) -> dict[str, Any]:
+    box = None if acct.cloud else _inbox()
+    if box is None:
+        raise HTTPException(404, "no inbox folder on this server")
+    return {"removed": box.dismiss(None)}
+
+
+@app.delete("/api/inbox/{item_id}")
+def inbox_dismiss(item_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    box = None if acct.cloud else _inbox()
+    if box is None:
+        raise HTTPException(404, "no inbox folder on this server")
+    if not box.dismiss(item_id):
+        raise HTTPException(404, "not in the inbox")
+    return {"removed": 1}
 
 
 @app.get("/api/files")

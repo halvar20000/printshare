@@ -431,3 +431,53 @@ def test_import_from_cad_program_home(client):
     state = client.get("/api/import-key", headers=H).json()
     assert state["server_token"] and state["token_required"]
     assert client.post("/api/import-key", headers=H).json()["key"] == H["Authorization"].removeprefix("Bearer ")
+
+
+def test_inbox_folder_api(client, api, tmp_path, monkeypatch):
+    """Watched folder (0.49.0): off without the folder; new files listed, openable as upload links, dismissable."""
+    assert client.get("/api/inbox", headers=H).json() == {"enabled": False, "items": []}
+    folder = tmp_path / "inbox"
+    folder.mkdir()
+    monkeypatch.setattr(api.settings, "inbox_dir", str(folder))
+    box = api._inbox()
+    box.scan()                                         # baseline
+    (folder / "bracket.stl").write_bytes(b"solid b\nendsolid b\n")
+    t = time.time() - 10
+    os.utime(folder / "bracket.stl", (t, t))
+    box.scan()
+    box.scan()
+    body = client.get("/api/inbox", headers=H).json()
+    assert body["enabled"] and [i["name"] for i in body["items"]] == ["bracket.stl"]
+    item = body["items"][0]
+    files = client.get("/api/files", params={"link": item["link"]}, headers=H).json()
+    assert [f["name"] for f in files] == ["bracket.stl"]
+    assert client.get("/api/inbox").status_code == 401
+    assert client.delete("/api/inbox/nothere", headers=H).status_code == 404
+    assert client.delete(f"/api/inbox/{item['id']}", headers=H).json() == {"removed": 1}
+    assert client.get("/api/inbox", headers=H).json()["items"] == []
+
+
+def test_inbox_loop_keeps_running_after_a_find(api, tmp_path, monkeypatch):
+    """The background loop itself (a NameError in its log line once killed it after the first file)."""
+    folder = tmp_path / "inbox"
+    folder.mkdir()
+    monkeypatch.setattr(api.settings, "inbox_dir", str(folder))
+    monkeypatch.setattr(api.settings, "work_dir", str(tmp_path / "work"))
+    monkeypatch.setattr(api.inbox_mod, "SCAN_S", 0.05)
+    monkeypatch.setattr(api.inbox_mod, "SETTLE_S", 0)
+    box = api._inbox()
+    box.scan()
+
+    async def run():
+        task = asyncio.create_task(api._inbox_loop())
+        for name in ("a.stl", "b.stl"):
+            (folder / name).write_bytes(b"solid x\nendsolid x\n")
+            for _ in range(60):
+                await asyncio.sleep(0.05)
+                if any(i["name"] == name for i in box.items()):
+                    break
+        assert not task.done(), task.exception()
+        task.cancel()
+
+    asyncio.run(run())
+    assert sorted(i["name"] for i in box.items()) == ["a.stl", "b.stl"]

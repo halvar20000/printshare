@@ -7,7 +7,7 @@ import { Platform, Pressable, ScrollView, Text, TextInput, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Badge, Banner, Button, Card, Divider, Empty, Row, tap, useContentWidth } from "@/components/ui";
-import { WEB_APP, takeSharedSearch, webHome, type JobSummary } from "@/lib/api";
+import { WEB_APP, takeSharedSearch, webHome, type InboxItem, type JobSummary } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { ago, extractLink, jobName, makerWorldId, printTime } from "@/lib/format";
 import { radius, space, useColors } from "@/lib/theme";
@@ -20,6 +20,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [recent, setRecent] = useState<JobSummary[]>([]);
   const [noPrinter, setNoPrinter] = useState(false);
+  const [inbox, setInbox] = useState<InboxItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const width = useContentWidth();
 
@@ -58,7 +59,19 @@ export default function Home() {
     api?.jobs().then(j => setRecent(j.slice(0, 3))).catch(() => {});
     if (api && server?.cloud) api.printers().then(p => setNoPrinter(!p.length)).catch(() => {});
     else setNoPrinter(false);
+    // inbox folder of an own server (0.49.0): new files from a CAD program, checked every 5 s while the screen is open
+    if (!api || server?.cloud) { setInbox([]); return; }
+    let stop = false;
+    const load = () => api.inbox().then(b => { if (!stop) setInbox(b.enabled ? b.items.slice(0, 5) : []); }).catch(() => {});
+    load();
+    const timer = setInterval(load, 5000);
+    return () => { stop = true; clearInterval(timer); };
   }, [api, server]));
+
+  const dismiss = (id: string) => {
+    setInbox(list => list.filter(i => i.id !== id));
+    api?.dismissInbox(id).catch(() => {});
+  };
 
   const go = (l: string) => {
     const found = extractLink(l);
@@ -161,6 +174,50 @@ export default function Home() {
           <Divider />
           <Row icon="search" label={t("searchModels")} sub={t("searchModelsSub")} onPress={() => router.navigate("/discover")} />
         </Card>
+
+        {inbox.length ? (
+          <>
+            <View style={{ flexDirection: "row", alignItems: "center", margin: space, marginTop: 26, marginBottom: 6 }}>
+              <Text style={{ color: c.sub, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.4, flex: 1 }}>
+                {t("inboxTitle")}
+              </Text>
+              {inbox.length > 1 ? (
+                <Pressable onPress={() => { setInbox([]); api?.clearInbox().catch(() => {}); }} accessibilityRole="button" hitSlop={8}>
+                  <Text style={{ color: c.accent, fontSize: 13 }}>{t("inboxClear")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Card>
+              {inbox.map((it, i) => (
+                <View key={it.id}>
+                  {i ? <Divider /> : null}
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Pressable onPress={() => { tap(); router.push({ pathname: "/prepare", params: { link: it.link } }); }}
+                      accessibilityRole="button"
+                      style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", padding: 14,
+                        backgroundColor: pressed ? c.input : "transparent" })}>
+                      <View style={{ width: 40, height: 40, borderRadius: radius / 1.5, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center", marginRight: 12 }}>
+                        <Ionicons name="file-tray-full-outline" size={20} color={c.accent} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: c.text, fontSize: 16 }} numberOfLines={1}>{it.name}</Text>
+                        <Text style={{ color: c.sub, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+                          {[it.path !== it.name ? it.path : null, ago(t, it.modified)].filter(Boolean).join(" · ")}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={c.sub} />
+                    </Pressable>
+                    <Pressable onPress={() => dismiss(it.id)} accessibilityRole="button" accessibilityLabel={t("inboxDismiss")}
+                      hitSlop={6} style={{ padding: 14 }}>
+                      <Ionicons name="close" size={20} color={c.sub} />
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </Card>
+            <Text style={{ color: c.sub, fontSize: 13, marginHorizontal: space, marginTop: 6 }}>{t("inboxSub")}</Text>
+          </>
+        ) : null}
 
         {recent.length ? (
           <>
