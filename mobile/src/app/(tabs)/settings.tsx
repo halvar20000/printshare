@@ -98,6 +98,8 @@ export default function Settings() {
 
   const orcaRow = <Row icon="sync-outline" label={t("orcaAccountTitle")} sub={t("orcaAccountSub")}
     onPress={() => router.push("/orca-account")} />;
+  const importRow = <Row icon="cube-outline" label={t("importTitle")} sub={t("importSub")}
+    onPress={() => router.push("/import-key")} />;
   const spoolsRow = (
     <Row icon="disc-outline" label={t("spoolman")} sub={spoolman === CLOUD_SPOOLS ? t("spoolsCloudOn") : spoolman ?? t("spoolmanSub")}
       value={spoolman ? undefined : t("spoolsOptional")} onPress={() => router.push("/spoolman")} />
@@ -147,6 +149,8 @@ export default function Settings() {
           {spoolsRow}
           <Divider />
           {orcaRow}
+          <Divider />
+          {importRow}
         </Section>
 
         <Section title={t("about")} footer={t(WEB_APP ? "aboutTextCloudWeb" : "aboutTextCloud")}>
@@ -207,6 +211,8 @@ export default function Settings() {
           {spoolsRow}
           <Divider />
           {orcaRow}
+          <Divider />
+          {importRow}
           <Divider />
           <Row icon="library-outline" label={t("manyfoldTitle")} sub={t("manyfoldSub")}
             onPress={() => router.push("/manyfold")} />

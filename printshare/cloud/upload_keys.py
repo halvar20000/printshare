@@ -12,6 +12,9 @@ from typing import Any
 from .accounts import Accounts, _hash
 
 KEY_PREFIX = "pp3do_"
+# "Open in PocketPrint3D" from a CAD program (SolidCraft, 0.48.0): one key per account, kept under this printer id
+IMPORT_PREFIX = "pp3dk_"
+IMPORT_ID = "@import"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS upload_keys (
@@ -29,7 +32,7 @@ class UploadKeys:
 
     def create(self, user_id: str, printer_id: str, now: float | None = None) -> str:
         """A new key for this printer; an older one stops working."""
-        key = KEY_PREFIX + secrets.token_urlsafe(24)
+        key = (IMPORT_PREFIX if printer_id == IMPORT_ID else KEY_PREFIX) + secrets.token_urlsafe(24)
         with self.acc.lock:
             self.acc.db.execute("DELETE FROM upload_keys WHERE user_id = ? AND printer_id = ?", (user_id, printer_id))
             self.acc.db.execute("INSERT INTO upload_keys (key_hash, user_id, printer_id, created) VALUES (?, ?, ?, ?)",
@@ -48,7 +51,7 @@ class UploadKeys:
 
     def resolve(self, key: str, now: float | None = None) -> tuple[str, str] | None:
         """(user id, printer id) of a key, or None."""
-        if not (key or "").startswith(KEY_PREFIX):
+        if not (key or "").startswith((KEY_PREFIX, IMPORT_PREFIX)):
             return None
         rows = self.acc._q("SELECT user_id, printer_id, last_used FROM upload_keys WHERE key_hash = ?", (_hash(key),))
         if not rows:

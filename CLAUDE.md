@@ -1076,6 +1076,17 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   after the HA plug was switched); **not yet with a real Orca, plug or COSMOS**, and Orca's printer agent with a path in
   the host address is untested (its `join_url` keeps the path).
 
+## Open in PocketPrint3D from SolidCraft (2026-11-02, server 0.48.0)
+- SolidCraft (Rust CAD, now `tangency-labs/solidcraft`, ~13k stars) has "Open with EasyPrint" (`crates/engine/src/easyprint.rs`
+  + host HTTP code) and "Send to Slicer" (`slicers.rs`), both community contributions. Thomas wants SolidCraft to print via
+  PocketPrint3D without saving/uploading by hand. Plan: ask upstream first, build it in a fork, PR upstream; keep the fork
+  (daily rebase, own files) only if they refuse. **Issue posted from Thomas' account: tangency-labs/solidcraft#10980**
+  (offers a generic "Open in web slicer" target as fallback). Their #2304 (LAN slicer folder) excludes print hosts.
+- Our side: `POST /api/import` (multipart `file`, Bearer key; errors `{"error": code}` like EasyPrint) → upload +
+  `open_url` = `<web host>/?link=upload:<id>`; keys `GET/POST/DELETE /api/import-key` (own server = its token, cloud =
+  `pp3dk_` account key in the `upload_keys` table under printer id `@import`). App/web: Settings → "Open from a CAD
+  program" (`import-key.tsx`); `?link=` survives the login (`takeSharedSearch`). Browser-tested on a local home server.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

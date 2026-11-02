@@ -30,7 +30,21 @@ async function sameOrigin(path: string, init?: RequestInit): Promise<Response | 
 
 /** Web app start: find out the server kind; on an own server log in with `?token=` / `#token=` from the address (the
  *  link the server prints) and answer the server to use - or null when the browser has no session there yet. */
+const SHARED_KEY = "pp3d_shared";
+
+/** Web app: the `?link=…` the page was opened with (kept over a login), once. */
+export function takeSharedSearch(): string {
+  const search = location.search || sessionStorage.getItem(SHARED_KEY) || "";
+  sessionStorage.removeItem(SHARED_KEY);
+  return search;
+}
+
+export type ImportKey = { enabled: boolean; url: string; server_token: boolean; token_required?: boolean;
+  created?: number; last_used?: number | null };
+
 export async function webStart(stored: Server | null): Promise<Server | null> {
+  // a model sent here (CAD program, share link) waits until the login is done (the login screen drops the address)
+  if (/[?&](link|url|text)=/.test(location.search)) sessionStorage.setItem(SHARED_KEY, location.search);
   const r = await sameOrigin("/api/server");
   const info = r?.ok ? await r.json().catch(() => null) : null;
   webKind = info && info.cloud === false ? "home" : "cloud";
@@ -532,6 +546,10 @@ export class Api {
       { method: "POST" });
   deleteOrcaUpload = (printer: string) =>
     this.request<{ deleted: boolean }>(`/api/printers/${encodeURIComponent(printer)}/orca-upload`, { method: "DELETE" });
+  // "Open in PocketPrint3D" from a CAD program (SolidCraft, server 0.48.0): own server = its token, cloud = account key
+  importKey = () => this.request<ImportKey>("/api/import-key");
+  createImportKey = () => this.request<ImportKey & { key: string }>("/api/import-key", { method: "POST" });
+  deleteImportKey = () => this.request<{ deleted: boolean }>("/api/import-key", { method: "DELETE" });
   // spool bookings in the account (cloud spools, server 0.29.0)
   bookings = () => this.request<ServerBookings>("/api/bookings");
   createBooking = (b: { printer: string; file: string; uses: { spool: number; grams: number; label?: string }[];

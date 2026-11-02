@@ -66,6 +66,7 @@ function Root() {
         <Stack.Screen name="spoolman" options={{ title: t("spoolman") }} />
         <Stack.Screen name="bridges" options={{ title: t("bridgesTitle") }} />
         <Stack.Screen name="orca-upload/[id]" options={{ title: t("orcaTitle") }} />
+        <Stack.Screen name="import-key" options={{ title: t("importTitle") }} />
         <Stack.Screen name="timelapse/[id]" options={{ title: t("timelapseTitle") }} />
         <Stack.Screen name="spools" options={{ title: t("spools") }} />
         <Stack.Screen name="printables" options={{ title: "Printables" }} />

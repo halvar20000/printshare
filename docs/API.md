@@ -797,6 +797,28 @@ Compatible-printer lists that Orca Cloud sends as text (`"A";"B"`) are read as l
 - `POST /api/orca-cloud/sync` → status + `removed` (409 not connected / pairing ended)
 - `DELETE /api/orca-cloud?remove_presets=true|false` → status + `removed` (the app ID and the schedule are kept)
 
+## Open in PocketPrint3D from a CAD program (0.48.0)
+
+For CAD programs (first: SolidCraft, tangency-labs/solidcraft#10980). The program uploads the model and opens the
+answer's address in the browser: the web app's prepare page, where the user chooses printer, material and quality and
+confirms the print. The CAD program never starts a print.
+
+```
+POST /api/import            multipart/form-data: file (STL/3MF/OBJ/STEP), optional file_name
+                            Authorization: Bearer <key>   (own server: its access token; cloud: the account's pp3dk_ key)
+  200 {"open_url": "https://app.pocketprint3d.com/?link=upload:<id>", "link": "upload:<id>", "name": "...", "size": n}
+  401 {"error": "invalid-key", "detail": "..."}
+  400 {"error": "missing-file", ...}   415 {"error": "invalid-extension", ...}   413 {"error": "file-too-large", ...}
+GET    /api/import-key      (auth) {"enabled", "url", "server_token": bool, "token_required"?, "created"?, "last_used"?}
+POST   /api/import-key      (auth) new key, shown once ({"key": ...}); an older key stops working. Own server: its token
+DELETE /api/import-key      (auth, cloud) {"deleted": bool}
+```
+- `open_url` uses the host the upload was sent to (cloud: the session cookie belongs to that host) - own servers prefer
+  `PRINTSHARE_URL`. A CAD program should only open addresses on the server it is configured for.
+- The upload belongs to the key's account: another account's browser session can't open it.
+- Import keys (`pp3dk_`) don't work for OrcaSlicer's printer upload, and its `pp3do_` keys don't work here.
+- The web app keeps `?link=` over the login screen (sessionStorage) and opens the prepare page right after the login.
+
 ## Web-page-only endpoints
 Settings that are made on the web page, not in the apps: `/api/printers/{id}/power/config` (GET/PUT/DELETE),
 `/power/test`, `/power/entities`. Details in `printshare/api.py`.

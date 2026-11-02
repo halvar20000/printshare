@@ -73,7 +73,7 @@ from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
@@ -83,7 +83,7 @@ from .cloud import accounts
 from .cloud.spools import Spools
 from .cloud.bridges import Bridges
 from .cloud.bookings import Bookings
-from .cloud.upload_keys import UploadKeys
+from .cloud.upload_keys import IMPORT_ID, UploadKeys
 from . import gcode_info
 from . import filament as filament_mod
 from . import spooltags as spooltags_mod
@@ -139,7 +139,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.47.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.48.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -851,6 +851,8 @@ def orca_upload_delete(printer_id: str, acct: Account = Depends(auth)) -> dict[s
 def _octo_auth(request: Request) -> tuple[Account, PrinterConfig]:
     key = request.headers.get("x-api-key") or request.query_params.get("apikey") or ""
     found = _upload_keys().resolve(key) if key else None
+    if found and found[1] == IMPORT_ID:
+        found = None                    # an "Open in PocketPrint3D" key doesn't send G-code to printers
     user = ACCOUNTS.user(found[0]) if found else None
     if user is None:
         raise HTTPException(403, "Invalid API key - create one in the PocketPrint3D app (printer → Send from OrcaSlicer)")
@@ -2623,6 +2625,107 @@ async def upload(request: Request, name: str, acct: Account = Depends(auth)) -> 
         shutil.rmtree(d, ignore_errors=True)
         raise
     return {"id": uid, "link": UPLOAD_PREFIX + uid, "name": safe, "size": size}
+
+
+# ---------- "Open in PocketPrint3D" from a CAD program (SolidCraft, 0.48.0) ----------
+# The CAD program uploads the model (multipart field `file`, `Authorization: Bearer <key>`) and opens `open_url` in the
+# browser: the web app's prepare page, where the user chooses printer, material and quality and confirms the print.
+# Key: own server = its access token; cloud = the account's `pp3dk_` key (Settings → Open from a CAD program).
+# Errors carry a short `error` code (like Printables' EasyPrint import) besides the usual `detail`.
+
+
+def _import_error(status: int, code: str, detail: str) -> JSONResponse:
+    return JSONResponse({"error": code, "detail": detail}, status_code=status)
+
+
+def _web_url(request: Request) -> str:
+    """The web app's address as the caller reached this server (the cloud's session cookie belongs to that host)."""
+    if not settings.cloud:
+        from . import bootstrap
+        if bootstrap.server_url():
+            return bootstrap.server_url().rstrip("/")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{'https' if _https(request) else 'http'}://{host.split(',')[0].strip()}"
+
+
+def _import_account(request: Request) -> Account | None:
+    key = _token(request)
+    if not settings.cloud:
+        if settings.api_token and not (key and secrets.compare_digest(key, settings.api_token)):
+            return None
+        return Account("local", settings)
+    found = UPLOAD_KEYS.resolve(key) if UPLOAD_KEYS is not None and key else None
+    user = ACCOUNTS.user(found[0]) if found and found[1] == IMPORT_ID else None
+    return _user_account(user, "") if user else None
+
+
+@app.post("/api/import")
+async def import_model(request: Request) -> Response:
+    """A model from a CAD program → an upload of the account + the address of its prepare page."""
+    acct = _import_account(request)
+    if acct is None:
+        return _import_error(401, "invalid-key", "invalid key - create one in PocketPrint3D (Settings → Open from a CAD program)")
+    limit = settings.limit_upload_mb * 1048576 if acct.cloud else MAX_UPLOAD
+    if int(request.headers.get("content-length") or 0) > limit + 1_000_000:
+        return _import_error(413, "file-too-large", f"file too large (max {limit // 1048576} MB)")
+    try:
+        form = await request.form(max_files=1, max_fields=5)
+    except Exception:  # noqa: BLE001 - not a multipart form
+        return _import_error(400, "missing-file", "send the model as multipart/form-data, field 'file'")
+    upload = form.get("file")
+    if upload is None or not hasattr(upload, "read"):
+        return _import_error(400, "missing-file", "no file in the upload")
+    safe = re.sub(r"[^\w.\- ]+", "_", Path(str(form.get("file_name") or upload.filename or "")).name).strip(" .")[:120]
+    if not safe.lower().endswith(SLICEABLE):
+        return _import_error(415, "invalid-extension", f"unsupported file type - use {', '.join(SLICEABLE)}")
+    uid = uuid.uuid4().hex[:12]
+    d = _uploads(acct) / uid
+    d.mkdir(parents=True)
+    size = 0
+    try:
+        with open(d / safe, "wb") as fh:
+            while chunk := await upload.read(1 << 20):
+                size += len(chunk)
+                if size > limit:
+                    raise ValueError("file-too-large")
+                fh.write(chunk)
+        if size == 0:
+            raise ValueError("missing-file")
+    except ValueError as e:
+        shutil.rmtree(d, ignore_errors=True)
+        if str(e) == "file-too-large":
+            return _import_error(413, "file-too-large", f"file too large (max {limit // 1048576} MB)")
+        return _import_error(400, "missing-file", "empty file")
+    except BaseException:
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    link = UPLOAD_PREFIX + uid
+    return JSONResponse({"open_url": f"{_web_url(request)}/?link={link}", "link": link, "name": safe, "size": size})
+
+
+@app.get("/api/import-key")
+def import_key_state(request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Is "Open in PocketPrint3D" set up? Own servers use their access token (shown in the app's pairing code)."""
+    url = _web_url(request)
+    if not acct.cloud:
+        return {"enabled": True, "url": url, "server_token": True, "token_required": bool(settings.api_token)}
+    info = _upload_keys().info(acct.id, IMPORT_ID)
+    return {"enabled": info is not None, "url": url, "server_token": False, **(info or {})}
+
+
+@app.post("/api/import-key")
+def import_key_create(request: Request, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """A new key (shown once; an older one stops working). Own servers: their access token."""
+    if not acct.cloud:
+        return {"enabled": True, "url": _web_url(request), "server_token": True, "key": settings.api_token or ""}
+    return {"enabled": True, "url": _web_url(request), "server_token": False, "key": _upload_keys().create(acct.id, IMPORT_ID)}
+
+
+@app.delete("/api/import-key")
+def import_key_delete(acct: Account = Depends(auth)) -> dict[str, Any]:
+    if not acct.cloud:
+        raise HTTPException(409, "own servers use their access token")
+    return {"deleted": _upload_keys().delete(acct.id, IMPORT_ID)}
 
 
 @app.get("/api/files")

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.48.0
+- "Open in PocketPrint3D" from CAD programs (first: SolidCraft, once they add it): the CAD program uploads the part to
+  `POST /api/import` and opens the print preparation in the browser - no saving and uploading by hand. Settings →
+  "Open from a CAD program" shows the address and key (own server: its access token; cloud: a personal key).
+- The web app keeps a model link it was opened with while you log in, and opens it right after the login.
+
 ## 0.47.0
 - The server's own web page is now the full PocketPrint3D web app - the same as on app.pocketprint3d.com and in the
   Android app: upload STL/3MF/OBJ/STEP files (also by drag and drop), camera, printer control, filament, 3D views,
