@@ -410,3 +410,24 @@ def test_numeric_access_code_from_yaml(tmp_path):
     p = printer_from_config({"id": "p1s", "type": "bambu_lan", "host": "192.168.1.5", "password": 12345678,
                              "slicing": {"machine": "Bambu Lab P1S 0.4 nozzle"}}, tmp_path, str(tmp_path / "no-orca"))
     assert p.password == "12345678"
+
+
+def test_import_from_cad_program_home(client):
+    """"Open in PocketPrint3D" (SolidCraft): multipart upload with the server token → prepare page address."""
+    stl = b"solid cube\nendsolid cube\n"
+    r = client.post("/api/import", files={"file": ("My Part.stl", stl)})
+    assert r.status_code == 401 and r.json()["error"] == "invalid-key"
+    r = client.post("/api/import", files={"file": ("part.dwg", b"x")}, headers=H)
+    assert r.status_code == 415 and r.json()["error"] == "invalid-extension"
+    r = client.post("/api/import", data={"x": "1"}, headers=H)
+    assert r.status_code == 400 and r.json()["error"] == "missing-file"
+    r = client.post("/api/import", files={"file": ("ignored.stl", stl)}, data={"file_name": "My Part.stl"}, headers=H)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["name"] == "My Part.stl" and body["size"] == len(stl)
+    assert body["open_url"] == f"http://testserver/?link={body['link']}"
+    files = client.get("/api/files", params={"link": body["link"]}, headers=H).json()
+    assert [f["name"] for f in files] == ["My Part.stl"]
+    state = client.get("/api/import-key", headers=H).json()
+    assert state["server_token"] and state["token_required"]
+    assert client.post("/api/import-key", headers=H).json()["key"] == H["Authorization"].removeprefix("Bearer ")

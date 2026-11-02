@@ -332,3 +332,25 @@ def test_spool_limit(cloud, monkeypatch):
             assert c.post("/spoolman/api/v1/spool", headers=a, json={}).status_code == 200
         r = c.post("/spoolman/api/v1/spool", headers=a, json={})
         assert r.status_code == 400 and "at most 2 spools" in r.json()["detail"]
+
+
+def test_import_from_cad_program_cloud(cloud):
+    """Cloud: one `pp3dk_` key per account; it opens the web app of the host it was sent to; no OrcaSlicer access."""
+    with TestClient(cloud.app) as c:
+        h = login(cloud, c, "anna@example.com")
+        assert c.get("/api/import-key", headers=h).json()["enabled"] is False
+        key = c.post("/api/import-key", headers=h).json()["key"]
+        assert key.startswith("pp3dk_")
+        k = {"Authorization": f"Bearer {key}", "Host": "app.pocketprint3d.com", "X-Forwarded-Proto": "https"}
+        r = c.post("/api/import", files={"file": ("cube.3mf", b"PK\x03\x04data")}, headers=k)
+        assert r.status_code == 200, r.text
+        assert r.json()["open_url"] == f"https://app.pocketprint3d.com/?link={r.json()['link']}"
+        assert c.get("/api/files", params={"link": r.json()["link"]}, headers=h).status_code != 404
+        assert c.get("/octoprint/api/version", headers={"X-Api-Key": key}).status_code == 403
+        assert c.post("/api/import", files={"file": ("a.stl", b"x")}, headers={"Authorization": "Bearer " + h["Authorization"][7:]}).status_code == 401
+        other = login(cloud, c, "ben@example.com")
+        assert c.get("/api/files", params={"link": r.json()["link"]}, headers=other).status_code in (400, 404)
+        info = c.get("/api/import-key", headers=h).json()
+        assert info["enabled"] and info["last_used"]
+        assert c.delete("/api/import-key", headers=h).json()["deleted"]
+        assert c.post("/api/import", files={"file": ("a.stl", b"x")}, headers=k).status_code == 401
