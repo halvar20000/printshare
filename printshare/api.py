@@ -52,6 +52,8 @@ import asyncio
 import base64
 import contextlib
 import dataclasses
+import hashlib
+import hmac
 import html as htmllib
 import ipaddress
 import json
@@ -60,6 +62,7 @@ import re
 import secrets
 import shutil
 import socket
+import threading
 import time
 import uuid
 from collections import deque
@@ -136,7 +139,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.46.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.47.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -222,13 +225,21 @@ def _token(request: Request) -> str:
     return header.removeprefix("Bearer ").strip() or request.query_params.get("token", "")
 
 
+def _home_session() -> str:
+    """Home server, web app: the cookie holds a value derived from the access token (not the token itself). A new
+    token in config.yaml ends every browser session."""
+    return hmac.new(settings.api_token.encode(), b"pp3d-web-session", hashlib.sha256).hexdigest()
+
+
 def auth(request: Request) -> Account:
     token = _token(request)
-    if not token and settings.cloud:
+    from_cookie = False
+    if not token:
         # the web app (docs/WEB.md): session in an HttpOnly cookie that page scripts can't read. SameSite=Strict keeps
         # other sites from using it; changes additionally need a header that a plain form or link can't send.
         token = request.cookies.get(SESSION_COOKIE, "")
-        if token and request.method not in ("GET", "HEAD", "OPTIONS") \
+        from_cookie = bool(token)
+        if from_cookie and request.method not in ("GET", "HEAD", "OPTIONS") \
                 and request.headers.get(CSRF_HEADER[0]) != CSRF_HEADER[1]:
             raise HTTPException(403, "request not allowed from this page")
     if settings.cloud:
@@ -238,8 +249,10 @@ def auth(request: Request) -> Account:
         if settings.api_token and token and secrets.compare_digest(token, settings.api_token):
             return Account("admin", dataclasses.replace(settings, printers=[]))   # operator: stats only
         raise HTTPException(401, "please log in")
-    if settings.api_token and not secrets.compare_digest(token, settings.api_token):
-        raise HTTPException(401, "invalid token")
+    if settings.api_token:
+        expected = _home_session() if from_cookie else settings.api_token
+        if not secrets.compare_digest(token, expected):
+            raise HTTPException(401, "invalid token")
     return Account("local", settings)       # no token configured: only acceptable on a trusted LAN
 
 
@@ -329,9 +342,43 @@ class LoginRequest(BaseModel):
     cookie: bool = False            # web app: keep the session in an HttpOnly cookie instead of returning it
 
 
-def _set_session_cookie(response: Response, token: str) -> None:
-    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_COOKIE_DAYS * 86400, path="/", secure=True,
+def _https(request: Request | None) -> bool:
+    if request is None:
+        return True
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    return (proto or request.url.scheme) == "https"
+
+
+def _set_session_cookie(response: Response, token: str, request: Request | None = None) -> None:
+    # home servers are often plain http on the LAN: a Secure cookie would never be stored there
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_COOKIE_DAYS * 86400, path="/", secure=_https(request),
                         httponly=True, samesite="strict")
+
+
+def _clear_session_cookie(response: Response, request: Request | None = None) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/", secure=_https(request), httponly=True, samesite="strict")
+
+
+class TokenLogin(BaseModel):
+    token: str
+
+
+_TOKEN_FAILS: deque[float] = deque(maxlen=50)
+
+
+@app.post("/api/auth/token")
+async def auth_token(req: TokenLogin, request: Request, response: Response) -> dict[str, Any]:
+    """Home server, web app: the access token once -> a browser session in an HttpOnly cookie (docs/WEB.md)."""
+    if settings.cloud:
+        raise HTTPException(404, "this server uses e-mail login")
+    if settings.api_token:
+        if not secrets.compare_digest(req.token.strip(), settings.api_token):
+            now = time.time()
+            _TOKEN_FAILS.append(now)
+            await asyncio.sleep(1 if sum(1 for t in _TOKEN_FAILS if now - t < 60) < 10 else 5)
+            raise HTTPException(401, "invalid token")
+        _set_session_cookie(response, _home_session(), request)
+    return {"ok": True, "name": "PrintShare", "version": app.version}
 
 
 @app.post("/api/auth/code")
@@ -375,10 +422,10 @@ def auth_me(acct: Account = Depends(auth)) -> dict[str, Any]:
 
 
 @app.post("/api/auth/logout")
-def auth_logout(response: Response, acct: Account = Depends(auth)) -> dict[str, Any]:
+def auth_logout(request: Request, response: Response, acct: Account = Depends(auth)) -> dict[str, Any]:
     if acct.cloud:
         ACCOUNTS.logout(acct.token)
-        response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
+    _clear_session_cookie(response, request)
     return {"ok": True}
 
 
@@ -2195,14 +2242,17 @@ async def motion_action(printer_id: str, req: MotionRequest, acct: Account = Dep
 
 # ---------- spools by NFC chip and per slot, NFC readers at the printer (0.38.0, printshare/spooltags.py) ----------
 _SPOOLTAGS: spooltags_mod.SpoolTags | None = None
+_SPOOLTAGS_LOCK = threading.Lock()
 
 
 def _tags() -> spooltags_mod.SpoolTags:
     """One store: next to the cloud database, or in the home server's config folder (owner "local")."""
     global _SPOOLTAGS
-    if _SPOOLTAGS is None:
-        base = Path(settings.cloud_db).parent if settings.cloud else Path(settings.config_dir or ".")
-        _SPOOLTAGS = spooltags_mod.SpoolTags(base / "spooltags.db")
+    # endpoints run in parallel threads: the web app asks several printers at once on the first page view
+    with _SPOOLTAGS_LOCK:
+        if _SPOOLTAGS is None:
+            base = Path(settings.cloud_db).parent if settings.cloud else Path(settings.config_dir or ".")
+            _SPOOLTAGS = spooltags_mod.SpoolTags(base / "spooltags.db")
     return _SPOOLTAGS
 
 
@@ -3346,16 +3396,31 @@ WEBAPP_CSP = ("default-src 'self'; "
 WEBAPP_HEADERS = {"Content-Security-Policy": WEBAPP_CSP, "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff",
                   "Referrer-Policy": "strict-origin-when-cross-origin",
                   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), usb=(), serial=()"}
+# Home servers: the browser may also reach the user's own services on the LAN (own Spoolman at http://<ip>:7912)
+WEBAPP_HEADERS_HOME = {**WEBAPP_HEADERS, "Content-Security-Policy": WEBAPP_CSP.replace(
+    "connect-src 'self' blob: data: https://cdn.jsdelivr.net", "connect-src 'self' blob: data: http: https:")}
 
 
 def _webapp() -> Path | None:
+    """The web app (Expo web build) at /: in the cloud and, since 0.47.0, on home servers too (classic page at
+    /classic). Not on bridge-only containers (no web app in that image) or with `classic_web`."""
+    if settings.bridge_only or (settings.classic_web and not settings.cloud):
+        return None
     d = Path(settings.webapp_dir)
-    return d if settings.cloud and (d / "index.html").is_file() else None
+    return d if (d / "index.html").is_file() else None
+
+
+def _webapp_headers() -> dict[str, str]:
+    return WEBAPP_HEADERS if settings.cloud else WEBAPP_HEADERS_HOME
 
 
 def _webapp_index(d: Path) -> HTMLResponse:
     return HTMLResponse((d / "index.html").read_text(encoding="utf-8"),
-                        headers={"Cache-Control": "no-cache", **WEBAPP_HEADERS})
+                        headers={"Cache-Control": "no-cache", **_webapp_headers()})
+
+
+def _classic_page() -> HTMLResponse:
+    return HTMLResponse((WEB / "index.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -3365,8 +3430,15 @@ def index(request: Request) -> HTMLResponse:
     d = _webapp()
     if d is not None:
         return _webapp_index(d)
-    return HTMLResponse((WEB / "index.html").read_text(encoding="utf-8"),
-                        headers={"Cache-Control": "no-cache"})
+    return _classic_page()
+
+
+@app.get("/classic", response_class=HTMLResponse)
+def classic_index() -> HTMLResponse:
+    """The classic web page of home servers (settings the app doesn't have yet: power plug, pairing code …)."""
+    if settings.cloud:
+        raise HTTPException(404, "Not Found")
+    return _classic_page()
 
 
 @app.get("/manifest.webmanifest")
@@ -3390,7 +3462,7 @@ def _webapp_response(path: str) -> Response | None:
     target = (d / path).resolve()
     if path and target.is_file() and target.is_relative_to(d.resolve()):
         cache = "public, max-age=31536000, immutable" if path.startswith("_expo/static/") else "public, max-age=3600"
-        return FileResponse(target, headers={"Cache-Control": cache, **WEBAPP_HEADERS})
+        return FileResponse(target, headers={"Cache-Control": cache, **_webapp_headers()})
     if "." in path.rsplit("/", 1)[-1]:
         return None                                      # a missing file, not an app route
     return _webapp_index(d)

@@ -844,6 +844,19 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - Harness note (old): test routes added after import end up behind the catch-all → move `/{path:path}` to the end (done in
   /tmp/cloudtest/run_web.py, /tmp/bridgetest/home.py).
 
+## Web app on home servers (2026-11-01, server 0.47.0)
+- Thomas noticed Tower's page lacked what the cloud web app has (STL upload, cameras …): home servers served the classic
+  page, the Expo web build in `/opt/webapp` was only used in cloud mode. Now `/` = web app everywhere (classic page at
+  `/classic`, `PRINTSHARE_CLASSIC_WEB=1` = old behaviour). Login: `POST /api/auth/token` → HttpOnly cookie with
+  HMAC(token) (not Secure on plain http - else the LAN browser drops it); app `webStart()` in `lib/api.ts` decides by
+  `GET /api/server`. Start log link `http://<server>:8484/#token=…`; expo-router writes its start URL back once after
+  mounting → the token is stripped again after 0.5/1.5/4 s. Classic service worker retired (`sw.js` unregisters itself).
+- Checked in Chromium against a local home server with Thomas' real CC (COSMOS) + P1S .53: login (wrong token → error),
+  cookie survives reload, printers with status/AMS slots, Centauri camera picture, control page, settings, STL file →
+  prepare screen. Slicing not tried there (no Orca in the claude-agent container) - covered by the image's CI tests.
+- Found on the way: an all-digit Bambu access code in a hand-written config.yaml came in as int (crash) → coerced to str;
+  `_tags()` created the spool DB twice when the web app asked several printers at once ("database is locked") → lock.
+
 ## Ready-made Raspberry Pi bridge image (2026-10-03, server 0.34.0)
 - Thomas: "simple setup" = write the image to an SD card, plug in LAN + power, done. `pi-image/stage-pp3d` = pi-gen custom
   stage after stage0-2 (Raspberry Pi OS Lite 64-bit trixie): docker.io, avahi, unattended-upgrades; bridge image

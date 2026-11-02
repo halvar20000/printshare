@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.47.0
+- The server's own web page is now the full PocketPrint3D web app - the same as on app.pocketprint3d.com and in the
+  Android app: upload STL/3MF/OBJ/STEP files (also by drag and drop), camera, printer control, filament, 3D views,
+  spools, time-lapse. Log in once with the server's access token; the browser stays logged in. The start log shows
+  a link that logs in by itself.
+- The classic page is still there at `/classic` (Settings → "Classic web page"), for the settings the web app doesn't
+  have yet (smart plug, pairing code for the app). `PRINTSHARE_CLASSIC_WEB=1` puts it back at `/`.
+- An all-digit Bambu access code written by hand into config.yaml works now (it was read as a number).
+- Fixed a rare "database is locked" error when several printers were asked at the same time.
+
 ## 0.46.0
 - OrcaSlicer can send straight to PocketPrint3D: every printer has its own address `http://<server>:8484/orca/<printer>`
   (API key = the server's token), usable as "Octo/Klipper" or as a Moonraker printer in OrcaSlicer 2.4. "Upload" puts

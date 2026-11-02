@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Screen, Section, Segmented } from "@/components/ui";
-import { CLOUD_URL, cloudLogin, cloudRequestCode, WEB_APP } from "@/lib/api";
+import { CLOUD_URL, cloudLogin, cloudRequestCode, WEB_APP, webHome, webTokenLogin } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { checkServer } from "@/lib/pairing";
 import { space, useColors } from "@/lib/theme";
@@ -58,6 +58,21 @@ export default function Connect() {
     }
   };
 
+  // web app on an own server: the address is this page, only the access token is asked once
+  const homeLogin = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await webTokenLogin(token.trim());
+      await setServer({ url: location.origin, token: "" });
+      done();
+    } catch (e) {
+      setError((e as { status?: number }).status === 401 ? t("errToken") : t("errOffline"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const connect = async (u = url, tk = token, r = remote) => {
     setBusy(true);
     setError("");
@@ -85,6 +100,22 @@ export default function Connect() {
 
   const input = { color: c.text, fontSize: 16, paddingHorizontal: space, paddingVertical: 14 };
   const mono = Platform.select({ ios: "Menlo", default: "monospace" });
+  if (webHome()) {
+    return (
+      <Screen>
+        {error ? <Banner kind="error" text={error} /> : null}
+        <Text style={{ color: c.sub, fontSize: 16, lineHeight: 22, marginBottom: 20 }}>{t("webTokenIntro")}</Text>
+        <Section title={t("token")}>
+          <TextInput value={token} onChangeText={setToken} placeholder={t("token")} placeholderTextColor={c.sub}
+            autoCapitalize="none" autoCorrect={false} secureTextEntry accessibilityLabel={t("token")} style={input}
+            onSubmitEditing={homeLogin} returnKeyType="go" autoFocus />
+        </Section>
+        <Button title={t("login")} icon="log-in-outline" onPress={homeLogin} loading={busy} disabled={!token.trim()} />
+        <Text style={{ color: c.sub, fontSize: 13, lineHeight: 18, marginTop: 20, marginHorizontal: 4 }}>{t("webTokenWhere")}</Text>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       {!WEB_APP ? (

@@ -466,6 +466,19 @@ All `409` in the cloud. `server_url` = this server as the ML API container reach
   clear the cookie. Apps keep using the token as before.
 - The cloud server serves the web app at `/` (app routes → `index.html`, `/api/*` never).
 
+## Web app on home servers (0.47.0 – docs/WEB.md)
+- `GET /api/server` (no login) → `"login": "token"` on home servers: the web app asks for the access token once.
+- `POST /api/auth/token {"token"}` (home servers only, 404 in the cloud) → `{"ok": true, "name", "version"}` and the
+  HttpOnly cookie `pp3d_session` (SameSite=Strict, 180 days; `Secure` only over https, also behind a proxy that sends
+  `X-Forwarded-Proto: https`). The cookie holds a value derived from the token (HMAC), not the token: a new token in
+  config.yaml ends all browser sessions. Wrong token → 401 after a short delay. Without a configured token every
+  request is allowed as before. Same rules as in the cloud: changes need `X-Requested-With: pocketprint3d`;
+  `POST /api/auth/logout` clears the cookie. Bearer / `?token=` for the apps unchanged.
+- `/` = the web app (when `/opt/webapp` exists, i.e. in the Docker image), the classic page moved to `/classic`;
+  config `classic_web: true` / env `PRINTSHARE_CLASSIC_WEB=1` keeps the classic page at `/`. Bridge-only containers
+  are unchanged (status page at `/`). The web app's CSP on home servers allows `connect-src http: https:` (own
+  Spoolman on the LAN).
+
 ## Spool bookings in the account (0.29.0, cloud – docs/WEB.md step 2)
 For spools kept in the cloud (`/spoolman/…`): the app registers what a print uses, the server books it when the print is
 finished. An own Spoolman at home keeps the app's own bookings (phone).
