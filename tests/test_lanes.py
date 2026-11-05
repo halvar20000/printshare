@@ -164,3 +164,36 @@ def test_spool_of_an_afc_lane():
         finally:
             await fake.stop()
     assert [ln["spool_id"] for ln in asyncio.run(go())["lanes"]] == [12]
+
+
+@pytest.mark.parametrize("lane,tool", [
+    ({"map": "T3"}, 3),                                       # AFC up to 1.2
+    ({"map": ["T3"], "current_map": "T3"}, 3),                # AFC multi-mapping (COSMOS 26.10.0)
+    ({"map": ["T3"], "current_map": ""}, 3),
+    ({"map": ["T5", "T1"], "current_map": "T5"}, 5),          # several tools: the one in use
+    ({"map": ["T5", "T1"], "current_map": ""}, 1),            # else the lowest
+    ({"map": ["NONE"], "current_map": ""}, None),
+    ({"map": [], "current_map": "T2"}, 2),
+    ({"map": None}, None),
+    ({}, None),
+])
+def test_afc_tool(lane, tool):
+    from printshare.printers.moonraker import afc_tool
+    assert afc_tool(lane) == tool
+
+
+def test_lanes_of_afc_with_map_lists():
+    """COSMOS 26.10.0 ships an AFC whose lanes report `map` as a list - the slots vanished from the apps."""
+    rec = {"objects": ["AFC", "AFC_lane CANVAS_1", "AFC_lane CANVAS_2"],
+           "status": {"AFC": {"lanes": ["CANVAS_1", "CANVAS_2"], "current_load": None},
+                      "AFC_lane CANVAS_1": {"map": ["T3"], "current_map": "T3", "material": "PLA", "prep": True},
+                      "AFC_lane CANVAS_2": {"map": ["T1"], "current_map": "T1", "material": "PETG", "prep": True}}}
+
+    async def go():
+        fake = FakeMoonraker(recorded=rec)
+        await fake.start()
+        try:
+            return await get_adapter(PrinterConfig(id="d", type="moonraker", url="http://127.0.0.1:7125")).status()
+        finally:
+            await fake.stop()
+    assert [(ln["id"], ln["tool"]) for ln in asyncio.run(go())["lanes"]] == [("CANVAS_2", 1), ("CANVAS_1", 3)]

@@ -73,10 +73,10 @@ export class MoonrakerPrinter implements Lan {
       const st: Raw = (await this.get(`/printer/objects/query?${objs.map(encodeURIComponent).join("&")}`)).status;
       return objs.map(obj => {
         const ln = st[obj] ?? {}, name = obj.split(" ").slice(1).join(" ");
-        const m = /^T(\d+)$/.exec(String(ln.map ?? ""));
+        const tool = afcTool(ln);
         const color = String(ln.color ?? "");
         return {
-          id: name, tool: m ? Number(m[1]) : null, unit: ln.unit ?? null, material: ln.material || null,
+          id: name, tool, unit: ln.unit ?? null, material: ln.material || null,
           color: /^#?[0-9A-Fa-f]{6,8}$/.test(color) ? `#${color.replace("#", "").slice(0, 6).toUpperCase()}` : null,
           filament: ln.filament_name || null, weight_g: ln.weight ?? null, loaded: !!(ln.prep || ln.load),
           in_toolhead: !!ln.tool_loaded || name === afc.current_load, status: ln.status ?? null,
@@ -139,4 +139,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Tool number of an AFC lane. AFC up to 1.2 reports `map` as one string ("T3"); since AFC's multi-mapping (in COSMOS
+ * 26.10.0) `map` is a list (["T3"], "NONE" = no tool) and `current_map` the tool in use. Several tools on one lane:
+ * `current_map` if it is one of them, else the lowest. Same rule as the server's `moonraker.afc_tool`. */
+export function afcTool(lane: Raw): number | null {
+  const num = (v: unknown) => { const m = /^T(\d+)$/.exec(String(v ?? "").trim()); return m ? Number(m[1]) : null; };
+  const tools = (Array.isArray(lane.map) ? lane.map : [lane.map]).map(num).filter((t): t is number => t !== null);
+  const current = num(lane.current_map);
+  if (current !== null && (tools.includes(current) || !tools.length)) return current;
+  return tools.length ? Math.min(...tools) : null;
 }
