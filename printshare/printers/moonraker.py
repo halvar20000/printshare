@@ -299,11 +299,11 @@ class Moonraker:
         for obj in lane_objs:
             ln = status.get(obj) or {}
             name = obj.split(" ", 1)[1]
-            m = re.fullmatch(r"T(\d+)", str(ln.get("map") or ""))
+            tool = afc_tool(ln)
             color = str(ln.get("color") or "")
             out.append({
                 "id": name,
-                "tool": int(m.group(1)) if m else None,
+                "tool": tool,
                 "unit": ln.get("unit"),
                 "material": ln.get("material") or None,
                 "color": ("#" + color.lstrip("#")[:6].upper()) if re.fullmatch(r"#?[0-9A-Fa-f]{6,8}", color) else None,
@@ -315,6 +315,21 @@ class Moonraker:
                 "spool_id": ln.get("spool_id") if isinstance(ln.get("spool_id"), int) else None,
             })
         return sorted(out, key=lambda x: (x["tool"] is None, x["tool"] if x["tool"] is not None else 0, x["id"]))
+
+
+def afc_tool(lane: dict[str, Any]) -> int | None:
+    """Tool number of an AFC lane. AFC up to 1.2 reports `map` as one string ("T3"); since AFC's multi-mapping
+    (AFC-Klipper-Add-On #832, in COSMOS 26.10.0) `map` is a list (["T3"], "NONE" = no tool) and `current_map` the
+    tool in use. Several tools on one lane: `current_map` if it is one of them, else the lowest."""
+    def num(v: Any) -> int | None:
+        m = re.fullmatch(r"T(\d+)", str(v or "").strip())
+        return int(m.group(1)) if m else None
+    raw = lane.get("map")
+    tools = [t for t in (num(v) for v in (raw if isinstance(raw, list) else [raw])) if t is not None]
+    current = num(lane.get("current_map"))
+    if current is not None and (current in tools or not tools):
+        return current
+    return min(tools) if tools else None
 
 
 def control_objects(objects: list[str]) -> dict[str, dict[str, str]]:

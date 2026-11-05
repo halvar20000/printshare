@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.49.1
+- Slots (AFC lanes) show up again on COSMOS 26.10.0: its newer AFC reports a lane's tool as a list (`map: ["T3"]`)
+  instead of `"T3"`, so every lane had no tool and the apps offered no slot to print with. Both forms are read now; a
+  lane mapped to several tools uses the one in use (`current_map`), else the lowest. Same fix in the Android app's
+  direct Wi-Fi connection.
+
 ## 0.49.0
 - Inbox folder: new model files (STL/3MF/OBJ/STEP) in a folder you mount as `/inbox` show up on the home screen of the
   app and the web app under "New in the inbox folder" - e.g. the export folder of SolidCraft or another CAD program,
