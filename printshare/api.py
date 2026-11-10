@@ -1687,7 +1687,7 @@ def _printer_json(acct: Account, printer_id: str) -> dict[str, Any]:
             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
             # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
             "power": (pw := plug.load(acct.settings.config_dir, p.id)) is not None,
-            # 0.46.0 OrcaSlicer's "Upload and Print" switches the printer on; the apps can always ask for it (power_on)
+            # 0.46.0: the plug switches the printer on for a start with wake=true (OrcaSlicer, and the apps since 0.50.0)
             "auto_on": bool(pw and pw.auto_on),
             "cosmos": p.slicing.machine_preset == "cosmos",
             # docs/BRIDGE.md: reached through a bridge at home (the app uses these endpoints instead of the Wi-Fi)
@@ -3330,8 +3330,6 @@ class SendRequest(BaseModel):
     # 0.46.0: a switched-off printer with a smart plug set to auto_on is switched on first (printshare/wake.py);
     # without auto_on this changes nothing. Set for OrcaSlicer's "Upload and Print".
     wake: bool = False
-    # 0.50.0: the user tapped "switch on and print" in the app - like wake, but any smart plug will do (no auto_on)
-    power_on: bool = False
     # 0.50.0: the chosen slots as the app showed them, {"<printer tool>": {"material": "PLA", "color": "#RRGGBB"}}.
     # Checked right before the start (after switching on): a slot that is empty now or holds another material /
     # colour stops the print (job error + `slot_problems`).
@@ -3370,7 +3368,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         job.update(state="sending", error=None)
         params = {"printer": via[1], "job": job_id, "start": req.start, "confirm": req.confirm,
                   "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id, "timelapse": req.timelapse,
-                  "wake": req.wake, "power_on": req.power_on,
+                  "wake": req.wake,
                   "expect": {k: v.model_dump() for k, v in (req.expect or {}).items()} or None}
 
         async def forward() -> None:
@@ -3396,10 +3394,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
     except ValueError as e:
         raise HTTPException(400, str(e))
     expect = _expect(req)
-    power = plug.load(acct.settings.config_dir, result.printer) if req.start and (req.wake or req.power_on) else None
-    if req.power_on and req.start and power is None:
-        raise HTTPException(409, "no smart plug set up for this printer - it can't be switched on")
-    wake = power is not None and (power.auto_on or req.power_on)
+    power = plug.load(acct.settings.config_dir, result.printer) if req.start and req.wake else None
+    wake = power is not None and power.auto_on
     if not wake:
         await _start_checks(acct, result.printer, tools, req.start, expect)
     job.update(state="sending", error=None, slot_problems=None)

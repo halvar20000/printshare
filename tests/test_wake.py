@@ -246,7 +246,7 @@ def _sliced_job(c):
     return _orca_job(c)
 
 
-def test_app_switches_on_without_auto_on_and_checks_the_slots(api, tmp_path, monkeypatch):  # noqa: F811
+def test_app_switches_on_with_auto_on_and_checks_the_slots(api, tmp_path, monkeypatch):  # noqa: F811
     monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
     monkeypatch.setattr(api.settings, "config_dir", str(tmp_path))
     monkeypatch.setattr(wake_mod, "POLL_S", 0.1)
@@ -271,12 +271,11 @@ def test_app_switches_on_without_auto_on_and_checks_the_slots(api, tmp_path, mon
         job = _sliced_job(c)
         pla = next(ln for ln in off["lanes"] if ln["material"] == "PLA")
         expect = {str(pla["tool"]): {"material": "PLA", "color": pla["color"]}}
-        body = {"start": True, "confirm": True, "power_on": True, "lanes": {"1": pla["tool"]}, "expect": expect}
-        # no smart plug: can't be switched on
-        assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 409
+        body = {"start": True, "confirm": True, "wake": True, "lanes": {"1": pla["tool"]}, "expect": expect}
         with BackgroundFake(FakeHomeAssistant()) as ha:
             c.put("/api/printers/dom/power/config", headers=H,
-                  json={"url": HA, "token": "ha-token", "entity": "switch.drucker"})        # auto_on stays off
+                  json={"url": HA, "token": "ha-token", "entity": "switch.drucker", "auto_on": True})
+            assert c.get("/api/printers", headers=H).json()[0]["auto_on"] is True
             assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 200
             end = time.time() + 10
             while ha.states["switch.drucker"] != "on" and time.time() < end:

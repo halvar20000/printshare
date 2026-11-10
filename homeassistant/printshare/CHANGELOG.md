@@ -1,9 +1,9 @@
 # Changelog
 
 ## 0.50.0
-- Print on a switched-off printer from the app: with a smart plug set up, "switch on and print" switches the printer
-  on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's "Upload and Print", but
-  without the "switch on automatically" setting, because you confirm it in the app.
+- Print on a switched-off printer from the app: with a smart plug set to "switch on when needed", "switch on and print"
+  switches the printer on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's
+  "Upload and Print".
 - Slots can be chosen while the printer is off: the server remembers the last slots (AFC/AMS lanes) it saw
   (`GET /api/printers/{id}/lanes`).
 - Before the start the chosen slots are checked again: is a slot empty now, or holds another material or colour than
