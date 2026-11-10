@@ -420,10 +420,10 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
   the usual confirmation (plate empty), then follow the job (`sending` with log lines → `started`, or `sliced` + `error`).
 - `expect` (0.50.0, optional): `{"<printer tool>": {"material": "PLA", "color": "#RRGGBB"}}` = the chosen slots as the
   app showed them (live or from `/lanes`). Checked right before the start - after switching on, or at once when the
-  printer is on: a slot that is gone, empty, or now holds another material or colour stops the print
-  (values a side doesn't know aren't compared). Printer on: `409` with the reason. After switching on: `state: sliced`,
+  printer is on: a slot that is gone, empty, or now holds another material stops the print (the colour is not
+  checked; values a side doesn't know aren't compared). Printer on: `409` with the reason. After switching on: `state: sliced`,
   `error: "Not started: lane CANVAS_2 (T1) now holds material PETG instead of PLA"` and
-  `slot_problems: [{"tool": 1, "lane": "CANVAS_2", "problem": "missing|empty|material|color", "expected", "found"}]` on
+  `slot_problems: [{"tool": 1, "lane": "CANVAS_2", "problem": "missing|empty|material", "expected", "found"}]` on
   the job (the apps build their own text from it). Through a bridge only the `error` text arrives.
 - 0.46.0: when the printer answers that it did not start the print (Moonraker `print_started: false`), sending fails
   instead of reporting `started`.

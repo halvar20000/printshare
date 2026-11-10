@@ -233,7 +233,8 @@ def test_mismatches_compare_slot_content():
     assert lane_map.mismatches(lanes, ok) == []
     got = lane_map.mismatches(lanes, {0: {"material": "PETG"}, 2: {"material": "PETG", "color": "#000000"},
                                       3: {}, 5: {}})
-    assert [(p["tool"], p["problem"]) for p in got] == [(0, "material"), (2, "color"), (3, "empty"), (5, "missing")]
+    # another colour of the same material is fine
+    assert [(p["tool"], p["problem"]) for p in got] == [(0, "material"), (3, "empty"), (5, "missing")]
     assert got[0]["found"] == "PLA" and got[0]["expected"] == "PETG"
     assert "now holds material PLA instead of PETG" in lane_map.describe(got[0])
     # an upload without start doesn't need filament in the slot

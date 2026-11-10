@@ -50,11 +50,6 @@ def parse_mapping(lanes: dict[str, int] | None) -> dict[int, int]:
     return out
 
 
-def _colour(value: object) -> str | None:
-    s = str(value or "").strip().lstrip("#").upper()
-    return s[:6] if re.fullmatch(r"[0-9A-F]{6}([0-9A-F]{2})?", s) else None
-
-
 def _material(value: object) -> str | None:
     s = str(value or "").strip().upper()
     return s or None
@@ -64,8 +59,8 @@ def mismatches(lanes: list[dict], expect: dict[int, dict], start: bool = True) -
     """What changed in the chosen slots since the app showed them (0.50.0). `expect` = {tool: {"material", "color"}},
     the lane as the user saw it when choosing - also the last known lanes of a switched-off printer. Checked right
     before the start, after a switched-off printer has come up: a slot that is gone or empty now, or holds another
-    material or colour, stops the print. Unknown values on either side are not compared (no material reported =
-    nothing to compare). Returns one entry per problem: {"tool", "lane", "problem": missing|empty|material|color,
+    material, stops the print; the colour is ignored. Unknown values on either side are not compared (no material
+    reported = nothing to compare). Returns one entry per problem: {"tool", "lane", "problem": missing|empty|material,
     "expected", "found"}."""
     by_tool = {ln.get("tool"): ln for ln in lanes}
     out: list[dict] = []
@@ -84,9 +79,7 @@ def mismatches(lanes: list[dict], expect: dict[int, dict], start: bool = True) -
             out.append({"tool": tool, "lane": lane, "problem": "material", "expected": want.get("material"),
                         "found": ln.get("material")})
             continue
-        exp_c, got_c = _colour(want.get("color")), _colour(ln.get("color"))
-        if exp_c and got_c and exp_c != got_c:
-            out.append({"tool": tool, "lane": lane, "problem": "color", "expected": "#" + exp_c, "found": "#" + got_c})
+        # the colour is not checked (Dominique, 2026-11-10): another colour of the same material still prints fine
     return out
 
 

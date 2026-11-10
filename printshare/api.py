@@ -3331,8 +3331,8 @@ class SendRequest(BaseModel):
     # without auto_on this changes nothing. Set for OrcaSlicer's "Upload and Print".
     wake: bool = False
     # 0.50.0: the chosen slots as the app showed them, {"<printer tool>": {"material": "PLA", "color": "#RRGGBB"}}.
-    # Checked right before the start (after switching on): a slot that is empty now or holds another material /
-    # colour stops the print (job error + `slot_problems`).
+    # Checked right before the start (after switching on): a slot that is empty now or holds another material
+    # stops the print (job error + `slot_problems`); the colour is not checked.
     expect: dict[str, LaneExpect] | None = None
 
 
@@ -3435,7 +3435,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
 
 async def _start_checks(acct: Account, printer_id: str, tools: dict[int, int], start: bool,
                         expect: dict[int, dict[str, Any]] | None = None, job: dict[str, Any] | None = None) -> None:
-    """Before a send: the chosen lanes exist and hold filament (and, 0.50.0, still the material/colour the user
+    """Before a send: the chosen lanes exist and hold filament (and, 0.50.0, still the material (not the colour) the user
     chose them for), and a start never goes to a busy printer (DR-03)."""
     if tools or expect:
         try:

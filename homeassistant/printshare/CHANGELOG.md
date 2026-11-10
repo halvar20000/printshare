@@ -6,8 +6,8 @@
   "Upload and Print".
 - Slots can be chosen while the printer is off: the server remembers the last slots (AFC/AMS lanes) it saw
   (`GET /api/printers/{id}/lanes`).
-- Before the start the chosen slots are checked again: is a slot empty now, or holds another material or colour than
-  when you chose it, the print is not started and the app says which slot doesn't fit.
+- Before the start the chosen slots are checked again: is a slot empty now, or holds another material than when you
+  chose it, the print is not started and the app says which slot doesn't fit. Another colour is fine.
 
 ## 0.49.1
 - Slots (AFC lanes) show up again on COSMOS 26.10.0: its newer AFC reports a lane's tool as a list (`map: ["T3"]`)
