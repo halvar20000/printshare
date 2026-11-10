@@ -36,6 +36,7 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   POST /api/jobs/{id}/send  {"start": true, "confirm": true}  -> upload (and start) after review
   DELETE /api/jobs/{id}
   GET  /api/printers/{id}/status   (+ "kind": idle|active|paused|done|stopped|error|unknown)
+  GET  /api/printers/{id}/lanes    slots live, or the last ones seen while the printer is off (0.50.0)
   GET  /api/printers/{id}/power     smart plug state {available, state}; POST {"on": bool} (issue #9)
   GET/PUT/DELETE /api/printers/{id}/power/config   Home Assistant URL / token (never returned) / entity
   POST /api/printers/{id}/power/test | /power/entities   check the settings, list switchable entities
@@ -143,7 +144,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.49.1", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.50.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -1685,7 +1686,9 @@ def _printer_json(acct: Account, printer_id: str) -> dict[str, Any]:
             # DO-01: the app shows the leveling switch only where it works per print
             "leveling": p.auto_leveling if p.type in LEVELING_TYPES else None,
             # issue #9: a smart plug is set up -> the app offers "switch on" while the printer is off
-            "power": plug.load(acct.settings.config_dir, p.id) is not None,
+            "power": (pw := plug.load(acct.settings.config_dir, p.id)) is not None,
+            # 0.46.0: the plug switches the printer on for a start with wake=true (OrcaSlicer, and the apps since 0.50.0)
+            "auto_on": bool(pw and pw.auto_on),
             "cosmos": p.slicing.machine_preset == "cosmos",
             # docs/BRIDGE.md: reached through a bridge at home (the app uses these endpoints instead of the Wi-Fi)
             "bridge": p.bridge}
@@ -1763,7 +1766,9 @@ async def options(printer_id: str, process: str | None = None, acct: Account = D
 @app.get("/api/printers/{printer_id}/status")
 async def status(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     if _via_bridge(acct, printer_id):
-        return await _forward(acct, printer_id, "printer.status")
+        st = await _forward(acct, printer_id, "printer.status")
+        _remember_lanes(acct, printer_id, st)
+        return st
     _local_only(acct)
     printer = _printer(acct, printer_id)
     try:
@@ -1771,11 +1776,66 @@ async def status(printer_id: str, acct: Account = Depends(auth)) -> dict[str, An
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"printer not reachable: {e}")
     _log_temperatures(printer_id, st)
+    _remember_lanes(acct, printer_id, st)
     out = {**st, "kind": printer_kind(st.get("state"))}
     watch_cfg = fw.load_config(settings)
     if watch_cfg.configured:
         out["watch"] = WATCHER.state(printer_id, watch_cfg)     # AI failure detection (0.23.0)
     return out
+
+
+# ---------- last known lanes (0.50.0): slots can be chosen while the printer is off ----------
+KNOWN_LANES_DIR = "printer-lanes"
+
+
+def _known_lanes_file(acct: Account, printer_id: str) -> Path | None:
+    if not acct.settings.config_dir or not re.fullmatch(r"[A-Za-z0-9_.-]+", printer_id):
+        return None
+    return Path(acct.settings.config_dir) / KNOWN_LANES_DIR / f"{printer_id}.json"
+
+
+def _remember_lanes(acct: Account, printer_id: str, st: Any) -> None:
+    """Keep the lanes of every status that has some; a printer without a filament system never writes the file."""
+    lanes = st.get("lanes") if isinstance(st, dict) else None
+    path = _known_lanes_file(acct, printer_id)
+    if not lanes or path is None:
+        return
+    try:
+        old = json.loads(path.read_text())
+    except (OSError, ValueError):
+        old = None
+    now = time.time()
+    if old and old.get("lanes") == lanes and now - float(old.get("seen_at") or 0) < 60:
+        return                                          # the printers tab asks every few seconds
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"lanes": lanes, "seen_at": now}))
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def _known_lanes(acct: Account, printer_id: str) -> dict[str, Any] | None:
+    path = _known_lanes_file(acct, printer_id)
+    try:
+        data = json.loads(path.read_text()) if path else None
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("lanes"), list) else None
+
+
+@app.get("/api/printers/{printer_id}/lanes")
+async def printer_lanes(printer_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The printer's lanes (slots) for the slot choice: live when it answers, else the last ones seen (`live` false,
+    `seen_at` = when). `lanes` is empty for printers without a filament system and before the first status."""
+    _printer(acct, printer_id)
+    try:
+        st = await asyncio.wait_for(status(printer_id, acct), 10)
+        return {"lanes": st.get("lanes") or [], "live": True, "seen_at": time.time(), "kind": st.get("kind")}
+    except Exception:  # noqa: BLE001 - off, unreachable, phone-only printer in the cloud, bridge offline
+        known = _known_lanes(acct, printer_id) or {}
+        return {"lanes": known.get("lanes") or [], "live": False, "seen_at": known.get("seen_at"), "kind": "offline"}
 
 
 def _log_temperatures(printer_id: str, st: dict[str, Any]) -> None:
@@ -3251,6 +3311,11 @@ def job(job_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
     return _own_job(acct, job_id)
 
 
+class LaneExpect(BaseModel):
+    material: str | None = None
+    color: str | None = None
+
+
 class SendRequest(BaseModel):
     start: bool = True
     confirm: bool = False
@@ -3265,6 +3330,23 @@ class SendRequest(BaseModel):
     # 0.46.0: a switched-off printer with a smart plug set to auto_on is switched on first (printshare/wake.py);
     # without auto_on this changes nothing. Set for OrcaSlicer's "Upload and Print".
     wake: bool = False
+    # 0.50.0: the chosen slots as the app showed them, {"<printer tool>": {"material": "PLA", "color": "#RRGGBB"}}.
+    # Checked right before the start (after switching on): a slot that is empty now or holds another material
+    # stops the print (job error + `slot_problems`); the colour is not checked.
+    expect: dict[str, LaneExpect] | None = None
+
+
+def _expect(req: "SendRequest") -> dict[int, dict[str, Any]]:
+    out: dict[int, dict[str, Any]] = {}
+    for key, val in (req.expect or {}).items():
+        try:
+            tool = int(str(key).lstrip("Tt"))
+        except ValueError:
+            raise HTTPException(400, f"expect: {key!r} is not a tool number")
+        if not 0 <= tool < 64:
+            raise HTTPException(400, f"expect: tool {tool} out of range")
+        out[tool] = val.model_dump()
+    return out
 
 
 @app.post("/api/jobs/{job_id}/send")
@@ -3286,7 +3368,8 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         job.update(state="sending", error=None)
         params = {"printer": via[1], "job": job_id, "start": req.start, "confirm": req.confirm,
                   "leveling": req.leveling, "lanes": req.lanes, "spool_id": req.spool_id, "timelapse": req.timelapse,
-                  "wake": req.wake}
+                  "wake": req.wake,
+                  "expect": {k: v.model_dump() for k, v in (req.expect or {}).items()} or None}
 
         async def forward() -> None:
             try:
@@ -3310,11 +3393,12 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         tools = lane_map.parse_mapping(req.lanes)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    expect = _expect(req)
     power = plug.load(acct.settings.config_dir, result.printer) if req.start and req.wake else None
     wake = power is not None and power.auto_on
     if not wake:
-        await _start_checks(acct, result.printer, tools, req.start)
-    job.update(state="sending", error=None)
+        await _start_checks(acct, result.printer, tools, req.start, expect)
+    job.update(state="sending", error=None, slot_problems=None)
 
     async def worker() -> None:
         if wake:
@@ -3324,7 +3408,7 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
                 if await wake_mod.wake(adapter.status, printer_kind, lambda: plug.get_power(power).turn(True),
                                        job["log"].append):
                     job["woken"] = True
-                await _start_checks(acct, result.printer, tools, req.start)
+                await _start_checks(acct, result.printer, tools, req.start, expect, job)
             except (wake_mod.WakeError, HTTPException) as e:
                 job.update(state="sliced", error=f"Not started: {e.detail if isinstance(e, HTTPException) else e}")
                 return
@@ -3349,20 +3433,24 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
     return {"job": job_id}
 
 
-async def _start_checks(acct: Account, printer_id: str, tools: dict[int, int], start: bool) -> None:
-    """Before a send: the chosen lanes exist and hold filament, and a start never goes to a busy printer (DR-03)."""
-    if tools:
+async def _start_checks(acct: Account, printer_id: str, tools: dict[int, int], start: bool,
+                        expect: dict[int, dict[str, Any]] | None = None, job: dict[str, Any] | None = None) -> None:
+    """Before a send: the chosen lanes exist and hold filament (and, 0.50.0, still the material (not the colour) the user
+    chose them for), and a start never goes to a busy printer (DR-03)."""
+    if tools or expect:
         try:
-            lanes = (await get_adapter(_printer(acct, printer_id)).status()).get("lanes") or []
+            st = await get_adapter(_printer(acct, printer_id)).status()
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, f"printer not reachable: {e}")
-        by_tool = {ln.get("tool"): ln for ln in lanes}
-        for idx, tool in sorted(tools.items()):
-            ln = by_tool.get(tool)
-            if ln is None:
-                raise HTTPException(400, f"the printer has no lane for T{tool}")
-            if start and not ln.get("loaded"):
-                raise HTTPException(409, f"lane {ln.get('id')} (T{tool}) is empty - load filament or choose another lane")
+        lanes = st.get("lanes") or []
+        _remember_lanes(acct, printer_id, st)
+        wanted = {tool: {} for tool in tools.values()}
+        wanted.update(expect or {})
+        problems = lane_map.mismatches(lanes, wanted, start)
+        if problems:
+            if job is not None:
+                job["slot_problems"] = problems
+            raise HTTPException(400 if problems[0]["problem"] == "missing" else 409, lane_map.describe(problems[0]))
     if start:
         # an unreachable printer fails in send_job
         try:

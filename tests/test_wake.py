@@ -221,3 +221,84 @@ def test_a_busy_printer_after_waking_is_not_started(api, tmp_path, monkeypatch):
         j = _wait(c, _orca_job(c), ("sliced", "started"))
         assert j["state"] == "sliced" and "busy" in j["error"] and ha.calls == []
         assert not moon.uploads
+
+
+# ---------- 0.50.0: the app starts a print on a switched-off printer, slots from the last known lanes ----------
+def test_mismatches_compare_slot_content():
+    from printshare import lanes as lane_map
+    lanes = [{"id": "lane1", "tool": 0, "loaded": True, "material": "PLA", "color": "#FFFFFF"},
+             {"id": "lane3", "tool": 2, "loaded": True, "material": "PETG", "color": "#1E88E5"},
+             {"id": "lane4", "tool": 3, "loaded": False, "material": None, "color": None}]
+    ok = {0: {"material": "pla", "color": "#ffffffff"}, 2: {"material": None, "color": None}}
+    assert lane_map.mismatches(lanes, ok) == []
+    got = lane_map.mismatches(lanes, {0: {"material": "PETG"}, 2: {"material": "PETG", "color": "#000000"},
+                                      3: {}, 5: {}})
+    # another colour of the same material is fine
+    assert [(p["tool"], p["problem"]) for p in got] == [(0, "material"), (3, "empty"), (5, "missing")]
+    assert got[0]["found"] == "PLA" and got[0]["expected"] == "PETG"
+    assert "now holds material PLA instead of PETG" in lane_map.describe(got[0])
+    # an upload without start doesn't need filament in the slot
+    assert lane_map.mismatches(lanes, {3: {}}, start=False) == []
+
+
+def _sliced_job(c):
+    r = _upload(c, start=False)
+    assert r.status_code == 201
+    return _orca_job(c)
+
+
+def test_app_switches_on_with_auto_on_and_checks_the_slots(api, tmp_path, monkeypatch):  # noqa: F811
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    monkeypatch.setattr(api.settings, "config_dir", str(tmp_path))
+    monkeypatch.setattr(wake_mod, "POLL_S", 0.1)
+    monkeypatch.setattr(wake_mod, "SETTLE_S", 0.0)
+    monkeypatch.setattr(wake_mod, "STATUS_TIMEOUT_S", 3.0)
+    api.JOBS.clear()
+    H = {"Authorization": f"Bearer {TOKEN}"}
+    with TestClient(api.app) as c:
+        # off, never seen: no lanes known
+        r = c.get("/api/printers/dom/lanes", headers=H).json()
+        assert r == {"lanes": [], "live": False, "seen_at": None, "kind": "offline"}
+        with BackgroundFake(FakeMoonraker(afc=True)) as moon:
+            moon.state = "standby"
+            live = c.get("/api/printers/dom/lanes", headers=H).json()
+            assert live["live"] is True and len(live["lanes"]) == 4
+        # off again: the last lanes, marked as not live
+        off = c.get("/api/printers/dom/lanes", headers=H).json()
+        assert off["live"] is False and off["lanes"] == live["lanes"] and off["seen_at"]
+        printers = c.get("/api/printers", headers=H).json()
+        assert printers[0]["power"] is False and printers[0]["auto_on"] is False
+
+        job = _sliced_job(c)
+        pla = next(ln for ln in off["lanes"] if ln["material"] == "PLA")
+        expect = {str(pla["tool"]): {"material": "PLA", "color": pla["color"]}}
+        body = {"start": True, "confirm": True, "wake": True, "lanes": {"1": pla["tool"]}, "expect": expect}
+        with BackgroundFake(FakeHomeAssistant()) as ha:
+            c.put("/api/printers/dom/power/config", headers=H,
+                  json={"url": HA, "token": "ha-token", "entity": "switch.drucker", "auto_on": True})
+            assert c.get("/api/printers", headers=H).json()[0]["auto_on"] is True
+            assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 200
+            end = time.time() + 10
+            while ha.states["switch.drucker"] != "on" and time.time() < end:
+                time.sleep(0.05)
+            assert ha.calls == [("turn_on", "switch.drucker")]
+            # while it was off someone put PETG into that slot: not started
+            from .fakes import AFC_LANES
+            lane_key = next(k for k, v in AFC_LANES.items() if v["material"] == "PLA" and
+                            ("#" + v["color"].lstrip("#").upper()) == pla["color"])
+            moon = FakeMoonraker(afc=True)
+            moon.state = "standby"
+            monkeypatch.setitem(AFC_LANES, lane_key, {**AFC_LANES[lane_key], "material": "PETG"})
+            with BackgroundFake(moon):
+                j = _wait(c, job, ("started", "sliced"))
+                assert j["state"] == "sliced" and "PETG instead of PLA" in j["error"], j
+                assert j["slot_problems"][0]["problem"] == "material" and not moon.uploads
+            # the right spool again: started
+            monkeypatch.setitem(AFC_LANES, lane_key, {**AFC_LANES[lane_key], "material": "PLA"})
+            moon = FakeMoonraker(afc=True)
+            moon.state = "standby"
+            with BackgroundFake(moon):
+                assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 200
+                j = _wait(c, job, ("started", "sliced"))
+                assert j["state"] == "started", j
+                assert moon.uploads[-1]["print"] == "true" and not j.get("slot_problems")
