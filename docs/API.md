@@ -153,6 +153,20 @@ a fan off while printing (`/adjust`), switching the power off (refused while pri
 - `type`: `elegoo_sdcp` (Centauri Carbon stock firmware), `moonraker` (Klipper, e.g. COSMOS), `prusalink`, `octoprint`.
 - `leveling`: `null` = no per-print bed-leveling switch; `true/false` = the printer's default (show a switch).
 - `power`: a smart plug is set up → offer "switch on" while the printer is offline.
+- `auto_on` (0.50.0): the plug switches the printer on for OrcaSlicer's "Upload and Print" by itself (see `/send` `wake`).
+  The apps don't need it for their own "switch on and print" (`/send` `power_on`).
+
+### `GET /api/printers/{id}/lanes` (0.50.0) – slots also while the printer is off
+```json
+{"lanes": [{"id": "CANVAS_1", "tool": 3, "loaded": true, "material": "PLA", "color": "#FFFFFF", …}],
+ "live": false, "seen_at": 1762785000.5, "kind": "offline"}
+```
+- The lanes as in `/status` when the printer answers (`live: true`), else the last ones the server saw in any status
+  (`live: false`, `seen_at` = when; null and `lanes: []` before the first one). Every status with lanes is remembered
+  (`<config dir>/printer-lanes/<id>.json`; in the cloud for printers behind a bridge too). Printers without a filament
+  system always give `[]`. Never an error for an unreachable printer: `200` with `live: false`.
+- For the slot choice before slicing and on the review screen while the printer is off; combine with `/send`
+  `power_on` + `expect`.
 
 ### `GET /api/printers/{id}/status`
 Live state; call every 3–10 s while visible. `502` = printer not reachable (off / not on the network).
@@ -402,6 +416,16 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
   runs the lane and busy checks and sends. The job stays `sending` meanwhile (log lines say what happens), the answer is
   200 at once, and every failure ends in the job (`state: sliced`, `error: "Not started: …"`), not in the reply. A server
   restart while waiting never starts the print. Without `auto_on` nothing changes. OrcaSlicer's "Upload and Print" sets it.
+- `power_on` (0.50.0, default false): the user chose "switch on and print" in the app. Works like `wake`, but every smart
+  plug will do (no `auto_on` needed): `409 "no smart plug set up …"` without one. The app asks for the usual confirmation
+  (plate empty) first, then follows the job (`sending` with log lines → `started`, or `sliced` + `error`).
+- `expect` (0.50.0, optional): `{"<printer tool>": {"material": "PLA", "color": "#RRGGBB"}}` = the chosen slots as the
+  app showed them (live or from `/lanes`). Checked right before the start - after switching on, or at once when the
+  printer is on: a slot that is gone, empty, or now holds another material or colour stops the print
+  (values a side doesn't know aren't compared). Printer on: `409` with the reason. After switching on: `state: sliced`,
+  `error: "Not started: lane CANVAS_2 (T1) now holds material PETG instead of PLA"` and
+  `slot_problems: [{"tool": 1, "lane": "CANVAS_2", "problem": "missing|empty|material|color", "expected", "found"}]` on
+  the job (the apps build their own text from it). Through a bridge only the `error` text arrives.
 - 0.46.0: when the printer answers that it did not start the print (Moonraker `print_started: false`), sending fails
   instead of reporting `started`.
 

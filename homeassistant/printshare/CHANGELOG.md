@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.50.0
+- Print on a switched-off printer from the app: with a smart plug set up, "switch on and print" switches the printer
+  on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's "Upload and Print", but
+  without the "switch on automatically" setting, because you confirm it in the app.
+- Slots can be chosen while the printer is off: the server remembers the last slots (AFC/AMS lanes) it saw
+  (`GET /api/printers/{id}/lanes`).
+- Before the start the chosen slots are checked again: is a slot empty now, or holds another material or colour than
+  when you chose it, the print is not started and the app says which slot doesn't fit.
+
 ## 0.49.1
 - Slots (AFC lanes) show up again on COSMOS 26.10.0: its newer AFC reports a lane's tool as a list (`map: ["T3"]`)
   instead of `"T3"`, so every lane had no tool and the apps offered no slot to print with. Both forms are read now; a

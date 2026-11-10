@@ -48,3 +48,54 @@ def parse_mapping(lanes: dict[str, int] | None) -> dict[int, int]:
             raise ValueError("lane mapping out of range")
         out[idx - 1] = tool
     return out
+
+
+def _colour(value: object) -> str | None:
+    s = str(value or "").strip().lstrip("#").upper()
+    return s[:6] if re.fullmatch(r"[0-9A-F]{6}([0-9A-F]{2})?", s) else None
+
+
+def _material(value: object) -> str | None:
+    s = str(value or "").strip().upper()
+    return s or None
+
+
+def mismatches(lanes: list[dict], expect: dict[int, dict], start: bool = True) -> list[dict]:
+    """What changed in the chosen slots since the app showed them (0.50.0). `expect` = {tool: {"material", "color"}},
+    the lane as the user saw it when choosing - also the last known lanes of a switched-off printer. Checked right
+    before the start, after a switched-off printer has come up: a slot that is gone or empty now, or holds another
+    material or colour, stops the print. Unknown values on either side are not compared (no material reported =
+    nothing to compare). Returns one entry per problem: {"tool", "lane", "problem": missing|empty|material|color,
+    "expected", "found"}."""
+    by_tool = {ln.get("tool"): ln for ln in lanes}
+    out: list[dict] = []
+    for tool in sorted(expect):
+        want = expect[tool] or {}
+        ln = by_tool.get(tool)
+        if ln is None:
+            out.append({"tool": tool, "lane": None, "problem": "missing", "expected": None, "found": None})
+            continue
+        lane = ln.get("id")
+        if start and not ln.get("loaded"):
+            out.append({"tool": tool, "lane": lane, "problem": "empty", "expected": None, "found": None})
+            continue
+        exp_m, got_m = _material(want.get("material")), _material(ln.get("material"))
+        if exp_m and got_m and exp_m != got_m:
+            out.append({"tool": tool, "lane": lane, "problem": "material", "expected": want.get("material"),
+                        "found": ln.get("material")})
+            continue
+        exp_c, got_c = _colour(want.get("color")), _colour(ln.get("color"))
+        if exp_c and got_c and exp_c != got_c:
+            out.append({"tool": tool, "lane": lane, "problem": "color", "expected": "#" + exp_c, "found": "#" + got_c})
+    return out
+
+
+def describe(problem: dict) -> str:
+    """One English line for the job's error (the apps build their own text from the fields)."""
+    where = f"lane {problem['lane']} (T{problem['tool']})" if problem.get("lane") else f"T{problem['tool']}"
+    kind = problem["problem"]
+    if kind == "missing":
+        return f"the printer has no lane for T{problem['tool']}"
+    if kind == "empty":
+        return f"{where} is empty - load filament or choose another lane"
+    return f"{where} now holds {kind} {problem['found']} instead of {problem['expected']}"
