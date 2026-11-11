@@ -14,9 +14,11 @@ The same app as on the phone, for desktop browsers, with the same cloud account:
   once (`POST /api/auth/token`, HttpOnly cookie, `lib/api.ts` `webStart`/`webHome()`); printers, camera, control, power …
   then all go through the server (own-server mode of the app). The start log prints `http://<server>:8484/#token=…`,
   which logs in by itself (the fragment never reaches a server log; the page removes it from the address bar).
-  The classic page (`printshare/web`) moved to `/classic` (Settings → "Classic web page") for what the app lacks so far
-  (smart plug setup, pairing QR); `PRINTSHARE_CLASSIC_WEB=1` puts it back at `/`. Its service worker is retired:
-  `/sw.js` now removes the old caches and unregisters itself.
+  The classic page (`printshare/web`) was kept at `/classic` until 0.51 for the settings the app lacked. **Since 0.52.0
+  there is one web page only:** smart plug (printer settings → "Steckdose", `app/power/[id].tsx`), pairing QR for
+  another phone (`app/pair-app.tsx`) and the server's own bridge mode (`app/server-bridge.tsx`) are in the app, under
+  Settings → Erweitert for an own server - in the browser and in the Android app alike. `/classic` redirects to `/`.
+  Its service worker stays retired: `/sw.js` removes the old caches and unregisters itself.
 
 ## Login and security
 - **Session in an HttpOnly cookie** (`pp3d_session`, `Secure`, `SameSite=Strict`, 180 days): `POST /api/auth/login` with
@@ -57,5 +59,5 @@ Open: OrcaSlicer's "Upload and print" for printers only the phone reaches (waits
 for Orca uploads, the same for home servers.
 
 ## Next (docs/BRIDGE.md, product plan)
-3. ~~The same web app on home servers instead of the classic page.~~ Done in 0.47.0; still to move from the classic
-   page into the app: smart plug setup, pairing QR for the phone app.
+3. ~~The same web app on home servers instead of the classic page.~~ Done in 0.47.0; the classic page's last settings
+   (smart plug, pairing QR, bridge mode) moved into the app and the page was removed in 0.52.0.

@@ -275,7 +275,8 @@ Live ≈ 300 KB/s: use still images away from home. Centauri: 640×360 MJPEG; Kl
 
 `GET|PUT /power/config` carry `auto_on` (0.46.0, default false; PUT without it keeps the stored value): switch the printer
 on for an OrcaSlicer "Upload and Print" (see `/send` `wake`). After switching on, the printer needs ~30–60 s until `/status` answers. The settings (`/power/config`, `/power/test`,
-`/power/entities`) are made on the web page; the token is never returned (`token_set: true/false`).
+`/power/entities`) are made in the app / web app (printer settings → smart plug, since 0.52.0; before only on the classic
+web page); the token is never returned (`token_set: true/false`).
 
 ### Printer profile
 `GET /api/printers/{id}/profile` → `{"machine": "Elegoo Centauri Carbon 0.4 nozzle", "machine_file": null,
@@ -497,9 +498,10 @@ All `409` in the cloud. `server_url` = this server as the ML API container reach
   config.yaml ends all browser sessions. Wrong token → 401 after a short delay. Without a configured token every
   request is allowed as before. Same rules as in the cloud: changes need `X-Requested-With: pocketprint3d`;
   `POST /api/auth/logout` clears the cookie. Bearer / `?token=` for the apps unchanged.
-- `/` = the web app (when `/opt/webapp` exists, i.e. in the Docker image), the classic page moved to `/classic`;
-  config `classic_web: true` / env `PRINTSHARE_CLASSIC_WEB=1` keeps the classic page at `/`. Bridge-only containers
-  are unchanged (status page at `/`). The web app's CSP on home servers allows `connect-src http: https:` (own
+- `/` = the web app (when `/opt/webapp` exists, i.e. in the Docker image; else a short hint page). The classic page
+  is gone since 0.52.0 (its last settings - smart plug, pairing code, bridge mode - are in the web app): `/classic`
+  answers `308` → `/`, `classic_web` / `PRINTSHARE_CLASSIC_WEB` no longer exist; `/sw.js` still unregisters the old
+  service worker. Bridge-only containers are unchanged (status page at `/`). The web app's CSP on home servers allows `connect-src http: https:` (own
   Spoolman on the LAN).
 
 ## Spool bookings in the account (0.29.0, cloud – docs/WEB.md step 2)

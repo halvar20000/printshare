@@ -180,8 +180,6 @@ export default function Settings() {
           sub={server.remoteUrl.replace(/^https?:\/\//, "")} /></> : null}
         {!webHome() ? <><Divider />
         <Row icon="qr-code-outline" label={server ? t("changeServer") : t("connectNow")} onPress={() => router.push("/connect")} /></> : null}
-        {webHome() ? <><Divider /><Row icon="browsers-outline" label={t("classicWeb")} sub={t("classicWebSub")}
-          onPress={() => { location.href = "/classic"; }} /></> : null}
         {server ? <><Divider /><Row icon="log-out-outline" label={t(webHome() ? "logout" : "disconnect")} danger onPress={disconnect} /></> : null}
       </Section>
 
@@ -219,6 +217,12 @@ export default function Settings() {
           <Divider />
           <Row icon="eye-outline" label={t("failureTitle")} sub={t("failureSub")}
             onPress={() => router.push("/failure-detection")} />
+          <Divider />
+          <Row icon="git-network-outline" label={t("serverBridgeTitle")} sub={t("serverBridgeSub")}
+            onPress={() => router.push("/server-bridge")} />
+          <Divider />
+          <Row icon="qr-code-outline" label={t("pairAppTitle")} sub={t("pairAppSub")}
+            onPress={() => router.push("/pair-app")} />
         </Section>
       ) : null}
 

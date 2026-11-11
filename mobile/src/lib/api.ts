@@ -148,6 +148,14 @@ export type SlotSpools = {
   slots: Record<string, { spool: number; source: string; updated: number }>;
   scans: Record<string, { uid: string; spool: number | null; at: number }>;
 };
+export type PowerSettings = { url: string; entity: string; token?: string; auto_on?: boolean };
+export type PowerConfig = { configured: boolean; addon: boolean; type?: string; url: string; entity: string;
+  token_set: boolean; supervisor: boolean; auto_on: boolean };
+export type Pairing = { link: string; svg: string; url: string; remote_url: string; token: string; configured: boolean;
+  warnings: ("localhost" | "ingress")[] };
+export type ServerBridge = { enabled: boolean; state: string; code: string | null; code_expires_in: number | null;
+  paired: boolean; account: string | null; cloud: string; bridge_id: string | null; connected_since: number | null;
+  error: string | null };
 export type ReaderKey = { enabled: boolean; url: string; created?: number; last_used?: number | null };
 export type FilamentAction = { action: "load" | "unload" | "set"; slot?: number; material?: string; color?: string;
   temp?: number; confirm?: boolean };
@@ -597,6 +605,31 @@ export class Api {
   setPower = (printer: string, on: boolean) =>
     this.request<{ ok: boolean }>(`/api/printers/${encodeURIComponent(printer)}/power`,
       { method: "POST", body: { on }, timeout: 20000 });
+  /** smart plug through Home Assistant (own servers, server 0.12.0; `auto_on` 0.46.0). The token never comes back. */
+  powerConfig = (printer: string) => this.request<PowerConfig>(`/api/printers/${encodeURIComponent(printer)}/power/config`);
+  setPowerConfig = (printer: string, body: PowerSettings) =>
+    this.request<PowerConfig>(`/api/printers/${encodeURIComponent(printer)}/power/config`,
+      { method: "PUT", body, timeout: 20000 });
+  deletePowerConfig = (printer: string) =>
+    this.request<PowerConfig>(`/api/printers/${encodeURIComponent(printer)}/power/config`, { method: "DELETE" });
+  testPower = (printer: string, body: PowerSettings) =>
+    this.request<{ ok: boolean; state?: string; name?: string | null; error?: string }>(
+      `/api/printers/${encodeURIComponent(printer)}/power/test`, { method: "POST", body, timeout: 20000 });
+  powerEntities = (printer: string, body: PowerSettings) =>
+    this.request<{ entity: string; name: string; state: string | null }[]>(
+      `/api/printers/${encodeURIComponent(printer)}/power/entities`, { method: "POST", body, timeout: 20000 });
+  /** pairing code for another phone (own servers, issue #10); empty url/remote = the server's own guess */
+  pairing = (url?: string, remote?: string) => {
+    const q = new URLSearchParams();
+    if (url !== undefined) q.set("url", url);
+    if (remote !== undefined) q.set("remote", remote);
+    const qs = q.toString();
+    return this.request<Pairing>(`/api/pairing${qs ? `?${qs}` : ""}`);
+  };
+  /** bridge mode of this own server (docs/BRIDGE.md, server 0.25.0): reached through PocketPrint3D Cloud from anywhere */
+  serverBridge = () => this.request<ServerBridge>("/api/bridge");
+  setServerBridge = (enabled: boolean) => this.request<ServerBridge>("/api/bridge", { method: "POST", body: { enabled } });
+  resetServerBridge = () => this.request<ServerBridge>("/api/bridge/reset", { method: "POST" });
   /** NFC chips linked to spools and the spool per slot (server 0.38.0) */
   spoolTags = () => this.request<{ uid: string; spool: number; created: number }[]>("/api/spool-tags");
   spoolSource = () => this.request<{ source: "cloud" | "spoolman"; spoolman_url: string | null; server_reaches_spoolman: boolean }>("/api/spool-source");

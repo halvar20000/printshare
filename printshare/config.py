@@ -225,7 +225,6 @@ class Settings:
     lan_subnet: str = ""               # printer search when broadcasts don't work (Docker bridge network), e.g. 192.168.1.0/24
     # cloud: the web app (Expo web build, docs/WEB.md) served at / of api./app.pocketprint3d.com
     webapp_dir: str = "/opt/webapp"
-    classic_web: bool = False          # home server: the classic page at / instead of the web app (PRINTSHARE_CLASSIC_WEB=1)
     inbox_dir: str = "/inbox"          # own servers: new model files there show up in the apps (inbox.py); "off" = never
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
@@ -323,8 +322,6 @@ def load_settings(path: str | Path | None = None) -> Settings:
     s.lan_subnet = os.environ.get("PRINTSHARE_LAN_SUBNET") or s.lan_subnet
     if os.environ.get("PRINTSHARE_INBOX", "").strip():
         s.inbox_dir = os.environ["PRINTSHARE_INBOX"].strip()
-    if os.environ.get("PRINTSHARE_CLASSIC_WEB", "").lower() in ("1", "true", "yes"):
-        s.classic_web = True
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

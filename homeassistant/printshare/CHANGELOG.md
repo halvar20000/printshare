@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0
+- One web page instead of two: the last settings of the classic page are in the web app (and the Android app) now -
+  smart plug through Home Assistant incl. "switch on when needed" (printer settings → Smart plug), the QR code to
+  connect another phone and "Print from anywhere" (this server as a bridge to PocketPrint3D Cloud), both under
+  Settings → Advanced. The classic page is gone: `/classic` opens the web app, `PRINTSHARE_CLASSIC_WEB` has no effect
+  any more.
+
 ## 0.50.0
 - Print on a switched-off printer from the app: with a smart plug set to "switch on when needed", "switch on and print"
   switches the printer on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's

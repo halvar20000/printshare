@@ -106,18 +106,18 @@ def test_auth_required(client):
 
 
 def test_app_shell_served(api, client, tmp_path):
-    # without a web app build (or with classic_web) the classic page is at /; it is always at /classic
+    # without a web app build: a short hint page; the classic page is retired (0.52.0), /classic sends to /
     keep = api.settings.webapp_dir
     api.settings.webapp_dir = str(tmp_path / "missing")
     try:
-        assert "PocketPrint3D" in client.get("/").text
+        r = client.get("/")
+        assert r.status_code == 200 and "web app is not installed" in r.text
     finally:
         api.settings.webapp_dir = keep
-    assert 'id="link"' in client.get("/classic").text
-    m = client.get("/manifest.webmanifest")
-    assert m.status_code == 200 and m.json()["share_target"]["action"] == "/"
-    assert client.get("/sw.js").status_code == 200
-    assert client.get("/static/app.js").status_code == 200
+    r = client.get("/classic", follow_redirects=False)
+    assert r.status_code == 308 and r.headers["location"] == "/"
+    assert client.get("/sw.js").status_code == 200          # the retired worker still unregisters itself
+    assert client.get("/static/icons/favicon.png").status_code == 200
 
 
 def test_slice_review_confirm_send(api, client, monkeypatch, tmp_path):
@@ -352,7 +352,7 @@ def _fake_webapp(tmp_path):
 
 
 def test_home_server_serves_web_app(api, tmp_path):
-    """Since 0.47.0 the web app (Expo web build) is at / of home servers too; the classic page moved to /classic."""
+    """Since 0.47.0 the web app (Expo web build) is at / of home servers too; the classic page is gone since 0.52.0."""
     keep = api.settings.webapp_dir
     api.settings.webapp_dir = str(_fake_webapp(tmp_path))
     try:
@@ -364,15 +364,10 @@ def test_home_server_serves_web_app(api, tmp_path):
                 # the browser may reach the user's own LAN services (own Spoolman); frames stay forbidden
                 assert "connect-src 'self' blob: data: http: https:" in csp and "frame-ancestors 'none'" in csp
             assert c.get("/_expo/static/js/web/entry-abc.js").status_code == 200
-            assert 'id="link"' in c.get("/classic").text
+            assert c.get("/classic", follow_redirects=False).headers["location"] == "/"
             assert c.get("/api/nothing-here").status_code == 404
             assert c.get("/api/server").json() == {"name": "PrintShare", "version": api.app.version, "cloud": False,
                                                   "login": "token"}
-            api.settings.classic_web = True
-            try:
-                assert 'id="link"' in c.get("/").text and c.get("/printers").status_code == 404
-            finally:
-                api.settings.classic_web = False
     finally:
         api.settings.webapp_dir = keep
 

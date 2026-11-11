@@ -76,7 +76,7 @@ from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
@@ -144,7 +144,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.50.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.52.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -3636,7 +3636,8 @@ async def print_(req: PrintRequest, acct: Account = Depends(auth)) -> dict[str, 
 
 
 # ---------- web app ----------
-# Cloud: the Expo web build (the same app as on the phone, docs/WEB.md). Home servers: the classic web page (printshare/web).
+# The Expo web build (the same app as on the phone, docs/WEB.md): cloud and home servers. The classic page (printshare/web)
+# is gone since 0.52.0; /classic sends old bookmarks to /.
 WEBAPP_CSP = ("default-src 'self'; "
               # the 3D viewers run in srcdoc iframes (inline module script, three.js from jsdelivr)
               "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
@@ -3652,9 +3653,9 @@ WEBAPP_HEADERS_HOME = {**WEBAPP_HEADERS, "Content-Security-Policy": WEBAPP_CSP.r
 
 
 def _webapp() -> Path | None:
-    """The web app (Expo web build) at /: in the cloud and, since 0.47.0, on home servers too (classic page at
-    /classic). Not on bridge-only containers (no web app in that image) or with `classic_web`."""
-    if settings.bridge_only or (settings.classic_web and not settings.cloud):
+    """The web app (Expo web build) at /: in the cloud and on home servers. Not on bridge-only containers (no web app in
+    that image)."""
+    if settings.bridge_only:
         return None
     d = Path(settings.webapp_dir)
     return d if (d / "index.html").is_file() else None
@@ -3669,8 +3670,15 @@ def _webapp_index(d: Path) -> HTMLResponse:
                         headers={"Cache-Control": "no-cache", **_webapp_headers()})
 
 
-def _classic_page() -> HTMLResponse:
-    return HTMLResponse((WEB / "index.html").read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+NO_WEBAPP_PAGE = """<!DOCTYPE html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>PocketPrint3D</title><link rel="icon" href="/static/icons/favicon.png">
+<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:3rem auto;padding:0 1rem;line-height:1.5">
+<h1>PocketPrint3D</h1>
+<p>The server runs, but its web app is not installed here. The Docker image (Unraid, Home Assistant, docker compose)
+brings it along; when running from source, build it with <code>cd mobile &amp;&amp; npx expo export --platform web</code>
+and point <code>webapp_dir</code> (config.yaml) at the <code>dist</code> folder. The apps work without it.</p>
+<p lang="de">Der Server läuft, aber seine Web-App ist hier nicht installiert. Das Docker-Image bringt sie mit; die Apps
+funktionieren auch ohne sie.</p></body></html>"""
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -3680,25 +3688,18 @@ def index(request: Request) -> HTMLResponse:
     d = _webapp()
     if d is not None:
         return _webapp_index(d)
-    return _classic_page()
+    return HTMLResponse(NO_WEBAPP_PAGE, headers={"Cache-Control": "no-cache"})
 
 
-@app.get("/classic", response_class=HTMLResponse)
-def classic_index() -> HTMLResponse:
-    """The classic web page of home servers (settings the app doesn't have yet: power plug, pairing code …)."""
-    if settings.cloud:
-        raise HTTPException(404, "Not Found")
-    return _classic_page()
-
-
-@app.get("/manifest.webmanifest")
-def manifest() -> FileResponse:
-    return FileResponse(WEB / "manifest.webmanifest", media_type="application/manifest+json")
+@app.api_route("/classic", methods=["GET", "HEAD"], include_in_schema=False)
+def classic_index() -> RedirectResponse:
+    """The classic page is retired (0.52.0): everything it had is in the web app now. Old bookmarks land on /."""
+    return RedirectResponse("/", status_code=308)
 
 
 @app.get("/sw.js")
 def service_worker() -> FileResponse:
-    # served from the root so its scope covers the whole app
+    # the classic page's retired service worker: removes its caches and unregisters itself (0.47.0)
     return FileResponse(WEB / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 

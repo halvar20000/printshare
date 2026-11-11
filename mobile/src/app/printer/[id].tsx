@@ -6,7 +6,7 @@ import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
 import { Banner, Button, Divider, Row, Screen, Section, confirmAsync, tap } from "@/components/ui";
-import type { Printer, PrinterProfile, UserProfile } from "@/lib/api";
+import type { PowerConfig, Printer, PrinterProfile, UserProfile } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import { space, useColors } from "@/lib/theme";
 
@@ -25,6 +25,7 @@ export default function PrinterSettings() {
   const [done, setDone] = useState("");
   const [orcaLink, setOrcaLink] = useState("");
   const [importing, setImporting] = useState(false);
+  const [plug, setPlug] = useState<PowerConfig | null>(null);
 
   // on focus: presets synced from Orca Cloud on the next screen show up when coming back
   useFocusEffect(useCallback(() => {
@@ -38,6 +39,7 @@ export default function PrinterSettings() {
         setProfiles(list);
       })
       .catch(e => { if (alive) setError((e as Error).message); });
+    api.powerConfig(id).then(p => { if (alive) setPlug(p); }).catch(() => {});
     return () => { alive = false; };
   }, [api, id]));
 
@@ -148,6 +150,11 @@ export default function PrinterSettings() {
             ))}
           </>
         ) : <ActivityIndicator color={c.accent} style={{ margin: 16 }} />}
+      </Section>
+
+      <Section title={t("plugTitle")}>
+        <Row icon="flash-outline" label={t("plugTitle")} sub={plug?.configured ? t("plugSubOn", { entity: plug.entity }) : t("plugSub")}
+          onPress={() => router.push({ pathname: "/power/[id]", params: { id } })} />
       </Section>
 
       {ownPresets.length ? (

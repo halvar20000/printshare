@@ -41,7 +41,7 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 | `printshare/printers/moonraker.py` | Klipper/COSMOS: tries configured URL, then :7125 |
 | `printshare/pipeline.py` | `prepare_job` (download + slice, queue via `max_parallel_slices`) → `send_job`; `run_job` = both |
 | `printshare/api.py` | FastAPI: app flow `/api/jobs` → review → `/send` (confirm required), options, printer control, PWA files |
-| `printshare/web/` | PWA: `index.html`, `app.js` (plain JS, DE/EN texts), `app.css`, `manifest.webmanifest` (share target), `sw.js`, `icons/` (`scripts/make_icons.py`) |
+| `printshare/web/` | only `sw.js` (unregisters the retired PWA worker) and `icons/` (`scripts/make_icons.py`); the classic PWA was removed in 0.52.0, the web app is the Expo build (docs/WEB.md) |
 | `printshare/cli.py` | `printshare print|files|status|presets|printers|serve` |
 | `tests/` | fake SDCP printer + fake Moonraker (aiohttp); `test_api.py` app flow; preset tests need `ORCA_PROFILES`; real slicing needs `ORCA_ROOT` |
 
@@ -1075,6 +1075,13 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `print_started: false` (Klippy not ready) no longer reports "started". Tested with fakes only (FakeMoonraker started
   after the HA plug was switched); **not yet with a real Orca, plug or COSMOS**, and Orca's printer agent with a path in
   the host address is untested (its `join_url` keeps the path).
+
+## One web page (2026-11-11, server 0.52.0, Dominique)
+- The classic page's last own settings moved into the Expo app: smart plug per printer (`app/power/[id].tsx`, from
+  printer settings), pairing QR (`app/pair-app.tsx`, `react-native-svg` `SvgXml` with the server's segno SVG) and the
+  server's bridge mode (`app/server-bridge.tsx`, polls `/api/bridge` every 3 s), the latter two under Settings → Erweitert
+  (own server). `printshare/web` keeps only `sw.js` + icons; `/classic` → 308 `/`; `classic_web` removed. Checked in
+  Chromium against a local home server with FakeHomeAssistant (entity list, test, save) and an unreachable cloud.
 
 ## Open in PocketPrint3D from SolidCraft (2026-11-02, server 0.48.0)
 - SolidCraft (Rust CAD, now `tangency-labs/solidcraft`, ~13k stars) has "Open with EasyPrint" (`crates/engine/src/easyprint.rs`
