@@ -152,6 +152,13 @@ export default function JobScreen() {
   const jobId = job?.id;
   const tlState = job?.timelapse?.state;
   const following = job?.state === "started" || tlState === "recording" || tlState === "rendering";
+  // server 0.51.0: a job waiting for the user's decision changes on its own (answered elsewhere, 10 min timeout)
+  const deciding = job?.state === "needs_decision" && !sending;
+  useEffect(() => {
+    if (!api || !jobId || !deciding) return;
+    const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 5000);
+    return () => clearInterval(iv);
+  }, [api, jobId, deciding]);
   useEffect(() => {
     if (!api || !jobId || !following) return;
     const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 15000);
@@ -367,32 +374,57 @@ export default function JobScreen() {
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
         printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, hasCam && timelapse, { wake, expect });
-      let j: Job | null = null;
-      // switching on: up to 10 min boot + filament system (the server's wake timeout)
-      for (let i = 0; i < (wake ? 900 : 600); i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        j = await api.job(job.id);
-        if (wake) setJob(j);                                // the banner follows the server's log
-        if (j.state !== "sending") break;
-      }
-      if (j) setJob(j);
-      setAgain(false);
-      if (j?.slot_problems?.length) {
-        setActionError(t("slotNotStarted", { reason: slotProblemText(j.slot_problems[0]) }));
-        setKnown(null);
-        refreshPrinter();
-      } else if (j?.error) setActionError(friendlyError(t, 0, j.error));
-      else if (start && j?.state === "started") {
-        await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
-          .catch(() => {});
-      }
-      if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      await followSend(job.id, wake, start);
     } catch (e) {
       setActionError((e as Error).message);
       refreshPrinter();
     } finally {
       setSending(null);
       setWaking(false);
+    }
+  };
+
+  /** After /send (and after a decision): follow the job until it is no longer "sending", then say how it ended.
+   *  `needs_decision` (server 0.51.0) stops here: the card on the screen asks the user. */
+  const followSend = async (jobId: string, wake: boolean, start: boolean) => {
+    if (!api) return;
+    let j: Job | null = null;
+    // switching on: up to 10 min boot + filament system (the server's wake timeout)
+    for (let i = 0; i < (wake ? 900 : 600); i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      j = await api.job(jobId);
+      if (wake) setJob(j);                                  // the banner follows the server's log
+      if (j.state !== "sending") break;
+    }
+    if (j) setJob(j);
+    setAgain(false);
+    if (j?.state === "needs_decision") return;
+    if (j?.slot_problems?.length) {
+      setActionError(t("slotNotStarted", { reason: slotProblemText(j.slot_problems[0]) }));
+      setKnown(null);
+      refreshPrinter();
+    } else if (j?.error) setActionError(friendlyError(t, 0, j.error));
+    else if (start && j?.state === "started") {
+      await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
+        .catch(() => {});
+    }
+    if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  };
+
+  /** Server 0.51.0: the printer is on but a slot holds another material - print anyway (confirmed) or not. */
+  const decide = async (start: boolean) => {
+    if (!api || !job) return;
+    if (start && !(await confirmAsync(t("decisionStartQ"), t("decisionStart"), t("cancelBtn"), t("decisionStartMsg")))) return;
+    setActionError("");
+    setSending(start ? "print" : null);
+    try {
+      setJob(await api.decide(job.id, start));
+      await followSend(job.id, true, start);
+    } catch (e) {
+      setActionError(errorText(t, e));
+      api.job(job.id).then(setJob).catch(() => {});
+    } finally {
+      setSending(null);
     }
   };
 
@@ -562,6 +594,7 @@ export default function JobScreen() {
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
   const canPrint = !busy && (kind !== "offline" || canWake) && !sending && job.state !== "sending"
+    && job.state !== "needs_decision"
     && !laneWarnings.some(w => w.blocking);
   const laneLabel = (tool?: number) => {
     const l = printerLanes.find(x => x.tool === tool);
@@ -621,6 +654,21 @@ export default function JobScreen() {
 
       {actionError ? <Banner kind="error" text={actionError} /> : null}
       {waking || (job.state === "sending" && wakeNeeded) ? <Banner kind="info" icon="power" text={wakeStep(job.log)} /> : null}
+      {job.state === "needs_decision" ? (
+        <Card style={{ padding: 16, marginBottom: 12 }}>
+          <Text style={{ color: c.text, fontSize: 17, fontWeight: "600" }}>{t("decisionTitle")}</Text>
+          <Text style={{ color: c.sub, fontSize: 14, marginTop: 6, marginBottom: 12 }}>
+            {t("decisionSub", {
+              reason: (job.decision?.problems ?? job.slot_problems ?? []).slice(0, 1).map(slotProblemText)[0] ?? "–",
+              time: job.decision?.until ? new Date(job.decision.until * 1000).toLocaleTimeString(t.lang,
+                { hour: "2-digit", minute: "2-digit" }) : "–" })}
+          </Text>
+          <Button title={t("decisionStart")} icon="play" onPress={() => decide(true)} loading={sending === "print"}
+            disabled={!!sending} />
+          <Button kind="secondary" title={t("decisionAbort")} onPress={() => decide(false)} disabled={!!sending}
+            style={{ marginTop: 8 }} />
+        </Card>
+      ) : null}
       {relay ? <Banner kind="info" icon="wifi-outline" text={relay.step === "upload"
         ? t("relayUpload", { pct: Math.round(relay.part * 100) }) : t(relay.step === "download" ? "relayDownload" : "relayStart")} /> : null}
 

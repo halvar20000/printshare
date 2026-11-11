@@ -34,7 +34,7 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 | File | Purpose |
 |---|---|
 | `printshare/fetch.py` | parse links, list model files, download (Printables GraphQL `ModelFiles` + `GetDownloadLink`, Thingiverse API w/ token, direct URL, local path for CLI) |
-| `printshare/profiles.py` | index OrcaSlicer system presets (shared `ProfileLibrary.cached`), flatten `inherits`, `compatible()` presets per machine |
+| `printshare/profiles.py` | index OrcaSlicer system presets (JSON from the source tag since 2.5, see below) (shared `ProfileLibrary.cached`), flatten `inherits`, `compatible()` presets per machine |
 | `printshare/slicer.py` | build machine/process/filament JSON, run Orca CLI, extract G-code + estimates |
 | `printshare/config.py` | `config.yaml` model, `cosmos` machine preset, bed type, `JobOptions` (per-job material/quality/plate/supports/brim/infill/walls) |
 | `printshare/printers/elegoo.py` | stock CC via pycentauri (upload HTTP :80 `/uploadFile/upload` 1 MB chunks, WS :3030 start/status) |
@@ -1104,6 +1104,34 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   after switching the mount to `files` the older cube was listed too (harmless). Live-checked with a local server +
   web build in Chromium (card, tap → prepare); not yet on Tower with the real SolidCraft export.
 
+## Push notifications + Live Activities (2026-11-11, server 0.51.0, Dominique) – docs/PUSH.md
+- Concept: project file `analysen/konzept-benachrichtigungen-live-activity.md`. `printshare/push/`: `relay.py` (cloud only:
+  APNs token → `pp3dp_` handle + secret, `/push/register|send|unregister`), `apns.py` (HTTP/2 via `h2`, ES256 JWT from the
+  .p8 in env `PRINTSHARE_APNS_*`), `notify.py` (every server: phones in `push.db`, prefs per group, texts DE/EN encrypted
+  with the phone's ChaCha20-Poly1305 key → relay sees no content; Live Activity state = numbers only, throttled 5 %/2 min).
+  Home servers send to `PRINTSHARE_PUSH_RELAY` (default the cloud, `off`). Phone-reached printers get no pushes.
+- "Switch on and print" with another material/empty slot → job `needs_decision` (10 min, notification `SLOT_CHECK`),
+  `POST /api/jobs/{id}/decision` start (confirm) / abort; timeout → plug off again. Bridges forward it (`job.decision`
+  event + method), `job.send` timeout 30 min.
+- **Not verified:** no real APNs key set yet, nothing sent to a real iPhone (APNs only against a fake).
+## OrcaSlicer 2.5.0 (2026-11-11, server 0.52.0, Dominique asked)
+- **The 2.5 AppImage has no JSON system presets any more**: `resources/profiles/<Vendor>.opc` = own binary format
+  (magic `ZCRO`), only cover PNGs in the vendor folders. The JSON files are still in the source tag
+  (`resources/profiles/<Vendor>/{machine,process,filament}/…`, sub-folders like `machine/ECC/`) → Dockerfile stage
+  `orca-profiles` (sparse git clone of tag `v${ORCA_VERSION}`) copies them into `/opt/orca/resources/profiles/<Vendor>/`
+  next to the .opc files; Orca itself keeps working (checked: identical results). `ORCA_VERSION` is a global ARG.
+- ~750 filament presets renamed (e.g. `Prusa Generic PLA @MK4S` → `Generic PLA @Prusa MK4S`, `Bambu PLA Basic @BBL X1C`
+  for the P1S → `… @BBL P1S 0.4 nozzle` by default), old names in `renamed_from` ("a;b") → `ProfileLibrary.canonical()`,
+  used by `resolve()` (also for `inherits`) and `_validate_options`. 1194 machines (+194), 3259 processes, 7637 filaments.
+- `enable_arc_fitting` changed bool → enum (we don't set it). CLI options we use are unchanged; infill list unchanged.
+- 2.5 counts the purge of colour changes in `filament used [g]` without a prime tower (2.4.2: 0) → copies test checks the
+  per-copy increment. `_parse_estimates` used only the first filament for the total on multicolour prints (fixed in 0.52.0, sums).
+- Benchy, standard profiles, 2.4.2 → 2.5.0: CC stock 35m32s/11.49 g → 35m10s/11.96 g, COSMOS 34m52s/11.36 → 33m49s/11.37,
+  P1S 31m15s/11.29 → 32m03s/11.29, MK4S 1h03m59s/11.43 → 40m16s/11.42. Full suite with the real 2.5: 299 passed.
+- Testing here: this container is Debian 12 again (glibc 2.36, Orca 2.5 needs 2.38) → Ubuntu 24.04 rootfs + proot in the
+  scratchpad (`proot -0` for apt). docker.yml: `publish`/`bridge-publish` only on main, so `gh workflow run docker.yml
+  --ref <branch>` builds and runs the integration tests without touching `:latest`.
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,
@@ -1130,7 +1158,7 @@ Done since the first handover: Unraid install + first prints on both printers (s
 ## Conventions
 - Python ≥ 3.10, English code/comments/docs; user-facing texts German first later (NF-11).
 - Keep printer and model-source integrations as swappable adapters (NF-08).
-- Pin OrcaSlicer version (`ORCA_VERSION` build arg); upgrade only after reference-model tests.
+- Pin OrcaSlicer version (`ORCA_VERSION` build arg, 2.5.0 since 0.52.0); upgrade only after reference-model tests.
 - Never start a print without explicit confirmation from the user (NF-05) — web page currently
   has "Print" and "Upload only"; the app must add a confirmation step.
 - Printables: only on the user's behalf, one model at a time, never re-host files.

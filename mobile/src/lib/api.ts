@@ -204,7 +204,8 @@ export type JobOptions = Partial<{
   copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
-export type JobState = "finished" | "cancelled" | "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
+export type JobState = "finished" | "cancelled" | "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done"
+  | "needs_decision";
 export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
@@ -227,6 +228,8 @@ export type Job = {
   progress?: number | null;
   /** server 0.50.0: the chosen slots didn't fit any more right before the start */
   slot_problems?: SlotProblem[] | null;
+  /** server 0.51.0: after switching on a slot didn't fit - the printer waits for the user until `until` (unix s) */
+  decision?: { until: number; problems: SlotProblem[] } | null;
 };
 export type JobSummary = {
   id: string; kind: string; state: JobState; error: string | null; created: number; printer?: string;
@@ -515,6 +518,10 @@ export class Api {
                                 ...(start && timelapse != null ? { timelapse } : {}),
                                 ...(start && extra?.wake ? { wake: true } : {}),
                                 ...(start && extra?.expect && Object.keys(extra.expect).length ? { expect: extra.expect } : {}) } });
+  /** Server 0.51.0: answer a job in `needs_decision` - start anyway (after the app's confirmation) or don't print. */
+  decide = (id: string, start: boolean) =>
+    this.request<Job>(`/api/jobs/${encodeURIComponent(id)}/decision`,
+      { method: "POST", body: start ? { action: "start", confirm: true } : { action: "abort" } });
   /** Server 0.50.0: slots live, or the last ones seen while the printer is off; null on older servers. */
   knownLanes = (printer: string) =>
     this.request<KnownLanes>(`/api/printers/${encodeURIComponent(printer)}/lanes`, { timeout: 15000 })

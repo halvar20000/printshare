@@ -93,7 +93,7 @@ DELETE /api/printers/{id}   → {"deleted": "werkstatt-cc"}
 `machine` (OrcaSlicer printer profile) is required for `prusalink` / `octoprint`; the Centauri profile is the default
 otherwise. The choices for it (0.15.3):
 ```http
-GET /api/machines   → [{"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}, …]   (all of Orca 2.4.2, ~1000)
+GET /api/machines   → [{"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}, …]   (all of the bundled Orca, ~1200 with 2.5.0)
 ```
 The app reaches `prusalink` printers with the user `maker` + the password from the printer screen (or an API key),
 `octoprint` with an API key; both are kept on the phone only. At most 10 printers per account. The address of the printer stays in the app (it finds the printer on
@@ -217,7 +217,7 @@ infill pattern, walls).
 - `own`: uploaded presets of the user (shown first, group "Own profiles").
 - Since 0.15.3 `materials` also lists OrcaSlicer's printer-independent library (`Generic PETG @System`, …) after the
   printer's own materials, and presets that pick their printers by condition (Prusa, CORE One) are included.
-- `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of Orca 2.4.2, in Orca's order); an app
+- `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of the bundled Orca, in Orca's order); an app
   may offer a subset. `defaults.infill_pattern`: the quality's pattern (Orca's legacy `zig-zag` is reported as
   `rectilinear`, like Orca reads it), `defaults.infill_line_width`: infill line width in mm (`null` if the preset
   gives it as a percentage) – for a true-to-scale infill preview. Missing on older servers: hide the choice.
@@ -383,7 +383,7 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
             "sent": {}, "filaments": [], "copies_requested": null, "copies": null},
  "error": null, "created": 1790778079.45, "request": {"link": "…", "printer": "cosmos", "file": null, "options": {…}}}
 ```
-- **`state`**: `slicing` → `sliced` | `error`; after `/send`: `sending` → `uploaded` | `started`
+- **`state`**: `slicing` → `sliced` | `error`; after `/send`: `sending` (→ `needs_decision`, 0.51.0) → `uploaded` | `started`
   (a failed send goes back to `sliced` with `error` set, so the user can try again).
 - `log`: progress lines (English; the apps translate the known ones).
 - `result.filaments` (multicolour): `[{"index", "color", "preset", "grams"}]`.
@@ -425,6 +425,14 @@ start doesn't end the job (same rule for spool bookings). `finished`/`cancelled`
   `error: "Not started: lane CANVAS_2 (T1) now holds material PETG instead of PLA"` and
   `slot_problems: [{"tool": 1, "lane": "CANVAS_2", "problem": "missing|empty|material", "expected", "found"}]` on
   the job (the apps build their own text from it). Through a bridge only the `error` text arrives.
+- 0.51.0: when the printer had to be switched on and every problem is `empty` or `material`, the job does not give up
+  but goes to **`state: needs_decision`** with `decision: {"until": <unix s>, "problems": [...]}` (and `slot_problems`):
+  the printer stays on, the phones get a notification (category `SLOT_CHECK`). `POST /api/jobs/{job}/decision`
+  `{"action": "start", "confirm": true}` starts anyway (only after the app's normal confirmation dialog; `400` without
+  `confirm`), `{"action": "abort"}` stops it (`sliced` + `error`). No answer within 10 min = stopped too, and the plug
+  is switched off again when it was switched on for this print. `409` when the job no longer waits. Through a bridge the
+  cloud job goes to `needs_decision` as well (bridge 0.51.0+; older bridges stop as before). A server restart while
+  waiting = `sliced` (never started).
 - 0.46.0: when the printer answers that it did not start the print (Moonraker `print_started: false`), sending fails
   instead of reporting `started`.
 
@@ -789,9 +797,9 @@ itself and fills the spool form / picks the matching spool – see `mobile/src/l
 | | |
 |---|---|
 | `GET /api/profiles` | `[{"file": "filament-Meine PLA.json", "kind": "filament", "name": "Meine PLA", "inherits": "Elegoo PLA @ECC"}, …]` (+ `print_start`, `nozzle` for printer presets, `error` if unusable) |
-| `POST /api/profiles?filename=x.json` | body: JSON preset or OrcaSlicer bundle (zip); → list of stored presets; `400` with a reason if Orca 2.4.2 doesn't know the base |
+| `POST /api/profiles?filename=x.json` | body: JSON preset or OrcaSlicer bundle (zip); → list of stored presets; `400` with a reason if the bundled Orca doesn't know the base |
 | `DELETE /api/profiles/{file}` | `400` while a printer uses it |
-| `POST /api/profiles/orca-cloud` `{"link": "https://cloud.orcaslicer.com/b/<code>"}` (0.18.0) | imports a **public** Orca Cloud bundle (**no Orca account**; private bundles only open for whitelisted, logged-in Orca users → `400 "bundle not found or private …"`): `{"bundle": {"name", "author", "version", "updated"}, "imported": [<same as the list above>], "skipped": [{"name", "error"}]}`; presets Orca 2.4.2 can't use are skipped, `400` if none is usable / not a share link / not found |
+| `POST /api/profiles/orca-cloud` `{"link": "https://cloud.orcaslicer.com/b/<code>"}` (0.18.0) | imports a **public** Orca Cloud bundle (**no Orca account**; private bundles only open for whitelisted, logged-in Orca users → `400 "bundle not found or private …"`): `{"bundle": {"name", "author", "version", "updated"}, "imported": [<same as the list above>], "skipped": [{"name", "error"}]}`; presets the bundled Orca can't use are skipped, `400` if none is usable / not a share link / not found |
 
 Orca Cloud: the server reads `GET https://api.orcaslicer.com/api/v1/bundles/share/<code>` (open, found in the
 cloud.orcaslicer.com web app); presets inheriting another preset of the same bundle are merged first, `"type": "printer"`
@@ -856,6 +864,49 @@ DELETE /api/inbox        (auth) {"removed": n}   all entries
 ```
 - `enabled: false` in the cloud, on bridge-only servers and when the folder doesn't exist (older servers: 404).
 - `link` works like an upload: `/api/files`, `/api/jobs` … The app polls every 5 s while its home screen is open.
+
+## Push notifications and Live Activities (0.51.0 – docs/PUSH.md)
+
+Every server (cloud, own server, Home Assistant) sends through the **push relay** of PocketPrint3D Cloud; only the relay
+has the APNs key. The phone registers each APNs token at the relay and gives the returned handle to its server.
+
+Relay (cloud only, no login; `404` elsewhere):
+```
+POST /push/register   {"token": "<APNs token hex>", "kind": "device"|"start"|"activity", "env": "production"|"sandbox",
+                       "platform": "ios"}  → {"handle": "pp3dp_…", "secret": "…"}   60 per IP and hour
+POST /push/send       {"handle", "secret", "message": {...}}  → {"sent": true}   (used by servers)
+POST /push/unregister {"handle", "secret"}
+```
+Errors `{"detail": {"error": "invalid|wrong_handle|unknown_handle|gone|rate_limited|push_unavailable|apns_failed"}}`;
+`404`/`410` = the handle is gone (register again). The same token registered again replaces its old handle.
+`env`: `sandbox` for Xcode builds, `production` for TestFlight / App Store.
+
+Messages (servers → relay): `{"type": "alert", "data": "<base64 ChaCha20-Poly1305 nonce+ciphertext+tag>", "level":
+"active"|"time-sensitive", "category": "SLOT_CHECK"|"AI_ALERT"|null, "thread", "collapse"}` → APNs alert with
+`mutable-content`, fallback text `loc-key: push.fallback`, the blob under `pp3d`. The decrypted blob:
+`{"event", "title", "body", "job", "printer"}` (texts in the phone's language, made by the server).
+`{"type": "activity", "event": "start"|"update"|"end", "state": {"s", "p", "end", "l", "lt"}, "attributes": {"job",
+"printer"} (start only), "stale", "dismiss", "urgent"}` → APNs `liveactivity` push; `attributes-type`
+`PrintActivityAttributes`. `s`: `sending|waking|decision|printing|paused|done|cancelled|error|failed`, `p` 0-100,
+`end` = unix s of the expected end, `l`/`lt` = layer / layers. Plain text at the relay → numbers and ids only.
+
+Own server / cloud account (auth; `404` on bridge-only servers or with `PRINTSHARE_PUSH_RELAY=off`):
+```
+GET    /api/push   {"relay": "<url to register at>" | null (cloud: this server), "relay_here": bool, "available": bool,
+                    "groups": [...], "defaults": {...}, "devices": [<device>]}
+POST   /api/push/devices        {"handle", "secret", "key": "<32 random bytes base64>", "platform": "ios", "lang": "de",
+                                 "name": "iPhone", "prefs"?}  → <device>   (same handle again = update; max 10)
+PUT    /api/push/devices/{id}   {"prefs"?, "lang"?, "name"?, "start_handle"?, "start_secret"?}  ("" removes push-to-start)
+DELETE /api/push/devices/{id}
+POST   /api/push/devices/{id}/test   → {"sent": true}   410 = the relay forgot the phone (register again)
+POST   /api/jobs/{job}/live-activity {"handle", "secret", "device"?}  → {"state": {...}}   keep this activity updated
+```
+`<device>` = `{"id", "name", "platform", "lang", "prefs", "live_activities", "created", "last_ok", "last_error"}`.
+`prefs` (defaults): `done` true (finished, cancelled), `problems` true (paused, error, ai_alert, send_failed),
+`decisions` true (decision), `info` false (external), `activities` true (push-to-start), `muted` [printer ids].
+Live Activities are updated at every state change and at most every 5 % / 2 min (refresh every 15 min); they end with
+the job. Push-to-start for prints the phone didn't start (started elsewhere). Printers the phone reaches itself (cloud
+without a bridge) get no server pushes: no server sees them.
 
 ## Web-page-only endpoints
 Settings that are made on the web page, not in the apps: `/api/printers/{id}/power/config` (GET/PUT/DELETE),

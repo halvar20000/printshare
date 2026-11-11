@@ -70,8 +70,8 @@ def _system_base(data: dict[str, Any], kind: str, lib: ProfileLibrary) -> str | 
     try:
         lib.resolve(kind, parent)
     except ProfileError as e:
-        raise ProfileUploadError(f"{data.get('name', 'preset')!r} is based on {parent!r}, which OrcaSlicer 2.4.2 "
-                                 f"on the server does not know. ({e})") from e
+        raise ProfileUploadError(f"{data.get('name', 'preset')!r} is based on {parent!r}, which the server's OrcaSlicer "
+                                 f"does not know. ({e})") from e
     return parent
 
 

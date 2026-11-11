@@ -1,9 +1,29 @@
 # Changelog
 
-## 0.50.1
+## 0.52.1
 - The web app (and the Android app) can do what 0.50.0 brought: choose slots while the printer is off (last seen
   slots), "Switch on and print" for printers whose smart plug may switch them on, and a clear message when a slot holds
-  another material than chosen.
+  another material than chosen. When the printer waits for an answer (0.51.0), the job screen asks "Print anyway" /
+  "Don't print".
+
+## 0.52.0
+- Slicing with **OrcaSlicer 2.5.0** (was 2.4.2): about 1200 printer models (about 190 new, e.g. Bambu Lab H2C and
+  A2L), new filament profiles, faster slicing.
+- Presets OrcaSlicer 2.5 renamed (about 750 filament presets, e.g. "Prusa Generic PLA @MK4S" → "Generic PLA @Prusa MK4S")
+  keep working under their old names: saved choices, config.yaml and uploaded presets based on them are mapped to the
+  new name.
+- Multicolour prints: the grams now include the filament purged at every colour change (CANVAS/AFC purge too; 2.4.2
+  counted nothing for it without a prime tower), so spool bookings come closer to what the printer really uses.
+- Fixed: the total filament of a multicolour print showed the first colour only.
+- Print times and filament can differ a little from 2.4.2 (newer profiles). Benchy with the standard profiles:
+  Centauri 35m32s → 35m10s, COSMOS 34m52s → 33m49s, P1S 31m15s → 32m03s, Prusa MK4S 1h04m → 40m16s.
+
+## 0.51.0
+- Push notifications for the apps: print finished or cancelled, paused, printer error, AI failure alert, print not
+  started. They go through the push relay of PocketPrint3D Cloud (also for your own server); the texts are encrypted
+  on your server and only your phone can read them. Live Activity updates (lock screen, Dynamic Island) for prints.
+- "Switch on and print": when a slot holds another material after switching on, the print waits 10 minutes and the app
+  asks "check or cancel" instead of giving up right away. Nobody answers → not started, the printer is switched off again.
 
 ## 0.50.0
 - Print on a switched-off printer from the app: with a smart plug set to "switch on when needed", "switch on and print"
