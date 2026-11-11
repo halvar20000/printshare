@@ -73,6 +73,9 @@ function Root() {
         <Stack.Screen name="manyfold" options={{ title: "Manyfold" }} />
         <Stack.Screen name="orca-account" options={{ title: "Orca Cloud" }} />
         <Stack.Screen name="failure-detection" options={{ title: t("failureTitle") }} />
+        <Stack.Screen name="power/[id]" options={{ title: t("plugTitle") }} />
+        <Stack.Screen name="pair-app" options={{ title: t("pairAppTitle") }} />
+        <Stack.Screen name="server-bridge" options={{ title: t("serverBridgeTitle") }} />
         <Stack.Screen name="spool/[id]" options={{ title: "" }} />
         <Stack.Screen name="connect" options={{ title: t("connectTitle"), presentation: "modal" }} />
         <Stack.Screen name="scan" options={{ title: t("scanTitle"), presentation: "fullScreenModal", headerShown: false }} />
