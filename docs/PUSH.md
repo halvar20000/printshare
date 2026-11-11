@@ -24,9 +24,10 @@ server event ──encrypted alert / activity state──▶ relay (/push/send) 
 
 ## Setting up the cloud (once, Thomas/Dominique)
 1. Apple developer portal → Keys → new key with "Apple Push Notifications service (APNs)" → download the .p8 (once!).
-2. Put it on the cloud server (e.g. `/opt/pocketprint3d/apns.p8`, mode 0600, mounted into the container) and add to
-   `secrets.env`: `PRINTSHARE_APNS_KEY=/secrets/apns.p8`, `PRINTSHARE_APNS_KEY_ID=<key id>`,
-   `PRINTSHARE_APNS_TEAM_ID=<team id>` (`PRINTSHARE_APNS_TOPIC` defaults to the iOS bundle id).
+2. Put it on the cloud server as `/srv/pocketprint3d/config/apns.p8` (mode 0600; that folder is the container's
+   `/config`) and add to `/opt/pocketprint3d/secrets.env`: `PRINTSHARE_APNS_KEY=/config/apns.p8`, `PRINTSHARE_APNS_KEY_ID=<key id>`,
+   `PRINTSHARE_APNS_TEAM_ID=<team id>` (`PRINTSHARE_APNS_TOPIC` defaults to the iOS bundle id), then `docker compose up -d`.
+   Create the key for "Sandbox & Production": Xcode builds register as sandbox, TestFlight as production.
 3. App ID in the developer portal: enable "Push Notifications" (and "Time Sensitive Notifications" for the app).
 Without a key the relay answers `503 push_unavailable` and nothing else changes.
 
