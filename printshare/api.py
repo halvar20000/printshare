@@ -151,7 +151,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.51.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.52.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -3250,6 +3250,16 @@ def _validate_options(acct: "Account", printer: PrinterConfig, o: OptionsModel) 
     if opts.bed_type and opts.bed_type not in PLATES:
         raise HTTPException(400, f"unknown plate {opts.bed_type!r}")
     s = printer.slicing
+    try:
+        lib = _library() if opts.filament or opts.filaments or opts.process else None
+    except ProfileError:
+        lib = None
+    if lib is not None:                  # old OrcaSlicer names (saved in the apps) -> current ones
+        own = set(_own_presets(acct, printer, "filament", lib))
+        canon = lambda kind, n: n if not n or n in own else lib.canonical(kind, n)  # noqa: E731
+        opts.filament = canon("filament", opts.filament)
+        opts.filaments = [canon("filament", f) for f in opts.filaments] if opts.filaments else opts.filaments
+        opts.process = canon("process", opts.process)
 
     def fits(kind: str, name: str) -> bool:        # only looked up for presets other than the configured ones
         lib = _library()

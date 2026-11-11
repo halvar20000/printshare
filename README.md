@@ -89,7 +89,7 @@ start from [`config-example.yaml`](config-example.yaml).
 ### Build it yourself (developers)
 
 ```bash
-docker build -t printshare:dev .          # ~5 min; downloads OrcaSlicer 2.4.2 for your CPU
+docker build -t printshare:dev .          # ~5 min; downloads OrcaSlicer 2.5.0 for your CPU
 bash scripts/unraid-install.sh             # Unraid: build + run from a source checkout
 ```
 
@@ -97,7 +97,7 @@ bash scripts/unraid-install.sh             # Unraid: build + run from a source c
 
 In the app: **Settings → your printer → Upload printer profile**, or on the web page: **Settings → Printer profile**. Export the profile in OrcaSlicer
 (File → Export → preset bundle `.zip`, or the profile's JSON file), pick it on the phone – the server
-checks it (valid preset, parent profile known to OrcaSlicer 2.4.2) and uses it for this printer right away.
+checks it (valid preset, parent profile known to the bundled OrcaSlicer) and uses it for this printer right away.
 It is kept in `/config/profiles/` and assigned in `/config/printers.d/<printer>.yaml`, so it survives the
 Unraid template / Home Assistant add-on regenerating `config.yaml`. A profile with its own `PRINT_START`
 (e.g. COSMOS with AFC) is not overridden by the built-in COSMOS start code.

@@ -73,6 +73,9 @@ class ProfileLibrary:
             raise ProfileError(f"OrcaSlicer profiles directory not found: {self.profiles_dir}")
         # index[kind][name] = path ; vendor-local names win over other vendors
         self._index: dict[str, dict[str, Path]] = {k: {} for k in KINDS}
+        # old name -> current name: OrcaSlicer 2.5 renamed ~750 presets and keeps the old names in `renamed_from`
+        # ("a;b"), so saved choices, config.yaml and uploaded presets (`inherits`) of 2.4 keep working
+        self._renamed: dict[str, dict[str, str]] = {k: {} for k in KINDS}
         for vendor_dir in sorted(p for p in self.profiles_dir.iterdir() if p.is_dir()):
             for kind in KINDS:
                 kdir = vendor_dir / kind
@@ -80,11 +83,18 @@ class ProfileLibrary:
                     continue
                 for f in kdir.rglob("*.json"):
                     try:
-                        name = json.loads(f.read_text(encoding="utf-8")).get("name")
+                        data = json.loads(f.read_text(encoding="utf-8"))
                     except (json.JSONDecodeError, UnicodeDecodeError):
                         continue
+                    name = data.get("name") if isinstance(data, dict) else None
                     if name:
                         self._index[kind].setdefault(name, f)
+                        for old in str(data.get("renamed_from") or "").split(";"):
+                            if old.strip():
+                                self._renamed[kind].setdefault(old.strip(), name)
+        for kind in KINDS:                  # a name that still exists is never redirected
+            for old in [o for o in self._renamed[kind] if o in self._index[kind]]:
+                del self._renamed[kind][old]
         self._raw: dict[Path, dict[str, Any]] = {}
         self._compatible: dict[tuple[str, str], list[str]] = {}
         self._lock = threading.Lock()
@@ -100,6 +110,10 @@ class ProfileLibrary:
             data = self._raw[path] = json.loads(path.read_text(encoding="utf-8"))
         return data
 
+    def canonical(self, kind: str, name: str) -> str:
+        """The current name of a preset (an old OrcaSlicer name is mapped to its new one; unknown names unchanged)."""
+        return name if name in self._index[kind] else self._renamed[kind].get(name, name)
+
     def names(self, kind: str, contains: str = "") -> list[str]:
         c = contains.lower()
         return sorted(n for n in self._index[kind] if c in n.lower())
@@ -108,8 +122,10 @@ class ProfileLibrary:
         """Return a flattened preset (parents merged, child wins)."""
         chain: list[dict[str, Any]] = []
         seen: set[str] = set()
+        name = self.canonical(kind, name)
         current: str | None = name
         while current:
+            current = self.canonical(kind, current)
             if current in seen:
                 raise ProfileError(f"Inheritance loop at {current!r}")
             seen.add(current)
