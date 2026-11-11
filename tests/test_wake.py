@@ -3,10 +3,12 @@ filament sync (also while the printer is off) and "Upload and Print" on a switch
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 from fastapi.testclient import TestClient
 
 from printshare import power as plug
@@ -290,9 +292,14 @@ def test_app_switches_on_with_auto_on_and_checks_the_slots(api, tmp_path, monkey
             moon.state = "standby"
             monkeypatch.setitem(AFC_LANES, lane_key, {**AFC_LANES[lane_key], "material": "PETG"})
             with BackgroundFake(moon):
+                # 0.51.0: the printer is on now - the job waits for the user instead of giving up
+                j = _wait(c, job, ("started", "sliced", "needs_decision"))
+                assert j["state"] == "needs_decision" and j["decision"]["until"] > time.time(), j
+                assert j["slot_problems"][0]["problem"] == "material" and not moon.uploads
+                assert c.post(f"/api/jobs/{job}/decision", headers=H, json={"action": "abort"}).status_code == 200
                 j = _wait(c, job, ("started", "sliced"))
                 assert j["state"] == "sliced" and "PETG instead of PLA" in j["error"], j
-                assert j["slot_problems"][0]["problem"] == "material" and not moon.uploads
+                assert "cancelled" in j["error"] and not moon.uploads
             # the right spool again: started
             monkeypatch.setitem(AFC_LANES, lane_key, {**AFC_LANES[lane_key], "material": "PLA"})
             moon = FakeMoonraker(afc=True)
@@ -302,3 +309,77 @@ def test_app_switches_on_with_auto_on_and_checks_the_slots(api, tmp_path, monkey
                 j = _wait(c, job, ("started", "sliced"))
                 assert j["state"] == "started", j
                 assert moon.uploads[-1]["print"] == "true" and not j.get("slot_problems")
+
+
+def test_wrong_material_after_waking_asks_the_user(api, tmp_path, monkeypatch):  # noqa: F811
+    """0.51.0: the printer is on, a slot holds another material - a notification asks; start anyway (confirmed) or
+    nobody answers (printer off again)."""
+    from printshare.push import notify
+    from .fakes import AFC_LANES
+
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    monkeypatch.setattr(api.settings, "config_dir", str(tmp_path))
+    monkeypatch.setattr(wake_mod, "POLL_S", 0.1)
+    monkeypatch.setattr(wake_mod, "SETTLE_S", 0.0)
+    monkeypatch.setattr(wake_mod, "STATUS_TIMEOUT_S", 3.0)
+    api.JOBS.clear()
+    sent = []
+
+    async def relay(handle, secret, msg):
+        sent.append(msg)
+
+    monkeypatch.setattr(api, "_NOTIFIER", notify.Notifier(tmp_path / "push.db", relay))
+    key = notify.new_key()
+    api._notifier().add("local", "pp3dp_" + "a" * 30, "s" * 20, key, "iPhone", "de")
+    H = {"Authorization": f"Bearer {TOKEN}"}
+    with TestClient(api.app) as c:
+        with BackgroundFake(FakeMoonraker(afc=True)) as moon:
+            moon.state = "standby"
+            lanes = c.get("/api/printers/dom/lanes", headers=H).json()["lanes"]
+        pla = next(ln for ln in lanes if ln["material"] == "PLA")
+        lane_key = next(k for k, v in AFC_LANES.items() if v["material"] == "PLA" and
+                        ("#" + v["color"].lstrip("#").upper()) == pla["color"])
+        monkeypatch.setitem(AFC_LANES, lane_key, {**AFC_LANES[lane_key], "material": "PETG"})
+        body = {"start": True, "confirm": True, "wake": True, "lanes": {"1": pla["tool"]},
+                "expect": {str(pla["tool"]): {"material": "PLA", "color": pla["color"]}}}
+        with BackgroundFake(FakeHomeAssistant()) as ha:
+            c.put("/api/printers/dom/power/config", headers=H,
+                  json={"url": HA, "token": "ha-token", "entity": "switch.drucker", "auto_on": True})
+            # 1) start anyway
+            job = _sliced_job(c)
+            assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 200
+            end = time.time() + 10
+            while ha.states["switch.drucker"] != "on" and time.time() < end:
+                time.sleep(0.05)
+            moon = FakeMoonraker(afc=True)
+            moon.state = "standby"
+            with BackgroundFake(moon):
+                _wait(c, job, ("needs_decision",))
+                end = time.time() + 5
+                while not any(m.get("category") == "SLOT_CHECK" for m in sent) and time.time() < end:
+                    time.sleep(0.05)
+                alert = next(m for m in sent if m.get("category") == "SLOT_CHECK")
+                raw = base64.b64decode(alert["data"])
+                text = ChaCha20Poly1305(base64.b64decode(key)).decrypt(raw[:12], raw[12:], None).decode()
+                assert "PETG statt PLA" in text and alert["level"] == "time-sensitive"
+                r = c.post(f"/api/jobs/{job}/decision", headers=H, json={"action": "start"})
+                assert r.status_code == 400, "starting needs confirm (NF-05)"
+                assert c.post(f"/api/jobs/{job}/decision", headers=H,
+                              json={"action": "start", "confirm": True}).status_code == 200
+                j = _wait(c, job, ("started", "sliced"))
+                assert j["state"] == "started" and moon.uploads[-1]["print"] == "true", j
+                assert c.post(f"/api/jobs/{job}/decision", headers=H, json={"action": "abort"}).status_code == 409
+            # 2) nobody answers: not started, the plug goes off again
+            monkeypatch.setattr(api, "DECISION_S", 0.3)
+            ha.states["switch.drucker"] = "off"
+            job = _sliced_job(c)
+            assert c.post(f"/api/jobs/{job}/send", headers=H, json=body).status_code == 200
+            end = time.time() + 10
+            while ha.states["switch.drucker"] != "on" and time.time() < end:
+                time.sleep(0.05)
+            moon = FakeMoonraker(afc=True)
+            moon.state = "standby"
+            with BackgroundFake(moon):
+                j = _wait(c, job, ("sliced", "started"))
+                assert j["state"] == "sliced" and "nobody answered" in j["error"] and not moon.uploads, j
+            assert ha.calls[-1] == ("turn_off", "switch.drucker")
