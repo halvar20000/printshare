@@ -907,7 +907,7 @@ POST   /api/jobs/{job}/live-activity {"handle", "secret", "device"?}  → {"stat
 `prefs` (defaults): `done` true (finished, cancelled), `problems` true (paused, error, ai_alert, send_failed),
 `decisions` true (decision), `info` false (external), `activities` true (push-to-start), `muted` [printer ids].
 Live Activities are updated at every state change and at most every 5 % / 2 min (refresh every 15 min); they end with
-the job. Push-to-start for prints the phone didn't start (started elsewhere). Printers the phone reaches itself (cloud
+the job. Push-to-start for prints the phone didn't start (started elsewhere, OrcaSlicer's "Upload and Print" since 0.53.1). Printers the phone reaches itself (cloud
 without a bridge) get no server pushes: no server sees them.
 
 ## Web-page-only endpoints

@@ -289,3 +289,27 @@ def test_cloud_learns_from_the_bridge_that_a_job_waits(cloud):  # noqa: F811
     api._bridge_event("b1", "u1", "job.decision", {"job": "cj1", "problems": [problem], "until": 123})
     assert job["state"] == "needs_decision" and job["decision"] == {"until": 123, "problems": [problem]}
     api.JOBS.pop("cj1")
+
+
+def test_orca_upload_and_print_starts_the_live_activity(cloud, monkeypatch):  # noqa: F811
+    """0.53.1: a print OrcaSlicer starts through the server has no phone behind it - push-to-start its Live Activity."""
+    api = cloud
+    started = []
+
+    async def fake_send(job_id, req, acct):
+        api.JOBS[job_id]["state"] = "started"
+
+    async def fake_start(owner, job, printer):
+        started.append((owner, job["id"], printer, job["state"]))
+        return 1
+
+    monkeypatch.setattr(api, "send", fake_send)
+    monkeypatch.setattr(api._notifier(), "start_activity", fake_start)
+    monkeypatch.setattr(api, "BOOKINGS", None)
+    job = {"id": "oj1", "owner": "u1", "printer": "cos", "state": "sliced", "log": [], "result": {"printer": "cos"}}
+    api.JOBS["oj1"] = job
+    try:
+        run(api._orca_print(api.Account("u1", api.settings), job))
+    finally:
+        api.JOBS.pop("oj1")
+    assert started == [("u1", "oj1", "cos", "started")]

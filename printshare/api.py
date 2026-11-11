@@ -909,6 +909,9 @@ async def _orca_print(acct: Account, job: dict[str, Any]) -> None:
     except HTTPException as e:
         job["log"].append(f"Not started: {e.detail}")
         return
+    if _push_enabled():
+        # nobody's phone started this print: the Live Activity comes by push-to-start (0.53.1)
+        _push_run(_safe(_notifier().start_activity(job.get("owner", "local"), job, job["printer"])))
     for _ in range(30 * 60):             # switching on and booting the printer included (wake.WAKE_TIMEOUT_S)
         if job["state"] != "sending":
             break
