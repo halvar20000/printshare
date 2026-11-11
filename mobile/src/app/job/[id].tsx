@@ -7,12 +7,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Platform, Pressable, Switch, Text, View } from "react-native";
 
 import { Banner, Button, Card, Divider, Empty, PickerSheet, Row, Screen, Section, Stat, tap } from "@/components/ui";
-import { errorText, friendlyError, isExternal, WEB_APP, type Job, type Printer, type PrinterKind, type PrinterStatus } from "@/lib/api";
+import { errorText, friendlyError, isExternal, WEB_APP, type Job, type KnownLanes, type Printer, type PrinterKind, type PrinterStatus,
+  type SlotProblem } from "@/lib/api";
 import { useApp } from "@/lib/app";
 import type { SendStep } from "@/lib/lan";
 import { NoAddressError, printerFileName, printerStatus, relayJob, viaServer } from "@/lib/printerAccess";
 import { getItem, setItem } from "@/lib/storage";
-import { infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
+import { ago, infillName, jobName, plateName, printTime, shortName } from "@/lib/format";
 import { defaultSlots, fits, slots } from "@/lib/lanes";
 import { addBooking, CLOUD_SPOOLS, loadLastSpools, loadSlotSpools, loadSpoolmanUrl, openSpoolman, saveLastSpools, spoolLabel, type Spool } from "@/lib/spoolman";
 import { cancelScan, identifyChip, nfcStatus, scanChip } from "@/lib/nfc";
@@ -36,9 +37,9 @@ function changedValues(t: T, o: Record<string, string>): string[] {
   return out;
 }
 
-function confirmAsync(title: string, ok: string, cancel: string): Promise<boolean> {
-  if (Platform.OS === "web") return Promise.resolve(globalThis.confirm?.(title) ?? true);
-  return new Promise(resolve => Alert.alert(title, undefined, [
+function confirmAsync(title: string, ok: string, cancel: string, message?: string): Promise<boolean> {
+  if (Platform.OS === "web") return Promise.resolve(globalThis.confirm?.(message ? `${title}\n\n${message}` : title) ?? true);
+  return new Promise(resolve => Alert.alert(title, message, [
     { text: cancel, style: "cancel", onPress: () => resolve(false) },
     { text: ok, onPress: () => resolve(true) },
   ], { cancelable: true, onDismiss: () => resolve(false) }));
@@ -57,6 +58,9 @@ export default function JobScreen() {
   const [job, setJob] = useState<Job | null>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
+  /** server 0.50.0: the slots last seen while the printer is off; "switch on and print" is running */
+  const [known, setKnown] = useState<KnownLanes | null>(null);
+  const [waking, setWaking] = useState(false);
   const [sending, setSending] = useState<"print" | "upload" | null>(null);
   const [printerNames, setPrinterNames] = useState<Record<string, string>>({});
   const [levelingDefault, setLevelingDefault] = useState<Record<string, boolean | null>>({});
@@ -148,6 +152,13 @@ export default function JobScreen() {
   const jobId = job?.id;
   const tlState = job?.timelapse?.state;
   const following = job?.state === "started" || tlState === "recording" || tlState === "rendering";
+  // server 0.51.0: a job waiting for the user's decision changes on its own (answered elsewhere, 10 min timeout)
+  const deciding = job?.state === "needs_decision" && !sending;
+  useEffect(() => {
+    if (!api || !jobId || !deciding) return;
+    const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 5000);
+    return () => clearInterval(iv);
+  }, [api, jobId, deciding]);
   useEffect(() => {
     if (!api || !jobId || !following) return;
     const iv = setInterval(() => { api.job(jobId).then(setJob).catch(() => {}); }, 15000);
@@ -157,7 +168,11 @@ export default function JobScreen() {
     if (!api || !server || !printerId) return;
     if (cloud && !printerObj) return;               // printer list not loaded yet
     (cloud ? printerStatus(api, server, printerObj!) : api.status(printerId))
-      .then(setPstatus).catch(() => setPstatus("offline"));
+      .then(setPstatus).catch(() => {
+        setPstatus("offline");
+        // switched off: the slots the server saw last (server 0.50.0, own server or bridge printer)
+        if (!cloud || printerObj?.bridge) api.knownLanes(printerId).then(k => { if (k) setKnown(k); });
+      });
   }, [api, server, cloud, printerId, printerObj]);
   useEffect(() => {
     if (job?.state !== "sliced" && job?.state !== "uploaded") return;
@@ -168,7 +183,12 @@ export default function JobScreen() {
 
   // Lane selection (issue #6): which slot of the printer prints each filament of the model;
   // the slots chosen while preparing (issue #12) are the default, changeable without re-slicing.
-  const printerLanes = useMemo(() => slots(pstatus && pstatus !== "offline" ? pstatus.lanes : []), [pstatus]);
+  const printerLanes = useMemo(() => slots(pstatus && pstatus !== "offline" ? pstatus.lanes
+    : pstatus === "offline" ? known?.lanes ?? [] : []), [pstatus, known]);
+  const usingKnownLanes = pstatus === "offline" && printerLanes.length > 0;
+  /** the server reaches the printer (own server / bridge) and its plug may switch it on (auto_on, server 0.50.0) */
+  const canWake = !!(server && printerObj?.power && printerObj.auto_on && viaServer(server, printerObj));
+  const wakeNeeded = pstatus === "offline" && canWake;
   const colours = useMemo(() => {
     const r = job?.result;
     if (!r) return [];
@@ -314,7 +334,9 @@ export default function JobScreen() {
     const pname = printerNames[printerId ?? ""] ?? printerId ?? "";
     // the safety check (NF-05) sits on the button: plate empty, material loaded, then start
     const material = shortName(job.result?.profiles?.filament) || t("filament");
-    if (start && !(await confirmAsync(t("confirmStartPlateQ", { printer: pname, material }), t("start"), t("cancelBtn")))) return;
+    const wake = start && wakeNeeded;
+    if (start && !(await confirmAsync(t("confirmStartPlateQ", { printer: pname, material }), t(wake ? "wakePrint" : "start"),
+      t("cancelBtn"), wake ? t("wakeConfirmMsg") : undefined))) return;
     setActionError("");
     setSending(start ? "print" : "upload");
     if (cloud && server && printerObj && !printerObj.bridge) {
@@ -340,29 +362,84 @@ export default function JobScreen() {
       }
       return;
     }
+    // the chosen slots' material as shown: another material stops the start (server 0.50.0), the colour doesn't count
+    const expect: Record<string, { material: string | null }> = {};
+    if (printerLanes.length) {
+      for (const tool of new Set(Object.values(laneFor))) {
+        const l = printerLanes.find(x => x.tool === tool);
+        if (l) expect[String(tool)] = { material: l.loaded ? l.material : null };
+      }
+    }
+    setWaking(wake);
     try {
       await api.send(job.id, start, start && levelingOn != null ? levelingOn : undefined,
-        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, hasCam && timelapse);
-      let j: Job | null = null;
-      for (let i = 0; i < 600; i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        j = await api.job(job.id);
-        if (j.state !== "sending") break;
-      }
-      if (j) setJob(j);
-      setAgain(false);
-      if (j?.error) setActionError(friendlyError(t, 0, j.error));
-      else if (start && j?.state === "started") {
-        await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
-          .catch(() => {});
-      }
-      if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        printerLanes.length ? laneFor : undefined, start ? activeSpool : undefined, hasCam && timelapse, { wake, expect });
+      await followSend(job.id, wake, start);
     } catch (e) {
       setActionError((e as Error).message);
       refreshPrinter();
     } finally {
       setSending(null);
+      setWaking(false);
     }
+  };
+
+  /** After /send (and after a decision): follow the job until it is no longer "sending", then say how it ended.
+   *  `needs_decision` (server 0.51.0) stops here: the card on the screen asks the user. */
+  const followSend = async (jobId: string, wake: boolean, start: boolean) => {
+    if (!api) return;
+    let j: Job | null = null;
+    // switching on: up to 10 min boot + filament system (the server's wake timeout)
+    for (let i = 0; i < (wake ? 900 : 600); i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      j = await api.job(jobId);
+      if (wake) setJob(j);                                  // the banner follows the server's log
+      if (j.state !== "sending") break;
+    }
+    if (j) setJob(j);
+    setAgain(false);
+    if (j?.state === "needs_decision") return;
+    if (j?.slot_problems?.length) {
+      setActionError(t("slotNotStarted", { reason: slotProblemText(j.slot_problems[0]) }));
+      setKnown(null);
+      refreshPrinter();
+    } else if (j?.error) setActionError(friendlyError(t, 0, j.error));
+    else if (start && j?.state === "started") {
+      await afterStart(j.printer_file || (j.result?.gcode ?? "").split("/").pop() || printerFileName(j.result?.source_file, j.id))
+        .catch(() => {});
+    }
+    if (!j?.error && Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  };
+
+  /** Server 0.51.0: the printer is on but a slot holds another material - print anyway (confirmed) or not. */
+  const decide = async (start: boolean) => {
+    if (!api || !job) return;
+    if (start && !(await confirmAsync(t("decisionStartQ"), t("decisionStart"), t("cancelBtn"), t("decisionStartMsg")))) return;
+    setActionError("");
+    setSending(start ? "print" : null);
+    try {
+      setJob(await api.decide(job.id, start));
+      await followSend(job.id, true, start);
+    } catch (e) {
+      setActionError(errorText(t, e));
+      api.job(job.id).then(setJob).catch(() => {});
+    } finally {
+      setSending(null);
+    }
+  };
+
+  /** Server 0.50.0: one slot that didn't fit any more, in the user's words. */
+  const slotProblemText = (p: SlotProblem) => {
+    const slot = printerLanes.find(l => l.tool === p.tool)?.slot ?? `T${p.tool}`;
+    if (p.problem === "missing") return t("slotProblemMissing", { slot });
+    if (p.problem === "empty") return t("slotProblemEmpty", { slot });
+    return t("slotProblemMaterial", { slot, found: p.found ?? "–", expected: p.expected ?? "–" });
+  };
+  /** what the server does while switching the printer on (its log lines are English) */
+  const wakeStep = (log: string[]) => {
+    const last = log[log.length - 1] ?? "";
+    return last.includes("waiting a moment") ? t("wakeSettling") : last.includes("switching it on") ? t("wakeWaiting")
+      : t("wakeSwitchingOn");
   };
 
   const editSettings = () => {
@@ -516,7 +593,9 @@ export default function JobScreen() {
   const uploaded = job.state === "uploaded" || relayed === "uploaded";
   const kind = pstatus === "offline" ? "offline" : pstatus?.kind;
   const busy = !!kind && BUSY.includes(kind as PrinterKind);
-  const canPrint = !busy && kind !== "offline" && !sending && !laneWarnings.some(w => w.blocking);
+  const canPrint = !busy && (kind !== "offline" || canWake) && !sending && job.state !== "sending"
+    && job.state !== "needs_decision"
+    && !laneWarnings.some(w => w.blocking);
   const laneLabel = (tool?: number) => {
     const l = printerLanes.find(x => x.tool === tool);
     if (!l) return "–";
@@ -546,7 +625,8 @@ export default function JobScreen() {
     </>
   ) : (
     <>
-      <Button title={t("print")} icon="play" onPress={() => send(true)} disabled={!canPrint}
+      <Button title={t(wakeNeeded ? "wakePrint" : "print")} icon={wakeNeeded ? "power" : "play"} onPress={() => send(true)}
+        disabled={!canPrint}
         loading={sending === "print" || job.state === "sending"} />
       {!uploaded ? (
         <Button kind="secondary" title={t("uploadOnly")} icon="cloud-upload-outline" onPress={() => send(false)}
@@ -573,6 +653,22 @@ export default function JobScreen() {
       <Text style={{ color: c.sub, fontSize: 15, marginBottom: 16 }} numberOfLines={2}>{name}</Text>
 
       {actionError ? <Banner kind="error" text={actionError} /> : null}
+      {waking || (job.state === "sending" && wakeNeeded) ? <Banner kind="info" icon="power" text={wakeStep(job.log)} /> : null}
+      {job.state === "needs_decision" ? (
+        <Card style={{ padding: 16, marginBottom: 12 }}>
+          <Text style={{ color: c.text, fontSize: 17, fontWeight: "600" }}>{t("decisionTitle")}</Text>
+          <Text style={{ color: c.sub, fontSize: 14, marginTop: 6, marginBottom: 12 }}>
+            {t("decisionSub", {
+              reason: (job.decision?.problems ?? job.slot_problems ?? []).slice(0, 1).map(slotProblemText)[0] ?? "–",
+              time: job.decision?.until ? new Date(job.decision.until * 1000).toLocaleTimeString(t.lang,
+                { hour: "2-digit", minute: "2-digit" }) : "–" })}
+          </Text>
+          <Button title={t("decisionStart")} icon="play" onPress={() => decide(true)} loading={sending === "print"}
+            disabled={!!sending} />
+          <Button kind="secondary" title={t("decisionAbort")} onPress={() => decide(false)} disabled={!!sending}
+            style={{ marginTop: 8 }} />
+        </Card>
+      ) : null}
       {relay ? <Banner kind="info" icon="wifi-outline" text={relay.step === "upload"
         ? t("relayUpload", { pct: Math.round(relay.part * 100) }) : t(relay.step === "download" ? "relayDownload" : "relayStart")} /> : null}
 
@@ -586,6 +682,10 @@ export default function JobScreen() {
       <Button kind="secondary" title={t("showPreview")} icon="layers-outline" style={{ marginBottom: 22 }}
         onPress={() => router.push({ pathname: "/preview/[id]", params: { id: job.id } })} />
 
+      {!done && usingKnownLanes ? (
+        <Banner kind="info" icon="time-outline"
+          text={t("knownSlotsHint", { ago: known?.seen_at ? ago(t, known.seen_at) : "–" })} />
+      ) : null}
       {!done && printerLanes.length ? (
         <Section title={t("lanes")} footer={t("lanesHint")}>
           {colours.map((col, i) => {
@@ -716,7 +816,8 @@ export default function JobScreen() {
         <>
           {busy ? <Banner kind="warn" text={t("printerBusy", { printer: pname })} /> : null}
           {webLan ? <Banner kind="info" icon="phone-portrait-outline" text={t("webLanJob", { printer: pname })} />
-            : kind === "offline" ? <Banner kind="error" text={t("printerOffline", { printer: pname })} /> : null}
+            : kind === "offline" ? (canWake ? <Banner kind="info" icon="power" text={t("wakeOfflineHint", { printer: pname })} />
+              : <Banner kind="error" text={t("printerOffline", { printer: pname })} />) : null}
           {levelingOn != null ? (
             <Card style={{ padding: 16, flexDirection: "row", alignItems: "center", marginTop: 10 }}>
               <View style={{ flex: 1 }}>

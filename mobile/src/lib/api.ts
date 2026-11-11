@@ -103,7 +103,14 @@ export type CameraInfo = { available: boolean; stream: boolean; snapshot: boolea
 export type Printer = { id: string; name: string; type: string; machine: string; leveling?: boolean | null; power?: boolean;
   cosmos?: boolean;
   /** cloud: reached through this bridge at home (docs/BRIDGE.md) - the server forwards status/control/send */
-  bridge?: string | null };
+  bridge?: string | null;
+  /** server 0.50.0: the plug may switch the printer on for a print ("switch on when needed" on the web page) */
+  auto_on?: boolean };
+/** Server 0.50.0: slots live, or the last ones seen while the printer is off. */
+export type KnownLanes = { lanes: Lane[]; live: boolean; seen_at: number | null };
+/** Server 0.50.0: why a start was refused right before it (`/send` `expect`). */
+export type SlotProblem = { tool: number; lane: string | null; problem: "missing" | "empty" | "material" | string;
+  expected: string | null; found: string | null };
 /** A bridge of the cloud account: a PocketPrint3D server at home with an outgoing connection (docs/BRIDGE.md). */
 export type Bridge = { id: string; name: string; version: string | null; public_key: string | null; created: number;
   last_seen: number | null; online: boolean; connected: number | null;
@@ -197,7 +204,8 @@ export type JobOptions = Partial<{
   copies: number; rotate_x: number; rotate_y: number; scale: number; orient: boolean;
 }>;
 export type ModelFile = { index: number; name: string; size: number | null };
-export type JobState = "finished" | "cancelled" | "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done";
+export type JobState = "finished" | "cancelled" | "uploading" | "slicing" | "sliced" | "sending" | "uploaded" | "started" | "error" | "running" | "done"
+  | "needs_decision";
 export type JobResult = {
   printer: string; source_file: string; print_time: string | null; filament_g: number | null;
   filament_m: number | null; layers: number | null; profiles: Record<string, string>;
@@ -218,6 +226,10 @@ export type Job = {
   timelapse?: { state: "recording" | "rendering" | "ready" | "failed"; frames: number; error?: string | null; size?: number };
   /** % of a started print, as last seen by the server (0.33.0) */
   progress?: number | null;
+  /** server 0.50.0: the chosen slots didn't fit any more right before the start */
+  slot_problems?: SlotProblem[] | null;
+  /** server 0.51.0: after switching on a slot didn't fit - the printer waits for the user until `until` (unix s) */
+  decision?: { until: number; problems: SlotProblem[] } | null;
 };
 export type JobSummary = {
   id: string; kind: string; state: JobState; error: string | null; created: number; printer?: string;
@@ -497,10 +509,23 @@ export class Api {
   /** lanes: {"<model filament, 1-based>": <printer tool of the chosen lane>};
    *  spoolId (server 0.16.0): Spoolman spool Moonraker books the print on (status.spoolman not null);
    *  timelapse (0.32.0): left out = the server's "always" setting (0.40.0), so a print start always says it */
-  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number, timelapse?: boolean) =>
+  /** extra (server 0.50.0): wake = switch a switched-off printer on first (plug with auto_on); expect = material per
+   *  chosen printer tool, checked right before the start (another material stops it, the colour doesn't count) */
+  send = (id: string, start: boolean, leveling?: boolean, lanes?: Record<string, number>, spoolId?: number, timelapse?: boolean,
+          extra?: { wake?: boolean; expect?: Record<string, { material: string | null }> }) =>
     this.request<{ job: string }>(`/api/jobs/${id}/send`,
       { method: "POST", body: { start, confirm: start, leveling, lanes, ...(spoolId != null ? { spool_id: spoolId } : {}),
-                                ...(start && timelapse != null ? { timelapse } : {}) } });
+                                ...(start && timelapse != null ? { timelapse } : {}),
+                                ...(start && extra?.wake ? { wake: true } : {}),
+                                ...(start && extra?.expect && Object.keys(extra.expect).length ? { expect: extra.expect } : {}) } });
+  /** Server 0.51.0: answer a job in `needs_decision` - start anyway (after the app's confirmation) or don't print. */
+  decide = (id: string, start: boolean) =>
+    this.request<Job>(`/api/jobs/${encodeURIComponent(id)}/decision`,
+      { method: "POST", body: start ? { action: "start", confirm: true } : { action: "abort" } });
+  /** Server 0.50.0: slots live, or the last ones seen while the printer is off; null on older servers. */
+  knownLanes = (printer: string) =>
+    this.request<KnownLanes>(`/api/printers/${encodeURIComponent(printer)}/lanes`, { timeout: 15000 })
+      .catch(() => null);
   /** Own server (0.40.0): record every print with a camera, also prints started on the printer itself. */
   timelapseConfig = () => this.request<{ always: boolean }>("/api/timelapse/config");
   setTimelapseConfig = (always: boolean) =>

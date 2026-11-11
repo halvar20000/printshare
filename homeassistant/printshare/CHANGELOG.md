@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.52.1
+- The web app (and the Android app) can do what 0.50.0 brought: choose slots while the printer is off (last seen
+  slots), "Switch on and print" for printers whose smart plug may switch them on, and a clear message when a slot holds
+  another material than chosen. When the printer waits for an answer (0.51.0), the job screen asks "Print anyway" /
+  "Don't print".
+
 ## 0.52.0
 - Slicing with **OrcaSlicer 2.5.0** (was 2.4.2): about 1200 printer models (about 190 new, e.g. Bambu Lab H2C and
   A2L), new filament profiles, faster slicing.
