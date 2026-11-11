@@ -97,7 +97,8 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
         api.JOBS.pop(local["id"], None)
         raise
     sent = 0
-    while local["state"] == "sending":                           # the cloud waits (job.send timeout 15 min)
+    # the cloud waits (job.send timeout 30 min: switching on 10 min + waiting for a decision 10 min + upload)
+    while local["state"] in ("sending", "needs_decision"):
         await asyncio.sleep(0.3)
         for line in local["log"][sent:]:
             await client.event("job.progress", {"printer": pid, "job": job, "message": str(line)[:200]})
@@ -105,6 +106,18 @@ async def _send(client: BridgeClient, params: dict[str, Any]) -> dict[str, Any]:
     if local.get("error"):
         raise MethodError("send_failed", str(local["error"]))
     return {"state": local["state"], "file": path.name, "local_job": local["id"]}
+
+
+async def _decision(params: dict[str, Any]) -> dict[str, Any]:
+    """The user answered "start anyway / cancel" for a job.send that waits (0.51.0)."""
+    api = _api()
+    cloud_job = str(params.get("job") or "")
+    local = next((j for j in list(api.JOBS.values()) if (j.get("request") or {}).get("cloud_job") == cloud_job
+                  and j.get("state") == "needs_decision"), None)
+    if local is None:
+        raise MethodError("not_waiting", "this print no longer waits for a decision")
+    req = api.JobDecision(action=str(params.get("action") or ""), confirm=params.get("confirm") is True)
+    return await _call(api.job_decision, local["id"], req, _local())
 
 
 async def _snapshot(pid: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -186,6 +199,8 @@ async def dispatch(method: str, params: dict[str, Any], client: BridgeClient) ->
         return await _add_or_update(client, params, None)
     if method == "job.send":
         return await _send(client, params)
+    if method == "job.decision":
+        return await _decision(params)
     if method == "spoolman.config":
         from .. import spool_source
         try:

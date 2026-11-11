@@ -11,6 +11,7 @@ license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
   "httpx>=0.27",
+  "h2>=4",                # HTTP/2 for APNs (push relay, cloud only)
   "pyyaml>=6",
   "fastapi>=0.110",
   "uvicorn>=0.29",

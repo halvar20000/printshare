@@ -7,6 +7,13 @@
   Settings → Advanced. The classic page is gone: `/classic` opens the web app, `PRINTSHARE_CLASSIC_WEB` has no effect
   any more.
 
+## 0.51.0
+- Push notifications for the apps: print finished or cancelled, paused, printer error, AI failure alert, print not
+  started. They go through the push relay of PocketPrint3D Cloud (also for your own server); the texts are encrypted
+  on your server and only your phone can read them. Live Activity updates (lock screen, Dynamic Island) for prints.
+- "Switch on and print": when a slot holds another material after switching on, the print waits 10 minutes and the app
+  asks "check or cancel" instead of giving up right away. Nobody answers → not started, the printer is switched off again.
+
 ## 0.50.0
 - Print on a switched-off printer from the app: with a smart plug set to "switch on when needed", "switch on and print"
   switches the printer on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's

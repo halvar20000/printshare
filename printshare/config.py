@@ -226,6 +226,13 @@ class Settings:
     # cloud: the web app (Expo web build, docs/WEB.md) served at / of api./app.pocketprint3d.com
     webapp_dir: str = "/opt/webapp"
     inbox_dir: str = "/inbox"          # own servers: new model files there show up in the apps (inbox.py); "off" = never
+    # push notifications (0.51.0, docs/PUSH.md): every server sends through the relay of PocketPrint3D Cloud ("off" = none)
+    push_relay: str = "https://api.pocketprint3d.com"
+    # cloud only: the relay's APNs key (env, never in config.yaml or the repository)
+    apns_key: str = ""                 # .p8 path or PEM text
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_topic: str = "com.dominiqueherbrigpersonalteam.printshare"
 
     def printer(self, printer_id: str | None) -> PrinterConfig:
         if not self.printers:
@@ -322,6 +329,9 @@ def load_settings(path: str | Path | None = None) -> Settings:
     s.lan_subnet = os.environ.get("PRINTSHARE_LAN_SUBNET") or s.lan_subnet
     if os.environ.get("PRINTSHARE_INBOX", "").strip():
         s.inbox_dir = os.environ["PRINTSHARE_INBOX"].strip()
+    s.push_relay = (os.environ.get("PRINTSHARE_PUSH_RELAY") or s.push_relay).strip().rstrip("/")
+    for key in ("key", "key_id", "team_id", "topic"):
+        setattr(s, f"apns_{key}", os.environ.get(f"PRINTSHARE_APNS_{key.upper()}") or getattr(s, f"apns_{key}"))
     for d in (s.work_dir, s.gcode_dir):
         Path(d).mkdir(parents=True, exist_ok=True)
     return s

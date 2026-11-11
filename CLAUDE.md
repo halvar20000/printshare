@@ -1111,6 +1111,17 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   after switching the mount to `files` the older cube was listed too (harmless). Live-checked with a local server +
   web build in Chromium (card, tap → prepare); not yet on Tower with the real SolidCraft export.
 
+## Push notifications + Live Activities (2026-11-11, server 0.51.0, Dominique) – docs/PUSH.md
+- Concept: project file `analysen/konzept-benachrichtigungen-live-activity.md`. `printshare/push/`: `relay.py` (cloud only:
+  APNs token → `pp3dp_` handle + secret, `/push/register|send|unregister`), `apns.py` (HTTP/2 via `h2`, ES256 JWT from the
+  .p8 in env `PRINTSHARE_APNS_*`), `notify.py` (every server: phones in `push.db`, prefs per group, texts DE/EN encrypted
+  with the phone's ChaCha20-Poly1305 key → relay sees no content; Live Activity state = numbers only, throttled 5 %/2 min).
+  Home servers send to `PRINTSHARE_PUSH_RELAY` (default the cloud, `off`). Phone-reached printers get no pushes.
+- "Switch on and print" with another material/empty slot → job `needs_decision` (10 min, notification `SLOT_CHECK`),
+  `POST /api/jobs/{id}/decision` start (confirm) / abort; timeout → plug off again. Bridges forward it (`job.decision`
+  event + method), `job.send` timeout 30 min.
+- **Not verified:** no real APNs key set yet, nothing sent to a real iPhone (APNs only against a fake).
+
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`
   (`eas build --local`, ~15 min first time). JDK 17 + Android SDK (platform 36, build-tools 36.0.0, NDK 27.1.12297006,

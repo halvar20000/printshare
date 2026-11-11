@@ -130,6 +130,7 @@ class FailureWatcher:
         self.watches: dict[str, PrinterWatch] = {}
         self.frames: dict[str, tuple[bytes, float]] = {}
         self._task: asyncio.Task | None = None
+        self.on_alert: Callable[[str], None] | None = None     # push notification (0.51.0), called with the printer id
 
     # ---------- one-time frame addresses ----------
     def offer(self, jpeg: bytes) -> str:
@@ -203,6 +204,11 @@ class FailureWatcher:
         if w.frames > WARMUP_FRAMES and w.score >= SENSITIVITY.get(cfg.sensitivity, 0.55):
             w.alerted_at = time.time()
             log.warning("possible print failure on %s (score %.2f)", printer.id, w.score)
+            if self.on_alert is not None:
+                try:
+                    self.on_alert(printer.id)
+                except Exception:  # noqa: BLE001 - a notification never stops the watch
+                    log.exception("alert notification")
             if cfg.action == "pause":
                 try:
                     await adapter.control("pause")

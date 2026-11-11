@@ -17,12 +17,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-RUNNING = ("slicing", "sending", "running", "uploading")
+RUNNING = ("slicing", "sending", "running", "uploading", "needs_decision")
 INTERRUPTED = {
     "uploading": ("error", "The upload was interrupted by a server update - please send it again."),
     "slicing": ("error", "Interrupted by a server update - please slice again."),
     "running": ("error", "Interrupted by a server update - please try again."),
     "sending": ("sliced", "Sending was interrupted by a server update - please send again."),
+    # 0.51.0: waited for "start anyway / cancel" (other material in a slot) - never started after a restart
+    "needs_decision": ("sliced", "Not started: the server restarted while the print waited for your decision."),
 }
 
 SCHEMA = """
