@@ -17,7 +17,7 @@ server event ──encrypted alert / activity state──▶ relay (/push/send) 
 
 ## Events
 - Home server: the job loop polls every printer every 30 s (`_track_jobs`) → finished / cancelled / paused / error,
-  prints started elsewhere (+ push-to-start); `send()` → print not started, `needs_decision`; `failure_watch` → AI alert.
+  prints started elsewhere and OrcaSlicer's "Upload and Print" (both with push-to-start, the latter since 0.53.1); `send()` → print not started, `needs_decision`; `failure_watch` → AI alert.
 - Cloud: the same `_track_jobs` from the 60 s bridge loop and `/api/observe`; bridge events `watch.alert` and
   `job.decision` (bridge 0.51.0+).
 - Bridges send no pushes themselves (nobody registers there) but forward the AI alert and the decision to the cloud.

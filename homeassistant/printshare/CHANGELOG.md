@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.53.1
+- iPhone: a print OrcaSlicer starts through PocketPrint3D ("Upload and Print") now shows its Live Activity on the lock
+  screen, like prints started from the app. Before, it only got the notification at the end.
+
 ## 0.53.0
 - One web page instead of two: the last settings of the classic page are in the web app (and the Android app) now -
   smart plug through Home Assistant incl. "switch on when needed" (printer settings → Smart plug), the QR code to
