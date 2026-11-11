@@ -75,7 +75,7 @@ def _parse_estimates(gcode: Path) -> tuple[str | None, float | None, float | Non
 
 
 def _sum(match: "re.Match[str] | None") -> float | None:
-    """All filaments of a multicolour print ("726.06, 683.65"); before 0.51.0 only the first one was reported."""
+    """All filaments of a multicolour print ("726.06, 683.65"); before 0.52.0 only the first one was reported."""
     if not match:
         return None
     try:

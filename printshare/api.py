@@ -45,6 +45,9 @@ Cloud mode only (settings.cloud, docs/CLOUD.md) - accounts instead of one token:
   GET  /api/printers/{id}/temperatures   history {heater: [[seconds before now, actual, target], …]}
   GET  /api/printers/{id}/camera   {"available", "stream", …};  …/camera/snapshot?w=640 (JPEG);  …/camera/stream (MJPEG)
   POST /api/printers/{id}/control  {"action": "pause"|"resume"|"cancel", "confirm": true}
+  GET  /api/push, POST/PUT/DELETE /api/push/devices[/{id}], POST /api/jobs/{id}/live-activity   push (0.51.0, docs/PUSH.md)
+  POST /api/jobs/{id}/decision     {"action": "start"|"abort", "confirm"} for a job waiting in needs_decision (0.51.0)
+  POST /push/register | /push/send | /push/unregister    the push relay (cloud only)
 One-shot (CLI / iOS Shortcut):
   POST /api/print   {"link": "...", "printer": "cc-thomas", "file": 1, "start": true}
 """
@@ -74,6 +77,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -104,6 +108,7 @@ from . import filament_db
 from . import manyfold as mf
 from . import failure_watch as fw
 from . import inbox as inbox_mod
+from .push import apns as push_apns, notify as push_notify, relay as push_relay
 from .cloud.mail import BrevoMailer, LogMailer, Mailer, MailError
 from .config import BRIM_TYPES, INFILL_PATTERNS, SUPPORT_TYPES, JobOptions, PrinterConfig, Settings, load_settings, printer_from_config
 from . import camera as cam
@@ -129,6 +134,8 @@ UPLOAD_PREFIX = "upload:"
 settings = load_settings()
 @contextlib.asynccontextmanager
 async def _lifespan(_app):
+    global _MAIN_LOOP
+    _MAIN_LOOP = asyncio.get_running_loop()      # push notifications from endpoints in the thread pool
     if not settings.cloud:
         WATCHER.start()            # AI failure detection (0.23.0); idles until it is set up
         BRIDGE_CLIENT.start()      # bridge mode (0.25.0); idles until it is switched on
@@ -144,7 +151,7 @@ async def _lifespan(_app):
     await asyncio.to_thread(JOB_STORE.sync, JOBS)
 
 
-app = FastAPI(title="PocketPrint3D", version="0.51.0", lifespan=_lifespan)
+app = FastAPI(title="PocketPrint3D", version="0.52.0", lifespan=_lifespan)
 BRIDGE_CLIENT = BridgeClient(lambda: settings, bridge_dispatch, app.version)
 app.add_middleware(GZipMiddleware, minimum_size=2000)  # layer previews are large but compress well
 app.mount("/static", StaticFiles(directory=WEB), name="static")
@@ -449,6 +456,7 @@ async def auth_delete_account(response: Response, confirm: bool = False, acct: A
     bridge_ids = [b["id"] for b in BRIDGES.list(acct.id)]
     ACCOUNTS.delete_user(acct.id)
     _tags().forget_owner(acct.id)
+    _notifier().remove_owner(acct.id)
     for bid in bridge_ids:
         await HUB.disconnect(bid, "the account was deleted")
     response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="strict")
@@ -723,12 +731,17 @@ def _track_jobs(owner: str, printer_id: str, status: dict[str, Any] | None) -> N
             and (j.get("printer") or (j.get("result") or {}).get("printer")) == printer_id]
     for job in mine:
         if job.get("state") in jobtrack.TRACKED:
+            before = job.get("state")
             jobtrack.track(job, status, kind)
+            _push_job_changed(job, before, status, kind)      # notifications + Live Activity (0.51.0)
     ext = jobtrack.external(mine, printer_id, status, kind)
     if ext is not None:
         job = _new_job(jobtrack.EXTERNAL, "started", ext.pop("request"), owner=owner)
         job.update(ext)
         job["log"].append("Started on the printer, not through PocketPrint3D")
+        _push_event(job, "external")
+        if _push_enabled():
+            _push_run(_safe(_notifier().start_activity(owner, job, printer_id)))
         if not settings.cloud and owner == "local" and _timelapse_wanted(None):
             _spawn(_external_timelapse(job))
 
@@ -1349,6 +1362,26 @@ def _bridge_event(bridge_id: str, user_id: str, event: str, data: dict[str, Any]
         job = JOBS.get(str(data.get("job") or ""))
         if job is not None and job.get("owner") == user_id and isinstance(data.get("message"), str):
             job.setdefault("log", []).append(data["message"][:200])
+        return
+    if event == "job.decision":
+        # 0.51.0: the bridge switched the printer on and a slot holds another material - it waits for the user
+        job = JOBS.get(str(data.get("job") or ""))
+        problems = data.get("problems") if isinstance(data.get("problems"), list) else []
+        if job is not None and job.get("owner") == user_id and job.get("state") == "sending" and problems:
+            until = data.get("until") if isinstance(data.get("until"), (int, float)) else time.time() + DECISION_S
+            job.update(state="needs_decision", slot_problems=problems[:16],
+                       decision={"until": until, "problems": problems[:16]})
+            _push_event(job, "decision", once=False, problem_data=problems[0])
+            _push_activity(job)
+        return
+    if event == "watch.alert" and ACCOUNTS is not None:
+        remote = str(data.get("printer") or "")
+        row = next((p for p in ACCOUNTS.printers(user_id) if p.get("bridge") == bridge_id
+                    and (p.get("remote") or p.get("id")) == remote), None)
+        if row is not None:
+            job = next((j for j in JOBS.values() if j.get("owner") == user_id and j.get("state") == "started"
+                        and _job_printer(j) == row["id"]), None)
+            _push_event(job, "ai_alert", printer=row["id"], owner=user_id, once=False)
 
 
 class BridgePrinterAdd(BaseModel):
@@ -3391,9 +3424,12 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
                     job["timelapse"] = {"state": "recording", "frames": 0}
                 if req.start:
                     job.update(started_at=time.time(), seen_printing=False, progress=None, finished_at=None)
-                job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"))
+                job.update(state=(r or {}).get("state") or ("started" if req.start else "uploaded"), decision=None)
+                _push_activity(job)
             except BridgeError as e:
-                job.update(state="sliced", error=f"Sending failed: {e}")
+                job.update(state="sliced", error=f"Sending failed: {e}", decision=None)
+                if req.start:
+                    _push_send_failed(job, str(e))
 
         _spawn(forward())
         return {"job": job_id}
@@ -3414,13 +3450,35 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
         if wake:
             # switched off: switch on, wait, then the same checks as above - failures end up in the job, not in a reply
             adapter = get_adapter(_printer(acct, result.printer))
+            job["waking"] = True
+            _push_activity(job)
             try:
                 if await wake_mod.wake(adapter.status, printer_kind, lambda: plug.get_power(power).turn(True),
                                        job["log"].append):
                     job["woken"] = True
-                await _start_checks(acct, result.printer, tools, req.start, expect, job)
+                job["waking"] = False
+                try:
+                    await _start_checks(acct, result.printer, tools, req.start, expect, job)
+                except HTTPException:
+                    problems = [p for p in job.get("slot_problems") or [] if p.get("problem") in ("material", "empty")]
+                    if not problems or len(problems) != len(job.get("slot_problems") or []):
+                        raise
+                    # 0.51.0: the printer is on now - ask the user (notification) instead of giving up right away
+                    choice = await _await_decision(job, problems)
+                    if choice != "start":
+                        if choice == "timeout" and job.get("woken"):
+                            with contextlib.suppress(Exception):
+                                await plug.get_power(power).turn(False)    # switched on for this print: off again
+                                job["log"].append("Nobody answered - the printer was switched off again")
+                        raise HTTPException(409, lane_map.describe(problems[0]) + (
+                            " - nobody answered within 10 minutes" if choice == "timeout" else " - cancelled"))
+                    job["log"].append("Started anyway after the user confirmed the other material")
+                    job["slot_problems"] = None
+                    await _start_checks(acct, result.printer, tools, req.start, None, job)
             except (wake_mod.WakeError, HTTPException) as e:
-                job.update(state="sliced", error=f"Not started: {e.detail if isinstance(e, HTTPException) else e}")
+                job.update(state="sliced", waking=False, decision=None,
+                           error=f"Not started: {e.detail if isinstance(e, HTTPException) else e}")
+                _push_send_failed(job, job["error"])
                 return
         try:
             await send_job(acct.settings, result, req.start, progress=lambda m: job["log"].append(m),
@@ -3435,9 +3493,12 @@ async def send(job_id: str, req: SendRequest, acct: Account = Depends(auth)) -> 
             if req.start:
                 job.update(started_at=time.time(), seen_printing=False, progress=None, finished_at=None)
             job.update(state="started" if req.start else "uploaded", result=result.as_dict())
+            _push_activity(job)
         except Exception as e:  # noqa: BLE001
             # the sliced G-code is still valid: allow another attempt
             job.update(state="sliced", error=f"Sending failed: {e}")
+            if req.start:
+                _push_send_failed(job, str(e))
 
     _spawn(worker())
     return {"job": job_id}
@@ -3710,6 +3771,349 @@ def manifest() -> FileResponse:
 def service_worker() -> FileResponse:
     # served from the root so its scope covers the whole app
     return FileResponse(WEB / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+# ---------- push notifications + Live Activities (0.51.0, printshare/push, docs/PUSH.md) ----------
+_RELAY: "push_relay.Relay | None" = None
+_NOTIFIER: "push_notify.Notifier | None" = None
+_PUSH_LOCK = threading.Lock()
+_MAIN_LOOP: asyncio.AbstractEventLoop | None = None
+DECISION_S = 10 * 60          # a job waiting for "check or cancel" (wrong material after switching on) waits this long
+DECISIONS: dict[str, tuple[asyncio.Event, dict[str, Any]]] = {}
+
+
+def _relay() -> "push_relay.Relay | None":
+    """The push relay: only PocketPrint3D Cloud has one (it holds the APNs key)."""
+    global _RELAY
+    if not settings.cloud:
+        return None
+    with _PUSH_LOCK:
+        if _RELAY is None:
+            apns = None
+            if settings.apns_key and settings.apns_key_id and settings.apns_team_id:
+                try:
+                    apns = push_apns.APNs(settings.apns_key, settings.apns_key_id, settings.apns_team_id,
+                                          settings.apns_topic)
+                except (OSError, ValueError) as e:
+                    import logging
+                    logging.getLogger(__name__).error("APNs key not usable: %s", e)
+            _RELAY = push_relay.Relay(Path(settings.cloud_db).parent / "push-relay.db", apns)
+    return _RELAY
+
+
+async def _relay_send(handle: str, secret: str, msg: dict[str, Any]) -> None:
+    """Cloud: straight into the relay. Own servers and bridges: over HTTPS to the configured relay."""
+    relay = _relay()
+    if relay is not None:
+        try:
+            await relay.send(handle, secret, msg)
+        except push_relay.RelayError as e:
+            if e.status in (404, 410):
+                raise push_notify.RelayGone(e.code) from None
+            raise
+        return
+    if not settings.push_relay or settings.push_relay == "off":
+        raise RuntimeError("push notifications are switched off on this server")
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(f"{settings.push_relay}/push/send", json={"handle": handle, "secret": secret, "message": msg},
+                              headers={"User-Agent": f"PocketPrint3D/{app.version}"})
+    if r.status_code in (404, 410):
+        raise push_notify.RelayGone(str(r.status_code))
+    if r.status_code != 200:
+        raise RuntimeError(f"push relay answered {r.status_code}: {r.text[:120]}")
+
+
+def _notifier() -> "push_notify.Notifier":
+    global _NOTIFIER
+    with _PUSH_LOCK:
+        if _NOTIFIER is None:
+            base = Path(settings.cloud_db).parent if settings.cloud else Path(settings.config_dir or ".")
+            _NOTIFIER = push_notify.Notifier(base / "push.db", _relay_send)
+    return _NOTIFIER
+
+
+def _push_enabled() -> bool:
+    return not settings.bridge_only and (settings.cloud or settings.push_relay not in ("", "off"))
+
+
+def _push_run(coro) -> None:
+    """Fire and forget from sync code too (endpoints in the thread pool, the job tracker)."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        if _MAIN_LOOP is not None and _MAIN_LOOP.is_running():
+            asyncio.run_coroutine_threadsafe(coro, _MAIN_LOOP)
+        else:
+            coro.close()
+        return
+    _spawn(coro)
+
+
+async def _safe(coro) -> None:
+    try:
+        await coro
+    except Exception:  # noqa: BLE001 - a notification never breaks a print
+        import logging
+        logging.getLogger(__name__).exception("push")
+
+
+def _printer_name(owner: str, printer_id: str) -> str:
+    if owner != "local" and ACCOUNTS is not None:
+        row = next((p for p in ACCOUNTS.printers(owner) if p.get("id") == printer_id), None)
+        return str((row or {}).get("custom_name") or (row or {}).get("name") or printer_id)
+    try:
+        return settings.printer(printer_id).name or printer_id
+    except KeyError:
+        return printer_id
+
+
+def _job_file(job: dict[str, Any]) -> str:
+    name = job.get("printer_file") or Path((job.get("result") or {}).get("gcode") or "").name
+    return Path(name).stem if name else ""
+
+
+def _job_printer(job: dict[str, Any]) -> str:
+    return job.get("printer") or (job.get("result") or {}).get("printer") or ""
+
+
+def _push_event(job: dict[str, Any] | None, event: str, printer: str = "", owner: str | None = None,
+                **fields: Any) -> None:
+    """Tell the account's phones (when they want it) - from anywhere, never blocking."""
+    if not _push_enabled():
+        return
+    owner = owner or (job or {}).get("owner", "local")
+    printer = printer or (_job_printer(job) if job else "")
+    if job is not None:
+        fields.setdefault("file", _job_file(job))
+    _push_run(_safe(_notifier().emit(owner, event, job, printer, _printer_name(owner, printer) if printer else "",
+                                     **fields)))
+
+
+def _push_activity(job: dict[str, Any], status: dict[str, Any] | None = None, kind: str | None = None) -> None:
+    if not _push_enabled():
+        return
+    _push_run(_safe(_notifier().activity(job.get("owner", "local"), job, status, kind)))
+
+
+def _push_job_changed(job: dict[str, Any], before: str | None, status: dict[str, Any] | None = None,
+                      kind: str | None = None) -> None:
+    """After a job's state or its printer's status changed: notifications for the transitions, Live Activity update."""
+    state = job.get("state")
+    if state != before and state in ("finished", "cancelled"):
+        _push_event(job, state)
+    if state == "started" and kind in ("paused", "error") and job.get("push_kind") != kind:
+        _push_event(job, kind, once=False)
+    if state == "started":
+        job["push_kind"] = kind if kind in ("paused", "error") else None
+    _push_activity(job, status, kind)
+
+
+def _push_send_failed(job: dict[str, Any], reason: str) -> None:
+    _push_event(job, "send_failed", once=False, reason=reason.removeprefix("Not started: ")[:160])
+    _push_activity(job)
+
+
+def _push_alert(printer_id: str) -> None:
+    """AI failure detection raised an alert (home server, bridge)."""
+    if settings.bridge and not settings.cloud:
+        _push_run(_safe(BRIDGE_CLIENT.event("watch.alert", {"printer": printer_id})))
+    job = next((j for j in JOBS.values() if j.get("state") == "started" and _job_printer(j) == printer_id
+                and j.get("owner", "local") == "local"), None)
+    _push_event(job, "ai_alert", printer=printer_id, owner="local", once=False)
+
+
+WATCHER.on_alert = _push_alert
+
+
+class PushDevice(BaseModel):
+    handle: str
+    secret: str
+    key: str                                  # 32 random bytes (base64) - the phone decrypts notifications with it
+    platform: str = "ios"
+    lang: str = "de"
+    name: str = ""
+    prefs: dict[str, Any] | None = None
+
+
+class PushDeviceUpdate(BaseModel):
+    prefs: dict[str, Any] | None = None
+    lang: str | None = None
+    name: str | None = None
+    start_handle: str | None = None          # push-to-start of Live Activities ("" removes it)
+    start_secret: str | None = None
+
+
+class PushActivity(BaseModel):
+    handle: str
+    secret: str
+    device: str | None = None
+
+
+class JobDecision(BaseModel):
+    action: str = Field(pattern="^(start|abort)$")
+    confirm: bool = False
+
+
+def _push_or_404() -> "push_notify.Notifier":
+    if not _push_enabled():
+        raise HTTPException(404, "push notifications are switched off on this server")
+    return _notifier()
+
+
+@app.get("/api/push")
+def push_info(acct: Account = Depends(auth)) -> dict[str, Any]:
+    """Where the app registers its tokens, and the phones of this account."""
+    n = _push_or_404()
+    relay = _relay()
+    return {"relay": settings.push_relay if relay is None else None, "relay_here": relay is not None,
+            "available": relay.available if relay is not None else True,
+            "groups": sorted(set(push_notify.GROUPS.values())) + ["activities"],
+            "defaults": push_notify.DEFAULT_PREFS, "devices": n.devices(acct.id)}
+
+
+@app.post("/api/push/devices")
+def push_add_device(req: PushDevice, acct: Account = Depends(auth)) -> dict[str, Any]:
+    try:
+        return _push_or_404().add(acct.id, req.handle, req.secret, req.key, req.name, req.lang, req.platform, req.prefs)
+    except push_notify.PushError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/push/devices/{device_id}")
+def push_update_device(device_id: str, req: PushDeviceUpdate, acct: Account = Depends(auth)) -> dict[str, Any]:
+    start = None if req.start_handle is None else (req.start_handle, req.start_secret or "")
+    try:
+        return _push_or_404().update(acct.id, device_id, req.prefs, req.lang, req.name, start)
+    except KeyError:
+        raise HTTPException(404, "unknown device")
+    except push_notify.PushError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/push/devices/{device_id}")
+def push_remove_device(device_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    try:
+        _push_or_404().remove(acct.id, device_id)
+    except KeyError:
+        raise HTTPException(404, "unknown device")
+    return {"deleted": device_id}
+
+
+@app.post("/api/push/devices/{device_id}/test")
+async def push_test(device_id: str, acct: Account = Depends(auth)) -> dict[str, Any]:
+    try:
+        ok = await _push_or_404().test(acct.id, device_id)
+    except KeyError:
+        raise HTTPException(404, "unknown device")
+    except push_notify.PushError as e:
+        raise HTTPException(410, str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"the push relay is not reachable: {e}")
+    return {"sent": ok}
+
+
+@app.post("/api/jobs/{job_id}/live-activity")
+async def job_live_activity(job_id: str, req: PushActivity, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """The phone started a Live Activity for this job (or got one by push-to-start): keep it up to date."""
+    job = _own_job(acct, job_id)
+    n = _push_or_404()
+    try:
+        n.add_activity(acct.id, job_id, req.handle, req.secret, req.device)
+    except push_notify.PushError as e:
+        raise HTTPException(400, str(e))
+    await _safe(n.activity(acct.id, job))
+    return {"state": push_notify.activity_state(job)}
+
+
+@app.post("/api/jobs/{job_id}/decision")
+async def job_decision(job_id: str, req: JobDecision, acct: Account = Depends(auth)) -> dict[str, Any]:
+    """A job waits because a slot holds another material than chosen (after switching the printer on): start anyway
+    (needs confirm, NF-05) or cancel."""
+    job = _own_job(acct, job_id)
+    if job.get("state") != "needs_decision":
+        raise HTTPException(409, f"job is {job.get('state')}, not waiting for a decision")
+    if req.action == "start" and not req.confirm:
+        raise HTTPException(400, "starting a print needs confirm=true")
+    via = _via_bridge(acct, _job_printer(job))
+    if via:
+        try:
+            await HUB.call(via[0], acct.id, "job.decision", {"job": job_id, "action": req.action, "confirm": req.confirm})
+        except BridgeError as e:
+            raise HTTPException(502 if e.code != "unknown_method" else 409,
+                                "the bridge is too old for this - update it" if e.code == "unknown_method" else str(e))
+        job.update(state="sending", decision=None)
+        return {"job": job_id, "state": job["state"]}
+    waiting = DECISIONS.get(job_id)
+    if waiting is None:
+        raise HTTPException(409, "the job no longer waits")
+    waiting[1]["action"] = req.action
+    waiting[0].set()
+    return {"job": job_id, "state": "sending"}
+
+
+async def _await_decision(job: dict[str, Any], problems: list[dict[str, Any]]) -> str:
+    """Wait for the user ("start" / "abort"); "timeout" after DECISION_S."""
+    ev, holder = asyncio.Event(), {}
+    DECISIONS[job["id"]] = (ev, holder)
+    job.update(state="needs_decision", slot_problems=problems,
+               decision={"until": time.time() + DECISION_S, "problems": problems})
+    lang_problem = problems[0]
+    _push_event(job, "decision", once=False, problem_data=lang_problem)
+    _push_activity(job)
+    if settings.bridge and not settings.cloud and (job.get("request") or {}).get("cloud_job"):
+        _push_run(_safe(BRIDGE_CLIENT.event("job.decision", {"job": job["request"]["cloud_job"], "problems": problems,
+                                                             "until": job["decision"]["until"]})))
+    try:
+        await asyncio.wait_for(ev.wait(), DECISION_S)
+        return holder.get("action") or "abort"
+    except asyncio.TimeoutError:
+        return "timeout"
+    finally:
+        DECISIONS.pop(job["id"], None)
+        job["decision"] = None
+        if job.get("state") == "needs_decision":
+            job["state"] = "sending"
+
+
+@app.post("/push/register")
+def push_register(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+    """Relay (cloud): an APNs token → handle + secret. No login: the phone registers before it knows any server."""
+    relay = _relay()
+    if relay is None:
+        raise HTTPException(404, "no push relay here")
+    try:
+        return relay.register(str(body.get("token") or ""), str(body.get("kind") or "device"),
+                              str(body.get("env") or "production"), str(body.get("platform") or "ios"),
+                              _client_ip(request) or "")
+    except push_relay.RelayError as e:
+        raise HTTPException(e.status, {"error": e.code, "message": str(e)})
+
+
+@app.post("/push/send")
+async def push_send(body: dict[str, Any]) -> dict[str, Any]:
+    """Relay (cloud): any PocketPrint3D server sends a message through a handle it got from the phone."""
+    relay = _relay()
+    if relay is None:
+        raise HTTPException(404, "no push relay here")
+    msg = body.get("message")
+    if not isinstance(msg, dict):
+        raise HTTPException(400, {"error": "invalid", "message": "message is missing"})
+    try:
+        return await relay.send(str(body.get("handle") or ""), str(body.get("secret") or ""), msg)
+    except push_relay.RelayError as e:
+        raise HTTPException(e.status, {"error": e.code, "message": str(e)})
+
+
+@app.post("/push/unregister")
+def push_unregister(body: dict[str, Any]) -> dict[str, Any]:
+    relay = _relay()
+    if relay is None:
+        raise HTTPException(404, "no push relay here")
+    try:
+        relay.remove(str(body.get("handle") or ""), str(body.get("secret") or ""))
+    except push_relay.RelayError as e:
+        raise HTTPException(e.status, {"error": e.code})
+    return {"deleted": True}
 
 
 
