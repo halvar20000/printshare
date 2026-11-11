@@ -9,7 +9,7 @@ RUN EXPO_PUBLIC_WEB_SAME_ORIGIN=1 npx expo export --platform web --output-dir /w
 
 FROM ubuntu:24.04
 
-ARG ORCA_VERSION=2.4.2
+ARG ORCA_VERSION=2.5.0
 # set by buildx (amd64 | arm64); OrcaSlicer publishes AppImages for both
 ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
