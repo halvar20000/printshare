@@ -28,10 +28,10 @@ METHODS: dict[str, float] = {
     "printer.power": 20, "printer.filament.info": 15, "printer.filament": 30,
     "printer.motion.info": 15, "printer.motion": 310,
     "spoolman.config": 15, "printer.slot.sync": 30,
-    "job.send": 15 * 60, "watch.state": 10, "watch.mute": 10, "discover": 60,
+    "job.send": 30 * 60, "job.decision": 15, "watch.state": 10, "watch.mute": 10, "discover": 60,
     "printer.add": 30, "printer.update": 30, "printer.remove": 30,
 }
-EVENTS = ("printer.state", "watch.alert", "job.progress", "printers.changed", "timelapse.state")
+EVENTS = ("printer.state", "watch.alert", "job.progress", "printers.changed", "timelapse.state", "job.decision")
 HELLO_TIMEOUT_S = 10
 MIN_VERSION = "0.24.0"
 MAX_PENDING = 32                 # requests in flight per bridge
