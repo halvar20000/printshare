@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.50.1
+- The web app (and the Android app) can do what 0.50.0 brought: choose slots while the printer is off (last seen
+  slots), "Switch on and print" for printers whose smart plug may switch them on, and a clear message when a slot holds
+  another material than chosen.
+
 ## 0.50.0
 - Print on a switched-off printer from the app: with a smart plug set to "switch on when needed", "switch on and print"
   switches the printer on, waits until it is ready (also its filament system) and then starts - like OrcaSlicer's

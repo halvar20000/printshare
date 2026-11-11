@@ -11,7 +11,7 @@ import type { JobOptions, Lane, ModelColors, ModelFile, Options, Printer, Printe
 import { loadLastPrinter, loadPrefs, saveLastPrinter, savePrefs, useApp } from "@/lib/app";
 import { brandOf, comboWarnings, infillName, jobName, plateName, shortName } from "@/lib/format";
 import { defaultSlots, fits, presetForLane, slots } from "@/lib/lanes";
-import { printerStatus } from "@/lib/printerAccess";
+import { printerStatus, viaServer } from "@/lib/printerAccess";
 import { InfillPreview, InfillTile } from "@/components/infill";
 import { viewable } from "@/lib/viewer3d";
 import { MAX_COPIES, plateOptions, TILT_LABELS, TILTS, tiltOf, type Tilt } from "@/lib/plate";
@@ -116,7 +116,15 @@ export default function Prepare() {
             setKinds(k => ({ ...k, [p.id]: s.kind }));
             setLanesBy(l => ({ ...l, [p.id]: s.lanes ?? [] }));
           })
-          .catch(() => setKinds(k => ({ ...k, [p.id]: "offline" }))));
+          .catch(() => {
+            setKinds(k => ({ ...k, [p.id]: "offline" }));
+            // switched off: the slots the server saw last (server 0.50.0, own server or bridge printer)
+            if (server && viaServer(server, p)) {
+              api.knownLanes(p.id).then(k => {
+                if (k?.lanes.length) setLanesBy(l => ({ ...l, [p.id]: l[p.id]?.length ? l[p.id] : k.lanes }));
+              });
+            }
+          }));
       } catch (e) {
         setError((e as Error).message);
       }
