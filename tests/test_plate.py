@@ -201,8 +201,14 @@ def test_copies_and_tilt_of_an_orca_project(tmp_path):
     opts = dict(filaments=["Elegoo PLA @ECC", "Elegoo PLA @ECC"])
     one = _slice(tmp_path / "a", project, **opts)
     two = _slice(tmp_path / "b", project, copies=2, **opts)
+    three = _slice(tmp_path / "d", project, copies=3, **opts)
     assert two.copies == 2 and _objects(two.gcode_path) == 4, two.log[-2000:]
-    assert [f["grams"] for f in two.filaments] == pytest.approx([2 * f["grams"] for f in one.filaments], rel=0.1)
+    assert three.copies == 3 and _objects(three.gcode_path) == 6, three.log[-2000:]
+    # every copy adds the same material; the purge of the colour changes (counted since Orca 2.5) stays the same
+    g1, g2, g3 = ([f["grams"] for f in r.filaments] for r in (one, two, three))
+    assert all(b > a for a, b in zip(g1, g2))
+    assert [b - a for a, b in zip(g2, g3)] == pytest.approx([b - a for a, b in zip(g1, g2)], rel=0.1)
+    assert two.filament_g == pytest.approx(sum(g2), abs=0.05)          # the total covers every filament
     tilted = _slice(tmp_path / "c", project, rotate_y=90, **opts)       # 20x20x10 boxes stand up
     assert tilted.layers == pytest.approx(2 * one.layers, abs=2), (one.layers, tilted.layers)
     assert "\nT1" in tilted.gcode_path.read_text()                      # colours survive

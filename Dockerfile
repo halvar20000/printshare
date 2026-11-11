@@ -1,3 +1,7 @@
+# OrcaSlicer version: the AppImage and its JSON presets (stage orca-profiles) are taken from the same release.
+# Upgrade only after the reference-model tests (CLAUDE.md conventions).
+ARG ORCA_VERSION=2.5.0
+
 # Web app (docs/WEB.md): the Expo web build of mobile/, served by the cloud at app.pocketprint3d.com. Built once on
 # the build machine's own architecture - the output is plain HTML/JS for every platform.
 FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS webapp
@@ -7,9 +11,22 @@ RUN npm ci --no-audit --no-fund
 COPY mobile/ ./
 RUN EXPO_PUBLIC_WEB_SAME_ORIGIN=1 npx expo export --platform web --output-dir /webapp && test -f /webapp/index.html
 
+# OrcaSlicer's system presets as JSON (printshare/profiles.py reads them). Since 2.5 the AppImage ships them only in
+# its own binary format (resources/profiles/*.opc); the JSON files come from the same release's source tag.
+FROM --platform=$BUILDPLATFORM alpine:3.20 AS orca-profiles
+ARG ORCA_VERSION
+RUN apk add --no-cache git \
+    && git clone -q --depth 1 --branch "v${ORCA_VERSION}" --filter=blob:none --sparse \
+         https://github.com/OrcaSlicer/OrcaSlicer.git /src \
+    && cd /src && git sparse-checkout set resources/profiles \
+    && cd resources/profiles && mkdir /profiles \
+    && for d in */; do for k in machine process filament; do \
+         if [ -d "$d$k" ]; then mkdir -p "/profiles/$d" && cp -r "$d$k" "/profiles/$d"; fi; done; done \
+    && grep -rlq '"Elegoo Centauri Carbon 0.4 nozzle"' /profiles/Elegoo/machine
+
 FROM ubuntu:24.04
 
-ARG ORCA_VERSION=2.5.0
+ARG ORCA_VERSION
 # set by buildx (amd64 | arm64); OrcaSlicer publishes AppImages for both
 ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -35,6 +52,8 @@ RUN case "${TARGETARCH:-amd64}" in \
     && curl -fsSL -o /tmp/orca.AppImage "https://github.com/OrcaSlicer/OrcaSlicer/releases/download/v${ORCA_VERSION}/$f" \
     && chmod +x /tmp/orca.AppImage && cd /opt && /tmp/orca.AppImage --appimage-extract >/dev/null \
     && mv /opt/squashfs-root /opt/orca && rm /tmp/orca.AppImage
+# the JSON presets next to Orca's own .opc bundles (same vendor folders; Orca itself keeps reading its .opc files)
+COPY --from=orca-profiles /profiles/ /opt/orca/resources/profiles/
 
 # klipper_estimator (MIT, Annex-Engineering): exact print times for Klipper printers (printshare/klipper_time.py).
 # Pinned + checksummed. Its arm build is 32-bit armv7: kept only if this machine can run it, else the feature is off.

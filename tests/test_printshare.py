@@ -372,7 +372,9 @@ def test_prusa_qualities_and_library_materials_slice(tmp_path):
     qualities, materials = lib.compatible("process", mk4s), lib.compatible("filament", mk4s)
     assert "0.20mm SPEED @MK4S 0.4" in qualities and "0.15mm STRUCTURAL @MK4S 0.4" in qualities
     assert not [q for q in qualities if "HF" in q or "Elegoo" in q]
-    assert "Prusa Generic PLA @MK4S" in materials and "Generic PETG @System" in materials
+    assert "Generic PLA @Prusa MK4S" in materials and "Generic PETG @System" in materials
+    # OrcaSlicer 2.4's name of that preset still works (renamed in 2.5, `renamed_from`)
+    assert lib.canonical("filament", "Prusa Generic PLA @MK4S") == "Generic PLA @Prusa MK4S"
     assert "Generic PETG @System" in lib.compatible("filament", "Elegoo Centauri Carbon 0.4 nozzle")
     s = _settings(tmp_path)
     s.printers = [PrinterConfig(id="mk4s", type="prusalink", url="http://127.0.0.1",
@@ -441,3 +443,25 @@ def test_thumbnails_for_the_printer_screen(tmp_path):
         assert g.index("; THUMBNAIL_BLOCK_START") < g.index("; EXECUTABLE_BLOCK_START")
     assert found["cc"] == [("thumbnail", "144x144")]
     assert ("thumbnail_QOI", "16x16") in found["mk4s"] and ("thumbnail", "640x480") in found["mk4s"]
+
+
+def test_renamed_presets_keep_working(tmp_path):
+    """OrcaSlicer 2.5 renamed presets and keeps the old names in `renamed_from`: old names resolve to the new preset."""
+    import json as _json
+
+    from printshare.profiles import ProfileLibrary
+    d = tmp_path / "Prusa" / "filament" / "sub"
+    d.mkdir(parents=True)
+    (d / "base.json").write_text(_json.dumps({"name": "Generic PLA @base", "nozzle_temperature": ["215"]}))
+    (d / "new.json").write_text(_json.dumps({"name": "Generic PLA @Prusa MK4S", "inherits": "Old PLA @base",
+                                             "renamed_from": "Prusa Generic PLA @MK4S;Even Older PLA",
+                                             "instantiation": "true"}))
+    (d / "base2.json").write_text(_json.dumps({"name": "Old PLA @base", "renamed_from": "Generic PLA @base",
+                                               "inherits": "Generic PLA @base"}))
+    lib = ProfileLibrary(tmp_path)
+    assert lib.canonical("filament", "Prusa Generic PLA @MK4S") == "Generic PLA @Prusa MK4S"
+    assert lib.canonical("filament", "Even Older PLA") == "Generic PLA @Prusa MK4S"
+    assert lib.canonical("filament", "Generic PLA @base") == "Generic PLA @base"   # still exists: never redirected
+    assert lib.canonical("filament", "unknown") == "unknown"
+    flat = lib.resolve("filament", "Prusa Generic PLA @MK4S")
+    assert flat["name"] == "Generic PLA @Prusa MK4S" and flat["nozzle_temperature"] == ["215"]

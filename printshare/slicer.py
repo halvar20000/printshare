@@ -34,8 +34,10 @@ class SliceResult:
 
 
 _TIME_RE = re.compile(r";\s*(?:model printing time|estimated printing time \(normal mode\))\s*[:=]\s*([^;\n]+)")
-_GRAMS_RE = re.compile(r";\s*(?:total filament weight \[g\]|filament used \[g\]|total filament used \[g\])\s*[:=]\s*([\d.]+)")
-_METERS_RE = re.compile(r";\s*(?:total filament length \[mm\]|filament used \[mm\])\s*[:=]\s*([\d.]+)")
+_TOTAL_G_RE = re.compile(r";\s*total filament (?:used|weight) \[g\]\s*[:=]\s*([\d.]+)")
+# per filament on multicolour prints ("2.18, 2.06"): summed when there is no total line
+_GRAMS_RE = re.compile(r";\s*(?:filament used \[g\]|total filament weight \[g\])\s*[:=]\s*([\d., ]+)")
+_METERS_RE = re.compile(r";\s*(?:total filament length \[mm\]|filament used \[mm\])\s*[:=]\s*([\d., ]+)")
 _LAYERS_RE = re.compile(r";\s*total layer number\s*[:=]\s*(\d+)")
 _GRAMS_EACH_RE = re.compile(r";\s*filament used \[g\]\s*=\s*([\d., ]+)")
 
@@ -59,16 +61,27 @@ def _parse_estimates(gcode: Path) -> tuple[str | None, float | None, float | Non
     data = gcode.read_bytes()
     text = data[:200_000].decode("utf-8", "ignore") + "\n" + data[-200_000:].decode("utf-8", "ignore")
     t = _TIME_RE.search(text)
-    g = _GRAMS_RE.search(text)
-    m = _METERS_RE.search(text)
+    total = _TOTAL_G_RE.search(text)
     n = _LAYERS_RE.search(text)
     layers = int(n.group(1)) if n else (data.count(b"\n;LAYER_CHANGE") or None)
+    grams = float(total.group(1)) if total else _sum(_GRAMS_RE.search(text))
+    meters = _sum(_METERS_RE.search(text))
     return (
         t.group(1).strip() if t else None,
-        float(g.group(1)) if g else None,
-        round(float(m.group(1)) / 1000, 2) if m else None,
+        round(grams, 2) if grams is not None else None,
+        round(meters / 1000, 2) if meters is not None else None,
         layers,
     )
+
+
+def _sum(match: "re.Match[str] | None") -> float | None:
+    """All filaments of a multicolour print ("726.06, 683.65"); before 0.51.0 only the first one was reported."""
+    if not match:
+        return None
+    try:
+        return sum(float(v) for v in match.group(1).replace(" ", "").split(",") if v)
+    except ValueError:
+        return None
 
 
 class Slicer:
