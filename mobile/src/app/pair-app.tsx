@@ -1,5 +1,5 @@
 // Pairing code for another phone (issue #10): QR code with the server's address(es) and access token. Own servers only.
-// Was on the classic web page alone until 0.52.0. The QR is hidden until asked for - it holds the token.
+// Was on the classic web page alone until 0.53.0. The QR is hidden until asked for - it holds the token.
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";

@@ -1,11 +1,23 @@
 # Changelog
 
-## 0.52.0
+## 0.53.0
 - One web page instead of two: the last settings of the classic page are in the web app (and the Android app) now -
   smart plug through Home Assistant incl. "switch on when needed" (printer settings → Smart plug), the QR code to
   connect another phone and "Print from anywhere" (this server as a bridge to PocketPrint3D Cloud), both under
   Settings → Advanced. The classic page is gone: `/classic` opens the web app, `PRINTSHARE_CLASSIC_WEB` has no effect
   any more.
+
+## 0.52.0
+- Slicing with **OrcaSlicer 2.5.0** (was 2.4.2): about 1200 printer models (about 190 new, e.g. Bambu Lab H2C and
+  A2L), new filament profiles, faster slicing.
+- Presets OrcaSlicer 2.5 renamed (about 750 filament presets, e.g. "Prusa Generic PLA @MK4S" → "Generic PLA @Prusa MK4S")
+  keep working under their old names: saved choices, config.yaml and uploaded presets based on them are mapped to the
+  new name.
+- Multicolour prints: the grams now include the filament purged at every colour change (CANVAS/AFC purge too; 2.4.2
+  counted nothing for it without a prime tower), so spool bookings come closer to what the printer really uses.
+- Fixed: the total filament of a multicolour print showed the first colour only.
+- Print times and filament can differ a little from 2.4.2 (newer profiles). Benchy with the standard profiles:
+  Centauri 35m32s → 35m10s, COSMOS 34m52s → 33m49s, P1S 31m15s → 32m03s, Prusa MK4S 1h04m → 40m16s.
 
 ## 0.51.0
 - Push notifications for the apps: print finished or cancelled, paused, printer error, AI failure alert, print not

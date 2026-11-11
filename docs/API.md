@@ -93,7 +93,7 @@ DELETE /api/printers/{id}   → {"deleted": "werkstatt-cc"}
 `machine` (OrcaSlicer printer profile) is required for `prusalink` / `octoprint`; the Centauri profile is the default
 otherwise. The choices for it (0.15.3):
 ```http
-GET /api/machines   → [{"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}, …]   (all of Orca 2.4.2, ~1000)
+GET /api/machines   → [{"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}, …]   (all of the bundled Orca, ~1200 with 2.5.0)
 ```
 The app reaches `prusalink` printers with the user `maker` + the password from the printer screen (or an API key),
 `octoprint` with an API key; both are kept on the phone only. At most 10 printers per account. The address of the printer stays in the app (it finds the printer on
@@ -217,7 +217,7 @@ infill pattern, walls).
 - `own`: uploaded presets of the user (shown first, group "Own profiles").
 - Since 0.15.3 `materials` also lists OrcaSlicer's printer-independent library (`Generic PETG @System`, …) after the
   printer's own materials, and presets that pick their printers by condition (Prusa, CORE One) are included.
-- `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of Orca 2.4.2, in Orca's order); an app
+- `infill_patterns` (0.15.2): OrcaSlicer's `sparse_infill_pattern` values (all of the bundled Orca, in Orca's order); an app
   may offer a subset. `defaults.infill_pattern`: the quality's pattern (Orca's legacy `zig-zag` is reported as
   `rectilinear`, like Orca reads it), `defaults.infill_line_width`: infill line width in mm (`null` if the preset
   gives it as a percentage) – for a true-to-scale infill preview. Missing on older servers: hide the choice.
@@ -275,7 +275,7 @@ Live ≈ 300 KB/s: use still images away from home. Centauri: 640×360 MJPEG; Kl
 
 `GET|PUT /power/config` carry `auto_on` (0.46.0, default false; PUT without it keeps the stored value): switch the printer
 on for an OrcaSlicer "Upload and Print" (see `/send` `wake`). After switching on, the printer needs ~30–60 s until `/status` answers. The settings (`/power/config`, `/power/test`,
-`/power/entities`) are made in the app / web app (printer settings → smart plug, since 0.52.0; before only on the classic
+`/power/entities`) are made in the app / web app (printer settings → smart plug, since 0.53.0; before only on the classic
 web page); the token is never returned (`token_set: true/false`).
 
 ### Printer profile
@@ -507,7 +507,7 @@ All `409` in the cloud. `server_url` = this server as the ML API container reach
   request is allowed as before. Same rules as in the cloud: changes need `X-Requested-With: pocketprint3d`;
   `POST /api/auth/logout` clears the cookie. Bearer / `?token=` for the apps unchanged.
 - `/` = the web app (when `/opt/webapp` exists, i.e. in the Docker image; else a short hint page). The classic page
-  is gone since 0.52.0 (its last settings - smart plug, pairing code, bridge mode - are in the web app): `/classic`
+  is gone since 0.53.0 (its last settings - smart plug, pairing code, bridge mode - are in the web app): `/classic`
   answers `308` → `/`, `classic_web` / `PRINTSHARE_CLASSIC_WEB` no longer exist; `/sw.js` still unregisters the old
   service worker. Bridge-only containers are unchanged (status page at `/`). The web app's CSP on home servers allows `connect-src http: https:` (own
   Spoolman on the LAN).
@@ -799,9 +799,9 @@ itself and fills the spool form / picks the matching spool – see `mobile/src/l
 | | |
 |---|---|
 | `GET /api/profiles` | `[{"file": "filament-Meine PLA.json", "kind": "filament", "name": "Meine PLA", "inherits": "Elegoo PLA @ECC"}, …]` (+ `print_start`, `nozzle` for printer presets, `error` if unusable) |
-| `POST /api/profiles?filename=x.json` | body: JSON preset or OrcaSlicer bundle (zip); → list of stored presets; `400` with a reason if Orca 2.4.2 doesn't know the base |
+| `POST /api/profiles?filename=x.json` | body: JSON preset or OrcaSlicer bundle (zip); → list of stored presets; `400` with a reason if the bundled Orca doesn't know the base |
 | `DELETE /api/profiles/{file}` | `400` while a printer uses it |
-| `POST /api/profiles/orca-cloud` `{"link": "https://cloud.orcaslicer.com/b/<code>"}` (0.18.0) | imports a **public** Orca Cloud bundle (**no Orca account**; private bundles only open for whitelisted, logged-in Orca users → `400 "bundle not found or private …"`): `{"bundle": {"name", "author", "version", "updated"}, "imported": [<same as the list above>], "skipped": [{"name", "error"}]}`; presets Orca 2.4.2 can't use are skipped, `400` if none is usable / not a share link / not found |
+| `POST /api/profiles/orca-cloud` `{"link": "https://cloud.orcaslicer.com/b/<code>"}` (0.18.0) | imports a **public** Orca Cloud bundle (**no Orca account**; private bundles only open for whitelisted, logged-in Orca users → `400 "bundle not found or private …"`): `{"bundle": {"name", "author", "version", "updated"}, "imported": [<same as the list above>], "skipped": [{"name", "error"}]}`; presets the bundled Orca can't use are skipped, `400` if none is usable / not a share link / not found |
 
 Orca Cloud: the server reads `GET https://api.orcaslicer.com/api/v1/bundles/share/<code>` (open, found in the
 cloud.orcaslicer.com web app); presets inheriting another preset of the same bundle are merged first, `"type": "printer"`

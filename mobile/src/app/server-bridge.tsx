@@ -1,5 +1,5 @@
 // Bridge mode of this own server (docs/BRIDGE.md, server 0.25.0): reached from anywhere through PocketPrint3D Cloud.
-// Was on the classic web page alone until 0.52.0. The code is entered in the app with a cloud account.
+// Was on the classic web page alone until 0.53.0. The code is entered in the app with a cloud account.
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Switch, Text, View } from "react-native";

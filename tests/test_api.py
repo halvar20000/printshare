@@ -106,7 +106,7 @@ def test_auth_required(client):
 
 
 def test_app_shell_served(api, client, tmp_path):
-    # without a web app build: a short hint page; the classic page is retired (0.52.0), /classic sends to /
+    # without a web app build: a short hint page; the classic page is retired (0.53.0), /classic sends to /
     keep = api.settings.webapp_dir
     api.settings.webapp_dir = str(tmp_path / "missing")
     try:
@@ -352,7 +352,7 @@ def _fake_webapp(tmp_path):
 
 
 def test_home_server_serves_web_app(api, tmp_path):
-    """Since 0.47.0 the web app (Expo web build) is at / of home servers too; the classic page is gone since 0.52.0."""
+    """Since 0.47.0 the web app (Expo web build) is at / of home servers too; the classic page is gone since 0.53.0."""
     keep = api.settings.webapp_dir
     api.settings.webapp_dir = str(_fake_webapp(tmp_path))
     try:

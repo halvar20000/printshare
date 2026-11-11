@@ -14,7 +14,7 @@ The same app as on the phone, for desktop browsers, with the same cloud account:
   once (`POST /api/auth/token`, HttpOnly cookie, `lib/api.ts` `webStart`/`webHome()`); printers, camera, control, power …
   then all go through the server (own-server mode of the app). The start log prints `http://<server>:8484/#token=…`,
   which logs in by itself (the fragment never reaches a server log; the page removes it from the address bar).
-  The classic page (`printshare/web`) was kept at `/classic` until 0.51 for the settings the app lacked. **Since 0.52.0
+  The classic page (`printshare/web`) was kept at `/classic` until 0.52 for the settings the app lacked. **Since 0.53.0
   there is one web page only:** smart plug (printer settings → "Steckdose", `app/power/[id].tsx`), pairing QR for
   another phone (`app/pair-app.tsx`) and the server's own bridge mode (`app/server-bridge.tsx`) are in the app, under
   Settings → Erweitert for an own server - in the browser and in the Android app alike. `/classic` redirects to `/`.
@@ -60,4 +60,4 @@ for Orca uploads, the same for home servers.
 
 ## Next (docs/BRIDGE.md, product plan)
 3. ~~The same web app on home servers instead of the classic page.~~ Done in 0.47.0; the classic page's last settings
-   (smart plug, pairing QR, bridge mode) moved into the app and the page was removed in 0.52.0.
+   (smart plug, pairing QR, bridge mode) moved into the app and the page was removed in 0.53.0.

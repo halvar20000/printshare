@@ -119,6 +119,8 @@ jobs:
 
   publish:
     needs: [build, integration]
+    # a manual run on another branch only builds and tests (e.g. a new OrcaSlicer version): :latest stays main's
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -209,6 +211,7 @@ jobs:
 
   bridge-publish:
     needs: bridge
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

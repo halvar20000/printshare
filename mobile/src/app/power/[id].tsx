@@ -1,5 +1,5 @@
 // Smart plug for one printer through Home Assistant (issue #9, server 0.12.0; "switch on when needed" 0.46.0).
-// Own servers only. Was on the classic web page alone until 0.52.0. The token is write-only: empty = keep the stored one.
+// Own servers only. Was on the classic web page alone until 0.53.0. The token is write-only: empty = keep the stored one.
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Switch, TextInput, View } from "react-native";
