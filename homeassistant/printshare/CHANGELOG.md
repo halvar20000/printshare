@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.53.2
+- Web app and Android app: the printers page shows every printer at once with "Checking the status …" and fills in each
+  status as it arrives. Before, a switched-off printer kept the whole page empty until its status request timed out
+  (same as the iPhone app since 0.9.6).
+
 ## 0.53.1
 - iPhone: a print OrcaSlicer starts through PocketPrint3D ("Upload and Print") now shows its Live Activity on the lock
   screen, like prints started from the app. Before, it only got the notification at the end.
