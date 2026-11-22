@@ -129,6 +129,8 @@ class Moonraker:
                                      or st.get("virtual_sdcard", {}).get("progress") or 0), 1),
             "layer": info.get("current_layer"), "layers": info.get("total_layer"),
             "print_duration_s": ps.get("print_duration"),
+            # Klipper's reason when a print ended in an error ("Error during homing probe: …"), "" otherwise
+            "message": ps.get("message") or None,
             "nozzle": st.get("extruder", {}).get("temperature"),
             "nozzle_target": st.get("extruder", {}).get("target"),
             "bed": st.get("heater_bed", {}).get("temperature"),

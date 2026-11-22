@@ -4,7 +4,7 @@ The same signals as the spool bookings (cloud/bookings.py): the printer's file n
 reports it - the home server for its printers, the cloud for printers behind a bridge, the app for printers on its Wi-Fi.
   printing the job's file          → remember it was seen, and the progress
   finished                         → "finished"
-  cancelled / error                → "cancelled"
+  cancelled / error                → "cancelled" (on an error with the printer's message as the job's `error`)
   idle / another file afterwards   → "finished" when it got to ≥ 99 %, else "cancelled" (only once it was seen printing)
   never seen printing for 6 hours  → left as "started" (the printer may have been off; nothing is guessed)
 
@@ -54,6 +54,9 @@ def track(job: dict[str, Any], status: dict[str, Any] | None, kind: str | None, 
             # right after the start the printer may still show the previous run of the same file as over
             if not job.get("seen_printing") and now - float(job.get("started_at") or 0) < STALE_DONE_S:
                 return False
+            if kind == "error" and isinstance(status.get("message"), str) and status["message"].strip():
+                # the printer's own reason (Klipper's print_stats.message), so the job says why it stopped
+                job["error"] = status["message"].strip()[:300]
             return _end(job, "finished" if kind == "done" else "cancelled", now)
         if job.get("seen_printing"):              # idle with the file still shown (PrusaLink after FINISHED)
             return _end(job, "finished" if (job.get("progress") or 0) >= 99 else "cancelled", now)

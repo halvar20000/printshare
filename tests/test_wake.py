@@ -101,6 +101,53 @@ def test_lane_data_in_afcs_layout(api):  # noqa: F811
                   "lane": "1", "spool_id": None}}
 
 
+def test_lane_data_prefers_afcs_lanes_and_keeps_the_printers_extras(api):  # noqa: F811
+    """0.53.3: AFC's own lane_data listed a loaded lane as empty (Dominique's COSMOS, 2026-11-22) - the lanes PocketPrint3D
+    reads from the AFC_lane objects win, temperatures/TD come from the printer's entry of the same tool."""
+    lanes = [{"id": "CANVAS_2", "tool": 1, "material": "PLA", "color": "#000000", "loaded": True}]
+    own = {"lane2": {"lane": "1", "material": "", "color": "", "nozzle_temp": 220, "bed_temp": 60, "td": "1.2",
+                     "scan_time": "x", "spool_id": None}}
+    assert api.lane_data(lanes, own)["lane1"] == {
+        "color": "#000000", "material": "PLA", "bed_temp": 60, "nozzle_temp": 220, "scan_time": "x", "td": "1.2",
+        "lane": "1", "spool_id": None}
+
+
+def test_orca_moonraker_agent_without_path(api, tmp_path, monkeypatch):  # noqa: F811
+    """0.53.3: OrcaSlicer 2.4.2 drops the path of the host address for its Moonraker agent (`dev_id_from_address`),
+    so it calls <server>/server/info. The printer comes from the API key."""
+    monkeypatch.setattr(api.settings, "config_dir", str(tmp_path))
+    with TestClient(api.app) as c:
+        assert c.get("/server/info").status_code == 401
+        assert c.get("/server/info", headers={"X-Api-Key": "wrong:dom"}).status_code == 401
+        assert c.get("/server/info", headers={"X-Api-Key": f"{TOKEN}:nope"}).status_code == 404
+        for key in (TOKEN, f"{TOKEN}:dom"):                 # one printer: the token alone is enough
+            info = c.get("/server/info", headers={"X-Api-Key": key})
+            assert info.status_code == 200 and info.json()["result"]["machine_name"] == "Dominique"
+        # the /orca/<id> address takes the same key
+        assert c.get("/orca/dom/server/info", headers={"X-Api-Key": f"{TOKEN}:dom"}).status_code == 200
+        assert c.get("/printer/objects/list", headers=KEY).json()["result"]["objects"]
+        assert c.get("/printer/objects/query?print_stats", headers=KEY).json()["result"]["status"][
+            "print_stats"]["state"] == "standby"
+        assert c.get("/server/database/item?namespace=lane_data", headers=KEY).status_code == 404
+        with BackgroundFake(FakeMoonraker(afc=True)):
+            lanes = c.get("/server/database/item?namespace=lane_data", headers=KEY).json()["result"]["value"]
+            assert {v["lane"] for v in lanes.values()} <= {"0", "1", "2", "3"} and lanes
+        r = c.post("/server/files/upload", headers=KEY, data={"root": "gcodes", "print": "false"},
+                   files={"file": ("cone.gcode", GCODE.read_bytes(), "application/octet-stream")})
+        assert r.status_code == 201 and r.json()["result"]["item"]["path"] == "cone.gcode"
+        assert _wait(c, _orca_job(c), ("sliced",))["request"]["source"] == "orcaslicer"
+        r = c.post("/printer/gcode/script", headers=KEY, json={"script": "CANCEL_PRINT"})
+        assert r.status_code == 400
+        r = c.post("/printer/print/start", headers=KEY, json={"filename": "missing.gcode"})
+        assert r.status_code == 400 and "not found" in r.json()["detail"]
+        # several printers: the key must name one
+        two = api.settings.printers + [api.settings.printers[0].__class__(id="p2", name="P2", type="moonraker")]
+        monkeypatch.setattr(api.settings, "printers", two)
+        r = c.get("/server/info", headers=KEY)
+        assert r.status_code == 409 and ":<printer id>" in r.json()["detail"]
+        assert c.get("/server/info", headers={"X-Api-Key": f"{TOKEN}:p2"}).json()["result"]["machine_name"] == "P2"
+
+
 def test_power_config_keeps_auto_on(tmp_path):
     plug.save(tmp_path, "p", plug.PowerConfig(url=HA, token="t", entity="switch.x", auto_on=True))
     cfg = plug.load(tmp_path, "p")

@@ -116,3 +116,6 @@ def test_printer_address_for_orca_in_the_cloud(cloud):  # noqa: F811
         r = c.post("/orca/cc/printer/gcode/script", headers=key, json={"script": "SDCARD_PRINT_FILE FILENAME=cone.gcode"})
         assert r.status_code == 400 and "phone" in r.json()["detail"], "phone-only printer: started in the app"
         assert c.get("/orca/cc/server/database/item?namespace=lane_data", headers=key).status_code == 404
+        # 0.53.3: the same without the path (Orca's Moonraker agent drops it), the key names the printer
+        assert c.get("/server/info", headers=key).json()["result"]["machine_name"] == "CC"
+        assert c.get("/server/info").status_code == 403

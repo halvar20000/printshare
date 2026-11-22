@@ -192,6 +192,8 @@ Live state; call every 3–10 s while visible. `502` = printer not reachable (of
 - `heaters` with `target: null` = sensor only (e.g. a chamber thermometer). `fans` in %, `lights` on/off,
   `speed` in % (Centauri: one of its modes 50/100/130/160).
 - `camera`: the printer's own URL – **apps use `/camera/...` below instead** (works away from home).
+- `message` (0.53.3, Klipper/COSMOS only): the printer's reason when a print ended in an error (Klipper's
+  `print_stats.message`, e.g. "Error during homing probe: Communication timeout during homing"), else `null`.
 - `spoolman` (0.16.0, Klipper only): Moonraker's own Spoolman link – `{"connected": true, "spool_id": 3}` or `null`
   (not configured). When it is not null, Moonraker books the used filament itself: the app must not book it again
   (see "Spoolman" below). Lanes then carry the `spool_id` AFC assigned to them (`null` = none).
@@ -370,7 +372,8 @@ fields `seen_printing`, `progress`, `started_at`, `finished_at`). Who looks: the
 minute for printers behind a bridge, the app for printers on its Wi-Fi (`POST /api/observe {"statuses"}`, same as
 `/api/bookings/observe`). The phone's own sends in the cloud: `POST /api/jobs/{id}/relayed {"start", "file"}` (file =
 name on the printer). A printer still showing the previous run of the same file as finished/cancelled within 10 min of the
-start doesn't end the job (same rule for spool bookings). `finished`/`cancelled` jobs can be sent again (`/send`, `/relayed`).
+start doesn't end the job (same rule for spool bookings). `finished`/`cancelled` jobs can be sent again (`/send`, `/relayed`). A print that ends
+in a printer error (`kind: "error"`) puts the printer's `message` from its status into the job's `error` (0.53.3).
 
 ### `GET /api/jobs/{job}`
 ```json
@@ -548,11 +551,22 @@ printer's key. PocketPrint3D answers the two OctoPrint calls OrcaSlicer makes:
 Each printer has its own address that OrcaSlicer treats like the printer itself: `http://<server>:8484/orca/<printer id>`
 (cloud: `https://api.pocketprint3d.com/orca/<printer id>`). API key (`X-Api-Key`) = the server's token on an own server,
 the printer's upload key (`pp3do_…`, above) in the cloud; wrong key → 401 (own server) / 403 (cloud).
+
+**Without the path (0.53.3) - the address that works with Orca's Moonraker agent:** OrcaSlicer 2.4.2 strips the path from
+the host address before its Moonraker printer agent uses it (`MachineObject::dev_id_from_address`), so it calls
+`<server>/server/info`, not `<server>/orca/<id>/server/info`. The same Moonraker endpoints therefore also exist at the
+root (`/server/info`, `/server/database/item`, `/server/files/upload`, `/printer/objects/list|query`,
+`/printer/gcode/script`, `/printer/print/start`); the printer comes from the API key: in the cloud the printer's upload
+key; on an own server the token alone (only when the server has exactly one printer, else 409) or
+`<token>:<printer id>` (404 unknown printer). `/orca/<id>/…` accepts `<token>:<printer id>` too. The Octo/Klipper host
+type keeps the path, `/orca/<id>` stays right for it.
 - Host type **Octo/Klipper** ("Upload" / "Upload and Print"): `GET …/api/version`, `POST …/api/files/local` as above.
 - **Moonraker printer agent** of OrcaSlicer 2.4 (Device tab, "Send" / "Print", filament sync):
   `GET …/server/info` (always `klippy_state: "ready"`, so Orca can send while the printer is off),
-  `GET …/server/database/item?namespace=lane_data[&key=laneN]` (filament sync: the printer's own `lane_data` when a
-  Klipper printer has one, else its `status.lanes` in AFC's layout `{"laneN": {"lane": "<tool>", "material", "color",
+  `GET …/server/database/item?namespace=lane_data[&key=laneN]` (filament sync: since 0.53.3 the printer's `status.lanes`
+  (from AFC's lane objects) in AFC's layout, with temperatures/TD/scan time taken from the printer's own `lane_data`
+  entry of the same tool; the printer's own `lane_data` alone only when there are no `status.lanes` - AFC doesn't keep
+  it up to date; before 0.53.3 the printer's own came first) - layout `{"laneN": {"lane": "<tool>", "material", "color",
   "spool_id", …}}`; the last answer is stored in `<config dir>/orca-lanes/<printer>.json` and served while the printer is
   off; 404 while nothing is known), `POST …/server/files/upload` (multipart `file`, `print`) → `{"result": {"item",
   "print_started"}}`, `POST …/printer/gcode/script {"script": "SDCARD_PRINT_FILE FILENAME=<name>"}` and
