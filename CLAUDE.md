@@ -1075,6 +1075,12 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `print_started: false` (Klippy not ready) no longer reports "started". Tested with fakes only (FakeMoonraker started
   after the HA plug was switched); **not yet with a real Orca, plug or COSMOS**, and Orca's printer agent with a path in
   the host address is untested (its `join_url` keeps the path).
+- **0.53.3 (2026-11-22, Dominique's first real try):** Orca 2.4.2 strips scheme + path from print_host before the Moonraker
+  agent uses it (`MachineObject::dev_id_from_address`, DeviceManager.cpp) → it called `<server>/server/info`, got the web
+  app's HTML, "Invalid JSON response", no filament sync. The Moonraker endpoints now also live at the root; the printer
+  comes from the key (cloud `pp3do_`; own server token = the only printer, else `<token>:<printer id>`). Orca lanes now
+  from `status.lanes` (AFC's own `lane_data` listed loaded T1 as empty), Klipper `print_stats.message` → job `error` on a
+  printer error. That print itself stopped on the COSMOS with "Communication timeout during homing" (Z probe), not ours.
 
 ## One web page (2026-11-11, server 0.53.0, Dominique)
 - The classic page's last own settings moved into the Expo app: smart plug per printer (`app/power/[id].tsx`, from

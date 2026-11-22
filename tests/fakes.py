@@ -170,6 +170,7 @@ class FakeMoonraker:
     def _objects(self) -> dict:
         objs = {
             "print_stats": {"state": self.state, "filename": "cube.gcode", "print_duration": 60,
+                            "message": getattr(self, "message", ""),
                             "info": {"current_layer": self.layer, "total_layer": 100}},
             "display_status": {"progress": 0.031},
             "extruder": {"temperature": 210.1, "target": 210},

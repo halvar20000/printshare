@@ -41,6 +41,13 @@ def test_rules():
     j = started()
     assert not jobtrack.track(j, st("standby", "other.gcode"), "idle", T0 + 60), "never seen: nothing is guessed"
     assert not jobtrack.track(j, None, None, T0 + 60)
+    # 0.53.3: an error keeps the printer's reason (Klipper's print_stats.message) in the job
+    j = started(seen_printing=True, progress=1)
+    err = st("error", progress=1) | {"message": "Error during homing probe: Communication timeout during homing"}
+    assert jobtrack.track(j, err, "error", T0 + 60) and j["state"] == "cancelled" and "homing" in j["error"]
+    j = started(seen_printing=True, progress=30)
+    jobtrack.track(j, st("cancelled", progress=30) | {"message": "old"}, "stopped", T0 + 60)
+    assert j["state"] == "cancelled" and not j.get("error"), "cancelled by someone: no error"
     # the name on the printer: bridge sends know it, others use the G-code's file name
     assert jobtrack.printer_file({"result": {"gcode": "/g/cc/j1/Cube.gcode"}}) == "Cube.gcode"
 

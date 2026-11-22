@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.53.3
+- OrcaSlicer's filament sync through PocketPrint3D works now. Orca's Klipper/Moonraker connection drops the path of the
+  host address, so `http://<server>:8484/orca/<printer>` never reached PocketPrint3D (Orca showed "Invalid JSON
+  response"). Enter just `http://<server>:8484` as the host in OrcaSlicer; the API key names the printer: the server's
+  token alone when the server has one printer, otherwise `<token>:<printer id>` (cloud: the printer's own key as before).
+- The slots Orca syncs come from AFC's lane objects, as in the apps. AFC's own list for Orca can be out of date (a loaded
+  slot showed as empty).
+- A print that ends in a printer error now shows the printer's reason on the job (Klipper/COSMOS, e.g. "Error during
+  homing probe: Communication timeout during homing") instead of only "cancelled".
+
 ## 0.53.2
 - Web app and Android app: the printers page shows every printer at once with "Checking the status …" and fills in each
   status as it arrives. Before, a switched-off printer kept the whole page empty until its status request timed out

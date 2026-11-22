@@ -1016,11 +1016,34 @@ def _orca_host(request: Request, printer_id: str) -> tuple[Account, PrinterConfi
         if printer.id != printer_id:
             raise HTTPException(403, "this key belongs to another printer")
         return acct, printer
-    key = request.headers.get("x-api-key") or request.query_params.get("apikey") or _token(request)
+    key = request.headers.get("x-api-key") or request.query_params.get("apikey") or _token(request) or ""
+    if ":" in key:                       # the key for path-less addresses (0.53.3) works here too
+        key = key.rpartition(":")[0]
     if settings.api_token and not (key and secrets.compare_digest(key, settings.api_token)):
         raise HTTPException(401, "invalid API key - use the server's token (Settings → Connect app)")
     acct = Account("local", settings)
     return acct, _printer(acct, printer_id)
+
+
+def _orca_root(request: Request) -> tuple[Account, PrinterConfig]:
+    """OrcaSlicer's Moonraker printer agent drops the path of the host address (2.4.2 `dev_id_from_address`), so it
+    reaches `<server>/server/info` instead of `<server>/orca/<id>/server/info` (0.53.3). The printer comes from the
+    API key: the printer's upload key in the cloud; on an own server the token alone (one printer) or
+    `<token>:<printer id>`."""
+    if settings.cloud:
+        return _octo_auth(request)
+    key = request.headers.get("x-api-key") or request.query_params.get("apikey") or _token(request) or ""
+    token, _, printer_id = key.rpartition(":") if ":" in key else (key, "", "")
+    if settings.api_token and not (token and secrets.compare_digest(token, settings.api_token)):
+        raise HTTPException(401, "invalid API key - use the server's token (Settings → Connect app)")
+    acct = Account("local", settings)
+    if printer_id:
+        return acct, _printer(acct, printer_id)
+    printers = acct.settings.printers
+    if len(printers) != 1:
+        raise HTTPException(409, "several printers on this server - use the API key <token>:<printer id> in OrcaSlicer"
+                            if printers else "no printer on this server")
+    return acct, printers[0]
 
 
 def _moonraker_ok(result: Any) -> dict[str, Any]:
@@ -1041,8 +1064,16 @@ async def orca_host_files_local(printer_id: str, request: Request) -> dict[str, 
 
 @app.get("/orca/{printer_id}/server/info")
 def orca_host_server_info(printer_id: str, request: Request) -> dict[str, Any]:
+    return _orca_server_info(_orca_host(request, printer_id)[1])
+
+
+@app.get("/server/info")
+def orca_root_server_info(request: Request) -> dict[str, Any]:
+    return _orca_server_info(_orca_root(request)[1])
+
+
+def _orca_server_info(printer: PrinterConfig) -> dict[str, Any]:
     """Always "ready": OrcaSlicer may send while the printer itself is off."""
-    _, printer = _orca_host(request, printer_id)
     return _moonraker_ok({"klippy_connected": True, "klippy_state": "ready", "hostname": printer.name,
                           "machine_name": printer.name, "moonraker_version": MOONRAKER_INFO_VERSION,
                           "api_version": [1, 5, 0], "api_version_string": "1.5.0", "components": ["database"],
@@ -1052,6 +1083,16 @@ def orca_host_server_info(printer_id: str, request: Request) -> dict[str, Any]:
 @app.get("/orca/{printer_id}/printer/objects/list")
 def orca_host_objects_list(printer_id: str, request: Request) -> dict[str, Any]:
     _orca_host(request, printer_id)
+    return _orca_objects_list()
+
+
+@app.get("/printer/objects/list")
+def orca_root_objects_list(request: Request) -> dict[str, Any]:
+    _orca_root(request)
+    return _orca_objects_list()
+
+
+def _orca_objects_list() -> dict[str, Any]:
     return _moonraker_ok({"objects": ["print_stats", "virtual_sdcard", "extruder", "heater_bed", "fan"]})
 
 
@@ -1064,9 +1105,18 @@ async def _orca_status(acct: Account, printer_id: str) -> dict[str, Any] | None:
 
 @app.get("/orca/{printer_id}/printer/objects/query")
 async def orca_host_objects_query(printer_id: str, request: Request) -> dict[str, Any]:
+    return await _orca_objects_query(*_orca_host(request, printer_id), request)
+
+
+@app.get("/printer/objects/query")
+async def orca_root_objects_query(request: Request) -> dict[str, Any]:
+    return await _orca_objects_query(*_orca_root(request), request)
+
+
+async def _orca_objects_query(acct: Account, printer: PrinterConfig, request: Request) -> dict[str, Any]:
     """Klipper printers that are on: the real answer (e.g. Happy Hare's `mmu` for Orca's filament sync); otherwise
     a small status built from the adapter's (standby while the printer is off)."""
-    acct, printer = _orca_host(request, printer_id)
+    printer_id = printer.id
     if printer.type == "moonraker" and not acct.cloud:
         real = await _moonraker_get(printer, "/printer/objects/query", dict(request.query_params))
         if real is not None:
@@ -1097,17 +1147,23 @@ async def _moonraker_get(printer: PrinterConfig, path: str, params: dict[str, An
         return None
 
 
-def lane_data(lanes: list[dict[str, Any]]) -> dict[str, Any]:
+def lane_data(lanes: list[dict[str, Any]], printer_data: dict[str, Any] | None = None) -> dict[str, Any]:
     """Our lanes in the layout AFC writes to Moonraker's `lane_data` namespace for OrcaSlicer (key laneN, "lane" =
-    tool number). An empty lane has no material, so Orca shows it as empty."""
+    tool number). An empty lane has no material, so Orca shows it as empty. Temperatures, TD and scan time come from
+    the printer's own `lane_data` entry of the same tool when there is one."""
+    own = {str(v.get("lane")): v for v in (printer_data or {}).values() if isinstance(v, dict)}
     out: dict[str, Any] = {}
     for ln in lanes:
         if not isinstance(ln.get("tool"), int):
             continue
         loaded = ln.get("loaded") is not False
+        extra = own.get(str(ln["tool"])) or {}
         out[f"lane{len(out) + 1}"] = {
             "color": (ln.get("color") or "") if loaded else "", "material": (ln.get("material") or "") if loaded else "",
-            "bed_temp": None, "nozzle_temp": None, "scan_time": "", "td": "", "lane": str(ln["tool"]),
+            "bed_temp": extra.get("bed_temp") if loaded else None,
+            "nozzle_temp": extra.get("nozzle_temp") if loaded else None,
+            "scan_time": (extra.get("scan_time") or "") if loaded else "", "td": (extra.get("td") or "") if loaded else "",
+            "lane": str(ln["tool"]),
             "spool_id": ln.get("spool_id") if isinstance(ln.get("spool_id"), int) else None}
     return out
 
@@ -1119,21 +1175,35 @@ def _lane_cache(acct: Account, printer_id: str) -> Path:
 @app.get("/orca/{printer_id}/server/database/item")
 async def orca_host_database(printer_id: str, request: Request, namespace: str = "", key: str | None = None
                              ) -> dict[str, Any]:
-    """OrcaSlicer's filament sync. The printer's own `lane_data` if it has one, else its lanes as PocketPrint3D sees
-    them; the last answer is kept, so Orca can sync while the printer is off."""
     acct, printer = _orca_host(request, printer_id)
+    return await _orca_database(acct, printer, namespace, key)
+
+
+@app.get("/server/database/item")
+async def orca_root_database(request: Request, namespace: str = "", key: str | None = None) -> dict[str, Any]:
+    acct, printer = _orca_root(request)
+    return await _orca_database(acct, printer, namespace, key)
+
+
+async def _orca_database(acct: Account, printer: PrinterConfig, namespace: str, key: str | None) -> dict[str, Any]:
+    """OrcaSlicer's filament sync. The lanes as PocketPrint3D reads them from the printer (AFC's lane objects); the
+    printer's own `lane_data` only when PocketPrint3D sees no lanes - AFC doesn't always keep it up to date (seen
+    2026-11-22: a loaded lane listed as empty there). The last answer is kept, so Orca can sync while the printer is off."""
+    printer_id = printer.id
     if namespace != "lane_data":
         raise HTTPException(404, f"Namespace '{namespace}' not found")
     value: dict[str, Any] | None = None
+    real: dict[str, Any] | None = None
     if printer.type == "moonraker" and not acct.cloud:
-        real = await _moonraker_get(printer, "/server/database/item", {"namespace": "lane_data"})
-        got = ((real or {}).get("result") or {}).get("value")
+        got = ((await _moonraker_get(printer, "/server/database/item", {"namespace": "lane_data"}) or {})
+               .get("result") or {}).get("value")
         if isinstance(got, dict) and got:
-            value = got
-    if value is None:
-        st = await _orca_status(acct, printer_id)
-        if st is not None and st.get("lanes"):
-            value = lane_data(st["lanes"])
+            real = got
+    st = await _orca_status(acct, printer_id)
+    if st is not None and st.get("lanes"):
+        value = lane_data(st["lanes"], real)
+    elif real is not None:
+        value = real
     cache = _lane_cache(acct, printer_id)
     if value:
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -1152,7 +1222,15 @@ async def orca_host_database(printer_id: str, request: Request, namespace: str =
 
 @app.post("/orca/{printer_id}/server/files/upload", status_code=201)
 async def orca_host_upload(printer_id: str, request: Request) -> dict[str, Any]:
-    acct, printer = _orca_host(request, printer_id)
+    return await _orca_upload(*_orca_host(request, printer_id), request)
+
+
+@app.post("/server/files/upload", status_code=201)
+async def orca_root_upload(request: Request) -> dict[str, Any]:
+    return await _orca_upload(*_orca_root(request), request)
+
+
+async def _orca_upload(acct: Account, printer: PrinterConfig, request: Request) -> dict[str, Any]:
     job, name, started = await _orca_receive(acct, printer, request)
     return _moonraker_ok({"item": {"path": name, "root": "gcodes"}, "print_started": started,
                           "print_queued": False, "action": "create_file"})
@@ -1175,9 +1253,18 @@ class OrcaScript(BaseModel):
 
 @app.post("/orca/{printer_id}/printer/gcode/script")
 async def orca_host_script(printer_id: str, req: OrcaScript, request: Request) -> dict[str, Any]:
+    return _orca_script(*_orca_host(request, printer_id), req)
+
+
+@app.post("/printer/gcode/script")
+async def orca_root_script(req: OrcaScript, request: Request) -> dict[str, Any]:
+    return _orca_script(*_orca_root(request), req)
+
+
+def _orca_script(acct: Account, printer: PrinterConfig, req: OrcaScript) -> dict[str, Any]:
     """Only the start of a file sent before (Orca's "Print": upload, then SDCARD_PRINT_FILE). Anything else - pause,
     cancel, own G-code - belongs in the app, where it is confirmed."""
-    acct, printer = _orca_host(request, printer_id)
+    printer_id = printer.id
     m = re.fullmatch(r"\s*SDCARD_PRINT_FILE\s+FILENAME=(.+?)\s*", req.script, re.I)
     if not m:
         raise HTTPException(400, "only SDCARD_PRINT_FILE is supported here - control the printer in the PocketPrint3D app")
@@ -1193,8 +1280,16 @@ class OrcaPrintStart(BaseModel):
 
 @app.post("/orca/{printer_id}/printer/print/start")
 async def orca_host_print_start(printer_id: str, req: OrcaPrintStart, request: Request) -> dict[str, Any]:
-    acct, printer = _orca_host(request, printer_id)
-    job = _orca_job_for(acct, printer_id, req.filename)
+    return _orca_print_start(*_orca_host(request, printer_id), req)
+
+
+@app.post("/printer/print/start")
+async def orca_root_print_start(req: OrcaPrintStart, request: Request) -> dict[str, Any]:
+    return _orca_print_start(*_orca_root(request), req)
+
+
+def _orca_print_start(acct: Account, printer: PrinterConfig, req: OrcaPrintStart) -> dict[str, Any]:
+    job = _orca_job_for(acct, printer.id, req.filename)
     if not _orca_start(acct, printer, job):
         raise HTTPException(400, "this printer is started from the PocketPrint3D app on your phone")
     return _moonraker_ok("ok")
