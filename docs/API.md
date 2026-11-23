@@ -568,9 +568,13 @@ type keeps the path, `/orca/<id>` stays right for it.
   entry of the same tool; the printer's own `lane_data` alone only when there are no `status.lanes` - AFC doesn't keep
   it up to date; before 0.53.3 the printer's own came first) - layout `{"laneN": {"lane": "<tool>", "material", "color",
   "spool_id", …}}`; the last answer is stored in `<config dir>/orca-lanes/<printer>.json` and served while the printer is
-  off; 404 while nothing is known), `POST …/server/files/upload` (multipart `file`, `print`) → `{"result": {"item",
-  "print_started"}}`, `POST …/printer/gcode/script {"script": "SDCARD_PRINT_FILE FILENAME=<name>"}` and
-  `POST …/printer/print/start {"filename"}` (start the newest not-started OrcaSlicer job of that printer with that file;
+  off; 404 while nothing is known), `GET …/server/files/roots` (0.53.4, `{"result": [{"name": "gcodes", "permissions": "rw", …}]}`),
+  `POST …/server/files/upload` (multipart `root`, `file`, `print`) → `{"item": {"path", "root"}, "print_started",
+  "print_queued", "action"}` - top level like Moonraker, no `result` envelope (until 0.53.3 it was wrapped, so
+  OrcaSlicer 2.5 missed `item.path` / `print_started` and sent its own start of a print already started); `item.path`
+  is the stored name (characters outside letters, digits, `. - _ ( )` and space become `_`), `POST …/printer/gcode/script {"script": "SDCARD_PRINT_FILE FILENAME=<name>"}` and
+  `POST …/printer/print/start {"filename"}` (start the newest not-started OrcaSlicer job of that printer with that file - the original or the stored
+  name; a file whose upload already started it within 10 minutes answers "ok" and is not started again (0.53.4);
   every other script → 400: pause/cancel stay in the apps), `GET …/printer/objects/list|query` (Klipper printers that
   are on: the printer's own answer, e.g. Happy Hare's `mmu`; otherwise a small `print_stats` / temperatures status).
 - Every upload becomes a job like above; a start ("Upload and Print", `SDCARD_PRINT_FILE`) is `/send` with

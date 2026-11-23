@@ -134,7 +134,7 @@ def test_orca_moonraker_agent_without_path(api, tmp_path, monkeypatch):  # noqa:
             assert {v["lane"] for v in lanes.values()} <= {"0", "1", "2", "3"} and lanes
         r = c.post("/server/files/upload", headers=KEY, data={"root": "gcodes", "print": "false"},
                    files={"file": ("cone.gcode", GCODE.read_bytes(), "application/octet-stream")})
-        assert r.status_code == 201 and r.json()["result"]["item"]["path"] == "cone.gcode"
+        assert r.status_code == 201 and r.json()["item"]["path"] == "cone.gcode"
         assert _wait(c, _orca_job(c), ("sliced",))["request"]["source"] == "orcaslicer"
         r = c.post("/printer/gcode/script", headers=KEY, json={"script": "CANCEL_PRINT"})
         assert r.status_code == 400
@@ -225,7 +225,7 @@ def test_upload_and_print_switches_the_printer_on(api, tmp_path, monkeypatch):  
         assert c.put("/api/printers/dom/power/config", headers=H, json=body).json()["auto_on"] is True
         # Orca's Moonraker agent: upload without starting, then SDCARD_PRINT_FILE
         r = _upload(c, start=False)
-        assert r.status_code == 201 and r.json()["result"]["print_started"] is False
+        assert r.status_code == 201 and r.json()["print_started"] is False and "result" not in r.json()
         job = _orca_job(c)
         assert c.get(f"/api/jobs/{job}", headers=H).json()["state"] == "sliced"
         r = c.post("/orca/dom/printer/gcode/script", headers=KEY, json={"script": "SDCARD_PRINT_FILE FILENAME=cone.gcode"})
@@ -242,6 +242,34 @@ def test_upload_and_print_switches_the_printer_on(api, tmp_path, monkeypatch):  
             assert j["state"] == "started", j
             assert moon.uploads[-1]["print"] == "true" and moon.uploads[-1]["name"] == "cone.gcode"
         assert any("switching it on" in line for line in j["log"])
+
+
+def test_orca_25_upload_and_print_like_moonraker(api, tmp_path, monkeypatch):  # noqa: F811
+    """0.53.4 (Dominique, 2026-11-23): OrcaSlicer 2.5's "Upload and Print" reads `item.path` and `print_started` from
+    the top level of the upload answer (Moonraker sends no {"result"} envelope there) and lists /server/files/roots
+    first. With the envelope it fell back to the original name and called /printer/print/start itself -> "not found"
+    although the upload had started the print."""
+    monkeypatch.setattr(api.settings, "config_dir", str(tmp_path))
+    api.JOBS.clear()
+    with TestClient(api.app) as c, BackgroundFake(FakeMoonraker()) as moon:
+        moon.state = "standby"
+        assert c.get("/server/files/roots").status_code == 401
+        roots = c.get("/server/files/roots", headers=KEY).json()["result"]
+        assert roots == c.get("/orca/dom/server/files/roots", headers=KEY).json()["result"]
+        assert any(r["name"] == "gcodes" and "w" in r["permissions"] for r in roots)
+        name = "Clip 60°_SUNLU PLA+ _0.2.gcode"
+        r = c.post("/server/files/upload", headers=KEY, data={"root": "gcodes", "print": "true"},
+                   files={"file": (name, GCODE.read_bytes(), "application/octet-stream")})
+        body = r.json()
+        assert r.status_code == 201 and body["print_started"] is True
+        stored = body["item"]["path"]
+        assert stored != name and stored.endswith(".gcode")
+        # Orca's own start after a print_started upload (older Orca, or the original name): nothing to do, no error
+        for filename in (stored, name):
+            r = c.post("/printer/print/start", headers=KEY, json={"filename": filename})
+            assert r.status_code == 200, r.text
+        j = _wait(c, _orca_job(c), ("started",))
+        assert moon.uploads[-1]["print"] == "true" and len(moon.uploads) == 1
 
 
 def test_without_auto_on_a_switched_off_printer_is_not_switched_on(api, tmp_path, monkeypatch):  # noqa: F811
