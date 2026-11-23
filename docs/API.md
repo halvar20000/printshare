@@ -905,10 +905,16 @@ Messages (servers → relay): `{"type": "alert", "data": "<base64 ChaCha20-Poly1
 "active"|"time-sensitive", "category": "SLOT_CHECK"|"AI_ALERT"|null, "thread", "collapse"}` → APNs alert with
 `mutable-content`, fallback text `loc-key: push.fallback`, the blob under `pp3d`. The decrypted blob:
 `{"event", "title", "body", "job", "printer"}` (texts in the phone's language, made by the server).
-`{"type": "activity", "event": "start"|"update"|"end", "state": {"s", "p", "end", "l", "lt"}, "attributes": {"job",
+`{"type": "activity", "event": "start"|"update"|"end", "state": {"s", "p", "end", "l", "lt", "h", "tn", "tnt", "tb",
+"tbt", "tc"}, "attributes": {"job",
 "printer"} (start only), "stale", "dismiss", "urgent"}` → APNs `liveactivity` push; `attributes-type`
 `PrintActivityAttributes`. `s`: `sending|waking|decision|printing|paused|done|cancelled|error|failed`, `p` 0-100,
-`end` = unix s of the expected end, `l`/`lt` = layer / layers. Plain text at the relay → numbers and ids only.
+`end` = unix s of the expected end, `l`/`lt` = layer / layers; since 0.54.0 `h` = 1 while heating up before the first
+layer (no `end` then), `tn`/`tnt` nozzle and `tb`/`tbt` bed actual/target, `tc` chamber, whole °C (older relays drop
+these keys). Plain text at the relay → numbers and ids only.
+Decrypted alerts also carry `device` (the phone's device id) and, since 0.54.0, `image` = a server-relative camera picture
+address (`/api/push/image/<token>.jpg`, no auth, 15 min) for `first_layer`, `halfway` and `finished` when the phone
+has `snapshots` on; the notification extension loads it from the server that phone registered with.
 
 Own server / cloud account (auth; `404` on bridge-only servers or with `PRINTSHARE_PUSH_RELAY=off`):
 ```
@@ -923,9 +929,11 @@ POST   /api/jobs/{job}/live-activity {"handle", "secret", "device"?}  → {"stat
 ```
 `<device>` = `{"id", "name", "platform", "lang", "prefs", "live_activities", "created", "last_ok", "last_error"}`.
 `prefs` (defaults): `done` true (finished, cancelled), `problems` true (paused, error, ai_alert, send_failed),
-`decisions` true (decision), `info` false (external), `activities` true (push-to-start), `muted` [printer ids].
-Live Activities are updated at every state change and at most every 5 % / 2 min (refresh every 15 min); they end with
-the job. Push-to-start for prints the phone didn't start (started elsewhere, OrcaSlicer's "Upload and Print" since 0.53.1). Printers the phone reaches itself (cloud
+`decisions` true (decision), `info` false (external), `snapshots` false (0.54.0: `first_layer` and `halfway` with a
+camera picture, and the picture on `finished`), `activities` true (push-to-start), `muted` [printer ids].
+Live Activities are updated at every state change right away; otherwise when something visible changed (≥ 2 %, another
+of 24 layer pictures (`l·24/lt`), the heating phase) at most every 60 s, a refresh every 10 min (0.54.0; before: 5 % /
+2 min / 15 min); they end with the job. Push-to-start for prints the phone didn't start (started elsewhere, OrcaSlicer's "Upload and Print" since 0.53.1). Printers the phone reaches itself (cloud
 without a bridge) get no server pushes: no server sees them.
 
 ## Web-page-only endpoints

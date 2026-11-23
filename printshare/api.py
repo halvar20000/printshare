@@ -4018,15 +4018,78 @@ def _job_printer(job: dict[str, Any]) -> str:
 
 def _push_event(job: dict[str, Any] | None, event: str, printer: str = "", owner: str | None = None,
                 **fields: Any) -> None:
-    """Tell the account's phones (when they want it) - from anywhere, never blocking."""
+    """Tell the account's phones (when they want it) - from anywhere, never blocking. Events in
+    `PICTURE_EVENTS` take a camera picture first when a phone wants pictures (0.54.0)."""
     if not _push_enabled():
         return
     owner = owner or (job or {}).get("owner", "local")
     printer = printer or (_job_printer(job) if job else "")
     if job is not None:
         fields.setdefault("file", _job_file(job))
-    _push_run(_safe(_notifier().emit(owner, event, job, printer, _printer_name(owner, printer) if printer else "",
-                                     **fields)))
+    name = _printer_name(owner, printer) if printer else ""
+    n = _notifier()
+    if event in push_notify.PICTURE_EVENTS and printer and n.wants(owner, "snapshots", printer):
+        async def with_picture() -> None:
+            image = await _push_picture(owner, printer)
+            await n.emit(owner, event, job, printer, name, image=image, **fields)
+        _push_run(_safe(with_picture()))
+        return
+    _push_run(_safe(n.emit(owner, event, job, printer, name, **fields)))
+
+
+# camera pictures for notifications (0.54.0): one-time addresses, the random token is the secret (like the ML frames)
+PUSH_IMAGES: dict[str, tuple[float, bytes]] = {}
+PUSH_IMAGE_TTL_S, PUSH_IMAGE_MAX = 15 * 60, 40
+
+
+async def _push_picture(owner: str, printer_id: str) -> str | None:
+    """Take a camera picture for a notification; its server-relative address, or None without a camera."""
+    try:
+        if owner == "local":
+            acct = Account("local", settings)
+        else:
+            user = ACCOUNTS.user(owner) if ACCOUNTS is not None else None
+            if user is None:
+                return None
+            acct = _user_account(user, "")
+        res = await asyncio.wait_for(camera_snapshot(printer_id, w=800, acct=acct), 25)
+        jpeg = bytes(res.body)
+    except Exception:  # noqa: BLE001 - no camera, unreachable, phone-only printer in the cloud: text only
+        return None
+    now = time.time()
+    for tok in [t for t, (at, _) in PUSH_IMAGES.items() if now - at > PUSH_IMAGE_TTL_S]:
+        PUSH_IMAGES.pop(tok, None)
+    while len(PUSH_IMAGES) >= PUSH_IMAGE_MAX:
+        PUSH_IMAGES.pop(next(iter(PUSH_IMAGES)))
+    token = secrets.token_urlsafe(24)
+    PUSH_IMAGES[token] = (now, jpeg)
+    return f"/api/push/image/{token}.jpg"
+
+
+@app.get("/api/push/image/{token}.jpg")
+def push_image(token: str) -> Response:
+    """The camera picture of a notification (15 min; no key: the notification extension has none)."""
+    item = PUSH_IMAGES.get(token) if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", token) else None
+    if item is None or time.time() - item[0] > PUSH_IMAGE_TTL_S:
+        raise HTTPException(404, "no such picture")
+    return Response(item[1], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+def _push_milestones(job: dict[str, Any], status: dict[str, Any] | None) -> None:
+    """First layer done / halfway: a camera picture as a check, only for phones that switched it on."""
+    if not status or not _push_enabled():
+        return
+    owner, printer = job.get("owner", "local"), _job_printer(job)
+    layer, progress = status.get("layer"), status.get("progress")
+    events = []
+    if isinstance(layer, int) and not isinstance(layer, bool) and layer >= 2:
+        events.append("first_layer")
+    if isinstance(progress, (int, float)) and not isinstance(progress, bool) and progress >= 50:
+        events.append("halfway")
+    n = _notifier()
+    for event in events:
+        if not n.sent_already(owner, job["id"], event) and n.wants(owner, "snapshots", printer):
+            _push_event(job, event)
 
 
 def _push_activity(job: dict[str, Any], status: dict[str, Any] | None = None, kind: str | None = None) -> None:
@@ -4045,6 +4108,8 @@ def _push_job_changed(job: dict[str, Any], before: str | None, status: dict[str,
         _push_event(job, kind, once=False)
     if state == "started":
         job["push_kind"] = kind if kind in ("paused", "error") else None
+        if kind not in ("paused", "error"):
+            _push_milestones(job, status)
     _push_activity(job, status, kind)
 
 

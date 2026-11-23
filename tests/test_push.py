@@ -211,6 +211,109 @@ def test_activity_state():
     assert st == {"s": "paused", "p": 50}, "no end time while paused"
 
 
+def test_activity_state_temperatures_and_heating():
+    now = 1000
+    status = {"progress": 0, "layer": 0, "layers": 80, "time_remaining_s": 3000, "nozzle": 150.4, "nozzle_target": 220,
+              "bed": 60.2, "bed_target": 60, "heaters": {"chamber": {"actual": 31.6, "target": None}}}
+    st = notify.activity_state({"state": "started"}, status, "active", now)
+    assert st == {"s": "printing", "p": 0, "l": 0, "lt": 80, "h": 1, "tn": 150, "tnt": 220, "tb": 60, "tbt": 60,
+                  "tc": 32}, "heating: no end time yet"
+    status.update(nozzle=219.6, layer=1)
+    st = notify.activity_state({"state": "started"}, status, "active", now)
+    assert "h" not in st and st["end"] == now + 3000 and st["tn"] == 220
+    # temperatures only in the heaters map (other adapters), nonsense values left out
+    st = notify.activity_state({"state": "started"}, {"progress": 30, "heaters": {
+        "nozzle": {"actual": 205.0, "target": 205}, "bed": {"actual": True, "target": 60}}}, "active", now)
+    assert st["tn"] == 205 and st["tnt"] == 205 and "tb" not in st
+    assert notify.frame({"l": 50, "lt": 100}) == 12 and notify.frame({"p": 100}) == 24 and notify.frame({"p": 3}) == 0
+
+
+def test_heating_updates_every_minute(tmp_path):
+    out = Collect()
+    n = notify.Notifier(tmp_path / "push.db", out)
+    n.add_activity("local", "job1", handle(5), "s" * 20)
+    job = {"id": "job1", "state": "started"}
+    heat = {"progress": 0, "nozzle": 100, "nozzle_target": 220, "bed": 60, "bed_target": 60}
+    assert run(n.activity("local", job, heat, "active", now=1000)) == 1
+    assert out.sent[-1][1]["state"]["h"] == 1 and out.sent[-1][1]["urgent"] is True
+    assert run(n.activity("local", job, {**heat, "nozzle": 130}, "active", now=1030)) == 0
+    assert run(n.activity("local", job, {**heat, "nozzle": 160}, "active", now=1061)) == 1, "every 60 s while heating"
+    assert run(n.activity("local", job, {**heat, "nozzle": 219, "layer": 1}, "active", now=1070)) == 1
+    assert out.sent[-1][1]["urgent"] is True and "h" not in out.sent[-1][1]["state"], "heating → printing = change"
+
+
+def test_relay_passes_temperatures():
+    st = relay_mod.activity_state({"s": "printing", "p": 3, "h": 1, "tn": 200, "tnt": 220, "tb": 60, "tbt": 60, "tc": 30,
+                                   "name": "x"})
+    assert st == {"s": "printing", "p": 3, "h": 1, "tn": 200, "tnt": 220, "tb": 60, "tbt": 60, "tc": 30}
+
+
+def test_old_push_db_gets_the_new_column(tmp_path):
+    import sqlite3
+    db = sqlite3.connect(tmp_path / "push.db")
+    db.execute("CREATE TABLE push_activities (owner TEXT NOT NULL, job TEXT NOT NULL, handle TEXT NOT NULL, secret TEXT "
+               "NOT NULL, device TEXT, created REAL NOT NULL, last_sent REAL NOT NULL DEFAULT 0, last_p REAL, last_s TEXT, "
+               "PRIMARY KEY (owner, job, handle))")
+    db.commit()
+    db.close()
+    n = notify.Notifier(tmp_path / "push.db", Collect())
+    n.add_activity("local", "job1", handle(5), "s" * 20)
+    assert run(n.activity("local", {"id": "job1", "state": "started"}, {"progress": 5}, "active", now=1000)) == 1
+
+
+def test_snapshot_notifications_only_for_phones_that_want_them(tmp_path):
+    out = Collect()
+    n = notify.Notifier(tmp_path / "push.db", out)
+    k1, k2 = notify.new_key(), notify.new_key()
+    d1 = n.add("local", handle(1), "s" * 20, k1, "iPhone", "de")
+    n.add("local", handle(2), "s" * 20, k2, "iPad", "en")
+    assert not n.wants("local", "snapshots"), "off by default"
+    job = {"id": "job1"}
+    assert run(n.emit("local", "first_layer", job, "dom", "Dom", image="/api/push/image/abc.jpg", file="cube")) == 0
+    n.update("local", d1["id"], prefs={"snapshots": True})
+    assert n.wants("local", "snapshots", "dom") and not n.sent_already("local", "job2", "first_layer")
+    assert run(n.emit("local", "first_layer", {"id": "job2"}, "dom", "Dom", image="/api/push/image/abc.jpg",
+                      file="cube")) == 1
+    data = decrypt(k1, out.sent[-1][1]["data"])
+    assert data["title"] == "Erste Schicht fertig" and data["image"] == "/api/push/image/abc.jpg"
+    assert data["device"] == d1["id"] and n.sent_already("local", "job2", "first_layer")
+    # "finished" goes to both, the picture only to the phone that wants pictures
+    assert run(n.emit("local", "finished", {"id": "job2"}, "dom", "Dom", image="/api/push/image/abc.jpg")) == 2
+    by = {h: decrypt(k1 if h == handle(1) else k2, m["data"]) for h, m in out.sent[-2:]}
+    assert by[handle(1)]["image"] == "/api/push/image/abc.jpg" and "image" not in by[handle(2)]
+
+
+def test_milestones_take_a_picture(cloud, monkeypatch):  # noqa: F811
+    api = cloud
+    from fastapi import Response
+    out = Collect()
+    monkeypatch.setattr(api, "_NOTIFIER", notify.Notifier(api.Path(api.settings.cloud_db).parent / "push-m.db", out))
+    key = notify.new_key()
+    dev = api._NOTIFIER.add("local", handle(3), "s" * 20, key, "iPhone", "de")
+    api._NOTIFIER.update("local", dev["id"], prefs={"snapshots": True})
+
+    async def fake_snapshot(printer_id, w=None, acct=None):
+        assert acct.id == "local" and w == 800
+        return Response(b"\xff\xd8jpeg", media_type="image/jpeg")
+
+    monkeypatch.setattr(api, "camera_snapshot", fake_snapshot)
+    job = {"id": "mj1", "owner": "local", "state": "started", "printer": "dom", "printer_file": "cube.gcode"}
+
+    async def go():
+        api._push_milestones(job, {"layer": 1, "progress": 2})
+        api._push_milestones(job, {"layer": 3, "progress": 10})
+        for _ in range(50):
+            await asyncio.sleep(0.01)
+    run(go())
+    assert len(out.sent) == 1
+    data = decrypt(key, out.sent[0][1]["data"])
+    assert data["event"] == "first_layer" and data["image"].startswith("/api/push/image/")
+    with TestClient(api.app) as c:
+        r = c.get(data["image"])
+        assert r.status_code == 200 and r.content == b"\xff\xd8jpeg"
+        assert c.get("/api/push/image/" + "x" * 32 + ".jpg").status_code == 404
+
+
 def test_activity_updates_are_throttled_and_end(tmp_path):
     out = Collect()
     n = notify.Notifier(tmp_path / "push.db", out)
@@ -218,11 +321,17 @@ def test_activity_updates_are_throttled_and_end(tmp_path):
     job = {"id": "job1", "state": "started"}
     assert run(n.activity("local", job, {"progress": 10}, "active", now=1000)) == 1
     assert out.sent[-1][1]["urgent"] is True, "first message = state change"
-    assert run(n.activity("local", job, {"progress": 12}, "active", now=1200)) == 0, "< 5 %"
-    assert run(n.activity("local", job, {"progress": 16}, "active", now=1050)) == 0, "too soon"
-    assert run(n.activity("local", job, {"progress": 16}, "active", now=1200)) == 1
-    assert out.sent[-1][1]["urgent"] is False and out.sent[-1][1]["state"]["p"] == 16
-    assert run(n.activity("local", job, {"progress": 16}, "paused", now=1210)) == 1, "state change right away"
+    assert run(n.activity("local", job, {"progress": 11}, "active", now=1200)) == 0, "< 2 %, same picture"
+    assert run(n.activity("local", job, {"progress": 13}, "active", now=1050)) == 0, "too soon (< 60 s)"
+    assert run(n.activity("local", job, {"progress": 13}, "active", now=1070)) == 1
+    assert out.sent[-1][1]["urgent"] is False and out.sent[-1][1]["state"]["p"] == 13
+    # another of the 24 layer pictures is due although the progress hardly moved
+    assert run(n.activity("local", job, {"progress": 13.5, "layer": 13, "layers": 100}, "active", now=1140)) == 0
+    assert run(n.activity("local", job, {"progress": 13.6, "layer": 17, "layers": 100}, "active", now=1140)) == 1
+    assert run(n.activity("local", job, {"progress": 13.6, "layer": 17, "layers": 100}, "active", now=1600)) == 0
+    assert run(n.activity("local", job, {"progress": 13.6, "layer": 17, "layers": 100}, "active", now=1800)) == 1, \
+        "refresh after 10 min"
+    assert run(n.activity("local", job, {"progress": 14}, "paused", now=1810)) == 1, "state change right away"
     job["state"] = "finished"
     assert run(n.activity("local", job, now=1300)) == 1
     assert out.sent[-1][1]["event"] == "end" and not n.has_activity("local", "job1")

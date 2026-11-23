@@ -7,6 +7,7 @@ Events (group → default):
   problems   paused, error, ai_alert, send_failed                  on   (time-sensitive)
   decisions  decision (slot holds another material after waking)   on   (time-sensitive, actions "Prüfen"/"Abbrechen")
   info       external (print started elsewhere)                    off
+  snapshots  first_layer, halfway (camera picture as a check)      off  (0.54.0; with it "finished" carries a picture too)
 `activities` (default on): Live Activity updates for this device's activities and push-to-start for prints the phone
 didn't start itself.
 """
@@ -31,13 +32,18 @@ from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 log = logging.getLogger(__name__)
 
 GROUPS = {"finished": "done", "cancelled": "done", "paused": "problems", "error": "problems",
-          "ai_alert": "problems", "send_failed": "problems", "decision": "decisions", "external": "info"}
-DEFAULT_PREFS = {"done": True, "problems": True, "decisions": True, "info": False, "activities": True, "muted": []}
+          "ai_alert": "problems", "send_failed": "problems", "decision": "decisions", "external": "info",
+          "first_layer": "snapshots", "halfway": "snapshots"}
+DEFAULT_PREFS = {"done": True, "problems": True, "decisions": True, "info": False, "snapshots": False,
+                 "activities": True, "muted": []}
+# events that carry a camera picture for devices with `snapshots` on
+PICTURE_EVENTS = ("first_layer", "halfway", "finished")
 URGENT = ("problems", "decisions")
 CATEGORIES = {"decision": "SLOT_CHECK", "ai_alert": "AI_ALERT"}
 MAX_DEVICES = 10                  # per account
-# Live Activity: progress at most every PROGRESS_STEP % and PROGRESS_MIN_S, a refresh at least every REFRESH_S
-PROGRESS_STEP, PROGRESS_MIN_S, REFRESH_S = 5, 120, 15 * 60
+# Live Activity (0.54.0): a state change right away; otherwise an update when something visible changed (PROGRESS_STEP %,
+# another of the app's FRAMES layer pictures, the heating phase) at most every MIN_INTERVAL_S, a refresh every REFRESH_S
+PROGRESS_STEP, MIN_INTERVAL_S, REFRESH_S, FRAMES = 2, 60, 10 * 60, 24
 ACTIVITY_MAX_AGE_S = 12 * 3600    # iOS ends a Live Activity after 8 h (+4 h on the lock screen)
 
 # texts, German first (NF-11); {printer} {file} {problem} {reason}
@@ -60,6 +66,10 @@ TEXTS: dict[str, dict[str, tuple[str, str]]] = {
                  "en": ("Wrong material in the slot", "{problem} {printer} is on and waiting. Check or cancel?")},
     "external": {"de": ("Druck gestartet", "{printer} druckt {file}."),
                  "en": ("Print started", "{printer} is printing {file}.")},
+    "first_layer": {"de": ("Erste Schicht fertig", "{file} auf {printer}: so sieht die erste Schicht aus."),
+                    "en": ("First layer done", "{file} on {printer}: this is how the first layer looks.")},
+    "halfway": {"de": ("Halbzeit", "{file} auf {printer} ist zur Hälfte gedruckt."),
+                "en": ("Halfway there", "{file} on {printer} is half printed.")},
     "test": {"de": ("PocketPrint3D", "Mitteilungen funktionieren."),
              "en": ("PocketPrint3D", "Notifications work.")},
 }
@@ -77,7 +87,8 @@ CREATE TABLE IF NOT EXISTS push_devices (
 CREATE UNIQUE INDEX IF NOT EXISTS push_devices_handle ON push_devices(owner, handle);
 CREATE TABLE IF NOT EXISTS push_activities (
   owner TEXT NOT NULL, job TEXT NOT NULL, handle TEXT NOT NULL, secret TEXT NOT NULL, device TEXT,
-  created REAL NOT NULL, last_sent REAL NOT NULL DEFAULT 0, last_p REAL, last_s TEXT, PRIMARY KEY (owner, job, handle));
+  created REAL NOT NULL, last_sent REAL NOT NULL DEFAULT 0, last_p REAL, last_s TEXT, last_f INTEGER,
+  PRIMARY KEY (owner, job, handle));
 CREATE TABLE IF NOT EXISTS push_sent (
   owner TEXT NOT NULL, job TEXT NOT NULL, event TEXT NOT NULL, at REAL NOT NULL, PRIMARY KEY (owner, job, event));
 """
@@ -154,7 +165,55 @@ def activity_state(job: dict[str, Any], status: dict[str, Any] | None = None, ki
         val = status.get(src)
         if isinstance(val, int) and not isinstance(val, bool) and val >= 0:
             out[key] = val
+    out.update(temperatures(status))
+    if out["s"] == "printing" and _heating(out, p):
+        out["h"] = 1
+        out.pop("end", None)                 # the estimate means nothing before the first layer
     return out
+
+
+def _deg(val: Any) -> int | None:
+    if isinstance(val, bool) or not isinstance(val, (int, float)) or not -50 <= val <= 600:
+        return None
+    return int(round(val))
+
+
+def temperatures(status: dict[str, Any]) -> dict[str, int]:
+    """Nozzle, bed and (when the printer has one) chamber in whole °C for the Live Activity."""
+    heaters = status.get("heaters") if isinstance(status.get("heaters"), dict) else {}
+    out: dict[str, int] = {}
+    for key, actual, target, hid in (("tn", "nozzle", "nozzle_target", "nozzle"), ("tb", "bed", "bed_target", "bed")):
+        h = heaters.get(hid) if isinstance(heaters.get(hid), dict) else {}
+        a = _deg(status.get(actual) if status.get(actual) is not None else h.get("actual"))
+        t = _deg(status.get(target) if status.get(target) is not None else h.get("target"))
+        if a is not None:
+            out[key] = a
+            if t is not None:
+                out[key + "t"] = t
+    chamber = heaters.get("chamber") if isinstance(heaters.get("chamber"), dict) else {}
+    c = _deg(chamber.get("actual"))
+    if c is not None:
+        out["tc"] = c
+    return out
+
+
+def _heating(state: dict[str, Any], progress: float) -> bool:
+    """Printing, but the first layer hasn't begun and a heater is still well below its target."""
+    if state.get("l") or progress >= 1:
+        return False
+    for key, margin in (("tn", 5), ("tb", 3)):
+        target = state.get(key + "t")
+        if target and target > 0 and state.get(key) is not None and state[key] < target - margin:
+            return True
+    return False
+
+
+def frame(state: dict[str, Any]) -> int:
+    """Which of the app's FRAMES layer pictures this state shows (0 … FRAMES)."""
+    lt, layer = state.get("lt"), state.get("l")
+    if lt and layer is not None:
+        return max(0, min(FRAMES, layer * FRAMES // lt))
+    return max(0, min(FRAMES, int(state.get("p", 0)) * FRAMES // 100))
 
 
 class Notifier:
@@ -164,6 +223,9 @@ class Notifier:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(push_activities)")}
+        if "last_f" not in cols:                 # push.db of 0.51-0.53
+            self.db.execute("ALTER TABLE push_activities ADD COLUMN last_f INTEGER")
         self.lock = threading.Lock()
         self.sender = sender
 
@@ -285,8 +347,21 @@ class Notifier:
                                 (time.time(), row["id"]))
         return ok
 
+    def wants(self, owner: str, group: str, printer: str = "") -> bool:
+        """Does any phone of the account want this group (e.g. "snapshots" before taking a camera picture)?"""
+        for row in self._q("SELECT prefs FROM push_devices WHERE owner = ?", (owner,)):
+            prefs = {**DEFAULT_PREFS, **json.loads(row["prefs"])}
+            if prefs.get(group) and printer not in prefs.get("muted", []):
+                return True
+        return False
+
+    def sent_already(self, owner: str, job_id: str, event: str) -> bool:
+        return bool(self._q("SELECT 1 FROM push_sent WHERE owner = ? AND job = ? AND event = ?", (owner, job_id, event)))
+
     async def emit(self, owner: str, event: str, job: dict[str, Any] | None = None, printer: str = "",
-                   printer_name: str = "", once: bool = True, **fields: Any) -> int:
+                   printer_name: str = "", once: bool = True, image: str | None = None, **fields: Any) -> int:
+        """`image`: server-relative address of a camera picture (`/api/push/image/<token>.jpg`), only for devices with
+        `snapshots` on; the notification service extension loads it from the server it registered with."""
         """Send one event to every device of the account that wants it. With `once`, an event is sent once per job."""
         group = GROUPS.get(event)
         job_id = (job or {}).get("id") or ""
@@ -306,7 +381,10 @@ class Notifier:
             if isinstance(problem, dict):
                 extra["problem"] = problem_text(problem, row["lang"])
             title, body = text(event, row["lang"], printer=printer_name or printer, **extra)
-            data = {"event": event, "title": title, "body": body, "job": job_id or None, "printer": printer or None}
+            data = {"event": event, "title": title, "body": body, "job": job_id or None, "printer": printer or None,
+                    "device": row["id"]}
+            if image and event in PICTURE_EVENTS and prefs.get("snapshots"):
+                data["image"] = image
             msg = {"type": "alert", "data": encrypt(row["key"], data),
                    "level": "time-sensitive" if group in URGENT else "active",
                    "category": CATEGORIES.get(event), "thread": _thread(printer) if printer else None,
@@ -346,10 +424,14 @@ class Notifier:
         state = activity_state(job, status, kind, now)
         final = state["s"] in ("done", "cancelled", "failed")
         sent = 0
+        f = frame(state)
         for row in rows:
-            changed = state["s"] != row["last_s"]
-            p_step = row["last_p"] is None or abs(state.get("p", 0) - row["last_p"]) >= PROGRESS_STEP
-            due = changed or (p_step and now - row["last_sent"] >= PROGRESS_MIN_S) or now - row["last_sent"] >= REFRESH_S
+            shown = state["s"] + (":h" if state.get("h") else "")
+            changed = shown != row["last_s"]
+            visible = (row["last_p"] is None or abs(state.get("p", 0) - row["last_p"]) >= PROGRESS_STEP
+                       or f != row["last_f"] or bool(state.get("h")))
+            since = now - row["last_sent"]
+            due = changed or (visible and since >= MIN_INTERVAL_S) or since >= REFRESH_S
             if not due:
                 continue
             msg: dict[str, Any] = {"type": "activity", "event": "end" if final else "update", "state": state,
@@ -367,9 +449,9 @@ class Notifier:
                     self.db.execute("DELETE FROM push_activities WHERE owner = ? AND job = ? AND handle = ?",
                                     (owner, job["id"], row["handle"]))
                 else:
-                    self.db.execute("UPDATE push_activities SET last_sent = ?, last_p = ?, last_s = ? "
+                    self.db.execute("UPDATE push_activities SET last_sent = ?, last_p = ?, last_s = ?, last_f = ? "
                                     "WHERE owner = ? AND job = ? AND handle = ?",
-                                    (now, state.get("p", 0), state["s"], owner, job["id"], row["handle"]))
+                                    (now, state.get("p", 0), shown, f, owner, job["id"], row["handle"]))
         return sent
 
     async def start_activity(self, owner: str, job: dict[str, Any], printer: str) -> int:

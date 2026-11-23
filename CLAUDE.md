@@ -1133,6 +1133,13 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   `POST /api/jobs/{id}/decision` start (confirm) / abort; timeout → plug off again. Bridges forward it (`job.decision`
   event + method), `job.send` timeout 30 min.
 - **Not verified:** no real APNs key set yet, nothing sent to a real iPhone (APNs only against a fake).
+## Live Activity with more information (2026-11-23, server 0.54.0, Dominique)
+- Concept: project file `analysen/konzept-live-activity-erweitert.md`. Content state + `h` (heating), `tn/tnt/tb/tbt/tc`
+  (°C); updates on any visible change (2 %, one of 24 layer pictures, heating) at most every 60 s, refresh 10 min.
+  The iOS app renders the 24 "printed up to layer X" pictures itself into the App Group (no pictures through APNs).
+- Pref `snapshots` (off): `first_layer` / `halfway` notifications and `finished` with a camera picture
+  (`/api/push/image/<token>.jpg`, 15 min, no auth; the decrypted alert carries `image` + `device`).
+
 ## OrcaSlicer 2.5.0 (2026-11-11, server 0.52.0, Dominique asked)
 - **The 2.5 AppImage has no JSON system presets any more**: `resources/profiles/<Vendor>.opc` = own binary format
   (magic `ZCRO`), only cover PNGs in the vendor folders. The JSON files are still in the source tag
