@@ -31,7 +31,9 @@ ENVS = ("production", "sandbox")
 TOKEN_RE = re.compile(r"^[0-9a-f]{64,200}$")
 HANDLE_RE = re.compile(r"^pp3dp_[A-Za-z0-9_-]{22,40}$")
 MAX_BLOB = 3000                    # base64 of the encrypted notification (APNs payloads are at most 4 KB)
-STATE_KEYS = {"s": str, "p": (int, float), "end": int, "l": int, "lt": int}
+# 0.54.0: `h` heating (1), temperatures in whole °C: `tn`/`tnt` nozzle, `tb`/`tbt` bed, `tc` chamber
+STATE_KEYS = {"s": str, "p": (int, float), "end": int, "l": int, "lt": int, "h": int,
+              "tn": int, "tnt": int, "tb": int, "tbt": int, "tc": int}
 STATES = ("sending", "waking", "decision", "printing", "paused", "done", "cancelled", "error", "failed")
 LEVELS = ("passive", "active", "time-sensitive")
 # per handle and hour; Live Activities have Apple's own budget on top (priority 10 counts, 5 doesn't)

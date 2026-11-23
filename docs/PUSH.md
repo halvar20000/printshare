@@ -20,6 +20,10 @@ server event ──encrypted alert / activity state──▶ relay (/push/send) 
   prints started elsewhere and OrcaSlicer's "Upload and Print" (both with push-to-start, the latter since 0.53.1); `send()` → print not started, `needs_decision`; `failure_watch` → AI alert.
 - Cloud: the same `_track_jobs` from the 60 s bridge loop and `/api/observe`; bridge events `watch.alert` and
   `job.decision` (bridge 0.51.0+).
+- 0.54.0: `first_layer` (printer reports layer ≥ 2) and `halfway` (≥ 50 %) from the same job tracking, only when a
+  phone has `snapshots` on; these and `finished` take a camera picture first (`_push_picture`, through the bridge for
+  bridge printers), kept 15 min under `/api/push/image/<token>.jpg`. Live Activity states carry temperatures and the
+  heating phase; the app picks one of 24 pre-rendered layer pictures by `l`/`lt` (no pictures through the relay).
 - Bridges send no pushes themselves (nobody registers there) but forward the AI alert and the decision to the cloud.
 
 ## Setting up the cloud (once, Thomas/Dominique)

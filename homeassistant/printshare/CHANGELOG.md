@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.54.0
+- Live Activity on the iPhone with more information: nozzle, bed and chamber temperature, a "heating up" phase before
+  the first layer, and updates whenever something visible changes (at most once a minute) instead of every 5 %. The
+  app shows the print up to the current layer as a picture.
+- New, off by default: a camera picture as a check when the first layer is done, at half time and when the print is
+  finished (Settings → Notifications → "Camera pictures").
+
 ## 0.53.4
 - "Upload and Print" from OrcaSlicer 2.5 (Moonraker host) no longer reports an error although the print started. The
   answer to the upload now has Moonraker's own shape, so Orca sees the stored file name (special characters like `°`
