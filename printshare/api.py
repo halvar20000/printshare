@@ -994,6 +994,7 @@ def _orca_start(acct: Account, printer: PrinterConfig, job: dict[str, Any]) -> b
     if acct.cloud and not printer.bridge:
         job["log"].append("Start it in the app (this printer is reached by your phone on the Wi-Fi)")
         return False
+    job["orca_start"] = time.time()     # before the job leaves "sliced": a quick second start must not start it again
     _spawn(_orca_print(acct, job))
     return True
 
@@ -1231,9 +1232,29 @@ async def orca_root_upload(request: Request) -> dict[str, Any]:
 
 
 async def _orca_upload(acct: Account, printer: PrinterConfig, request: Request) -> dict[str, Any]:
+    """Moonraker answers an upload with a bare object, not the {"result": ...} envelope of its other endpoints.
+    OrcaSlicer 2.5 reads `item.path` (the stored, cleaned-up name) and `print_started` from the top level: with the
+    envelope (0.46.0-0.53.3) it took the original name and called /printer/print/start itself after a print we had
+    already started - "not found" although the print ran (0.53.4)."""
     job, name, started = await _orca_receive(acct, printer, request)
-    return _moonraker_ok({"item": {"path": name, "root": "gcodes"}, "print_started": started,
-                          "print_queued": False, "action": "create_file"})
+    return {"item": {"path": name, "root": "gcodes"}, "print_started": started, "print_queued": False,
+            "action": "create_file"}
+
+
+ORCA_ROOTS = [{"name": "gcodes", "path": "/gcodes", "permissions": "rw"}]
+
+
+@app.get("/orca/{printer_id}/server/files/roots")
+def orca_host_roots(printer_id: str, request: Request) -> dict[str, Any]:
+    _orca_host(request, printer_id)
+    return _moonraker_ok(ORCA_ROOTS)
+
+
+@app.get("/server/files/roots")
+def orca_root_roots(request: Request) -> dict[str, Any]:
+    """OrcaSlicer 2.5 lists the storage roots before an upload (before 0.53.4 it got the web app's page here)."""
+    _orca_root(request)
+    return _moonraker_ok(ORCA_ROOTS)
 
 
 def _orca_job_for(acct: Account, printer_id: str, filename: str) -> dict[str, Any]:
@@ -1242,9 +1263,25 @@ def _orca_job_for(acct: Account, printer_id: str, filename: str) -> dict[str, An
     for job in sorted(JOBS.values(), key=lambda j: j.get("created") or 0, reverse=True):
         if (job.get("owner", "local") == acct.id and job.get("printer") == printer_id
                 and (job.get("request") or {}).get("source") == "orcaslicer" and job["state"] in ("sliced", "uploaded")
+                and not job.get("orca_start")
                 and Path((job.get("result") or {}).get("gcode") or "").name == name):
             return job
     raise HTTPException(400, f"File '{filename}' not found - send it from OrcaSlicer again")
+
+
+def _orca_started_already(acct: Account, printer_id: str, filename: str) -> bool:
+    """A start for a file whose upload started the print already (`print=true`) within the last 10 minutes: nothing
+    to do. Orca falls back to its own start when it misreads the upload answer - that must not fail."""
+    name = _orca_file_name(filename.strip().strip('"\''))
+    for job in JOBS.values():
+        if (job.get("owner", "local") == acct.id and job.get("printer") == printer_id
+                and (job.get("request") or {}).get("source") == "orcaslicer"
+                and job["state"] in ("sliced", "sending", "needs_decision", "started")
+                and time.time() - (job.get("orca_start") or 0) < 600
+                and not (job["state"] == "sliced" and job.get("error"))      # that start failed: say so
+                and Path((job.get("result") or {}).get("gcode") or "").name == name):
+            return True
+    return False
 
 
 class OrcaScript(BaseModel):
@@ -1268,6 +1305,8 @@ def _orca_script(acct: Account, printer: PrinterConfig, req: OrcaScript) -> dict
     m = re.fullmatch(r"\s*SDCARD_PRINT_FILE\s+FILENAME=(.+?)\s*", req.script, re.I)
     if not m:
         raise HTTPException(400, "only SDCARD_PRINT_FILE is supported here - control the printer in the PocketPrint3D app")
+    if _orca_started_already(acct, printer_id, m.group(1)):
+        return _moonraker_ok("ok")
     job = _orca_job_for(acct, printer_id, m.group(1))
     if not _orca_start(acct, printer, job):
         raise HTTPException(400, "this printer is started from the PocketPrint3D app on your phone")
@@ -1289,6 +1328,8 @@ async def orca_root_print_start(req: OrcaPrintStart, request: Request) -> dict[s
 
 
 def _orca_print_start(acct: Account, printer: PrinterConfig, req: OrcaPrintStart) -> dict[str, Any]:
+    if _orca_started_already(acct, printer.id, req.filename):
+        return _moonraker_ok("ok")
     job = _orca_job_for(acct, printer.id, req.filename)
     if not _orca_start(acct, printer, job):
         raise HTTPException(400, "this printer is started from the PocketPrint3D app on your phone")

@@ -1081,6 +1081,12 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
   comes from the key (cloud `pp3do_`; own server token = the only printer, else `<token>:<printer id>`). Orca lanes now
   from `status.lanes` (AFC's own `lane_data` listed loaded T1 as empty), Klipper `print_stats.message` → job `error` on a
   printer error. That print itself stopped on the COSMOS with "Communication timeout during homing" (Z probe), not ours.
+- **0.53.4 (2026-11-23):** Dominique uses **Orca 2.5's Moonraker host** ("Upload and Print", `src/slic3r/Utils/Moonraker.cpp`),
+  which reads the upload answer at the top level (`item.path`, `print_started`; real Moonraker has no `result` envelope
+  there) and calls `/server/files/roots` first. With our envelope it fell back to the raw name (`60°`, `PLA+`) and
+  posted `/printer/print/start` → 400 "not found" although our `print=true` upload had started the print. Fixed + roots
+  route + a repeated start of an already started file = "ok" (`job["orca_start"]` set before the job leaves `sliced`).
+  Orca 2.5's agent websocket (`/websocket`) still gets 403 (no live status in Orca's Device tab).
 
 ## One web page (2026-11-11, server 0.53.0, Dominique)
 - The classic page's last own settings moved into the Expo app: smart plug per printer (`app/power/[id].tsx`, from

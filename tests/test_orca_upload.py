@@ -112,7 +112,7 @@ def test_printer_address_for_orca_in_the_cloud(cloud):  # noqa: F811
         assert c.get("/orca/cc/server/info").status_code == 403
         r = c.post("/orca/cc/server/files/upload", headers=key, data={"print": "false"},
                    files={"file": ("cone.gcode", GCODE.read_bytes(), "application/octet-stream")})
-        assert r.status_code == 201 and r.json()["result"]["print_started"] is False
+        assert r.status_code == 201 and r.json()["print_started"] is False and "result" not in r.json()
         r = c.post("/orca/cc/printer/gcode/script", headers=key, json={"script": "SDCARD_PRINT_FILE FILENAME=cone.gcode"})
         assert r.status_code == 400 and "phone" in r.json()["detail"], "phone-only printer: started in the app"
         assert c.get("/orca/cc/server/database/item?namespace=lane_data", headers=key).status_code == 404

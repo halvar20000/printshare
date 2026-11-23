@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.53.4
+- "Upload and Print" from OrcaSlicer 2.5 (Moonraker host) no longer reports an error although the print started. The
+  answer to the upload now has Moonraker's own shape, so Orca sees the stored file name (special characters like `°`
+  or `+` become `_`) and that the print already runs, and doesn't try to start it a second time.
+- Orca's list of storage folders (`/server/files/roots`) gets a proper answer instead of the web page.
+- A second start request for a file whose print is already starting answers "ok" and never starts it twice.
+
 ## 0.53.3
 - OrcaSlicer's filament sync through PocketPrint3D works now. Orca's Klipper/Moonraker connection drops the path of the
   host address, so `http://<server>:8484/orca/<printer>` never reached PocketPrint3D (Orca showed "Invalid JSON
