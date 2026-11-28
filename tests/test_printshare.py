@@ -513,7 +513,7 @@ def test_bambu_p1s_slices_with_its_own_start_gcode(tmp_path):
     slicing = JobOptions(filament="Generic PETG @System").apply(printer.slicing)
     res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out", slicing)
     gcode = res.gcode_path.read_text()
-    body = gcode.split("; CONFIG_BLOCK_START")[0]
+    body = gcode.split("; CONFIG_BLOCK_END")[-1]                   # Orca 2.5 puts the settings block first
     assert ";===== machine: P1S" in body and "Draw the first line" not in body
     assert "M109 S205" not in body
     temps = {int(t) for t in re.findall(r"^M10[49] S(\d+)", body, re.M)}
