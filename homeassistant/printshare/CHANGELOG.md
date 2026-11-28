@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.54.1
+- Bambu Lab printers (P1S, P1P, X1, A1 …) print properly again. Since the switch to OrcaSlicer 2.5 (0.52.0) their own
+  start code was missing: the server used a generic one that heated the nozzle to a fixed 205 °C, skipped Bambu's
+  levelling/purge sequence and printed PETG and other hot materials as spaghetti. Orca 2.5 keeps that code in
+  separate template presets (`include`), which are now merged like Orca does. Other printers were not affected.
+
 ## 0.54.0
 - Live Activity on the iPhone with more information: nozzle, bed and chamber temperature, a "heating up" phase before
   the first layer, and updates whenever something visible changes (at most once a minute) instead of every 5 %. The

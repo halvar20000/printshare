@@ -465,3 +465,56 @@ def test_renamed_presets_keep_working(tmp_path):
     assert lib.canonical("filament", "unknown") == "unknown"
     flat = lib.resolve("filament", "Prusa Generic PLA @MK4S")
     assert flat["name"] == "Generic PLA @Prusa MK4S" and flat["nozzle_temperature"] == ["215"]
+
+
+def test_profile_includes_are_merged(tmp_path):
+    """OrcaSlicer 2.5 keeps the Bambu start/end G-code in `include`d templates: parent, then includes in order,
+    then the preset's own keys (PresetBundle.cpp). Before, the generic `M109 S205` start code reached every P1S."""
+    import json
+
+    from printshare.profiles import ProfileError, ProfileLibrary
+    mdir = tmp_path / "BBL" / "machine"
+    mdir.mkdir(parents=True)
+
+    def put(**d):
+        (mdir / f"{d['name']}.json").write_text(json.dumps({"type": "machine", **d}))
+    put(name="fdm_machine_common", instantiation="false", machine_start_gcode="M109 S205", machine_end_gcode="END0",
+        layer_change_gcode="L0", printer_model="")
+    put(name="P1S template start", instantiation="false", machine_start_gcode="BAMBU START [nozzle_temperature]")
+    put(name="P1S template end", instantiation="false", machine_end_gcode="BAMBU END", layer_change_gcode="L1")
+    put(name="P1S template override", instantiation="false", layer_change_gcode="L2")
+    put(name="P1S 0.4", inherits="fdm_machine_common", instantiation="true", printer_model="Bambu Lab P1S",
+        include=["P1S template start", "P1S template end", "P1S template override"])
+    put(name="P1S 0.4 own end", inherits="P1S 0.4", instantiation="true", machine_end_gcode="MINE")
+    put(name="Loop", inherits="fdm_machine_common", instantiation="true", include="Loop")
+    lib = ProfileLibrary(tmp_path)
+    m = lib.resolve("machine", "P1S 0.4")
+    assert m["machine_start_gcode"] == "BAMBU START [nozzle_temperature]" and m["machine_end_gcode"] == "BAMBU END"
+    assert m["layer_change_gcode"] == "L2"                           # later include wins over an earlier one
+    assert m["name"] == "P1S 0.4" and m["instantiation"] == "true" and "include" not in m
+    child = lib.resolve("machine", "P1S 0.4 own end")              # a child's own key beats its parent's includes
+    assert child["machine_end_gcode"] == "MINE" and child["machine_start_gcode"].startswith("BAMBU START")
+    with pytest.raises(ProfileError, match="loop"):
+        lib.resolve("machine", "Loop")
+
+
+@needs_orca
+def test_bambu_p1s_slices_with_its_own_start_gcode(tmp_path):
+    """P1S + PETG with the real Orca: Bambu's start code (with the material's temperatures), never fdm_machine_common's
+    generic one that heated the nozzle to a fixed 205 °C and printed PETG as spaghetti (seen live 2026-11-28)."""
+    import re
+
+    from printshare.config import JobOptions
+    from printshare.slicer import Slicer
+    s = _settings(tmp_path)
+    s.printers = [PrinterConfig(id="p1s", type="bambu_lan", host="127.0.0.1", password="12345678",
+                                slicing=SlicingConfig(machine="Bambu Lab P1S 0.4 nozzle"))]
+    printer = s.printer("p1s")
+    slicing = JobOptions(filament="Generic PETG @System").apply(printer.slicing)
+    res = Slicer(s).slice(_cube(tmp_path), printer, tmp_path / "out", slicing)
+    gcode = res.gcode_path.read_text()
+    body = gcode.split("; CONFIG_BLOCK_START")[0]
+    assert ";===== machine: P1S" in body and "Draw the first line" not in body
+    assert "M109 S205" not in body
+    temps = {int(t) for t in re.findall(r"^M10[49] S(\d+)", body, re.M)}
+    assert max(temps) >= 230, temps                                  # PETG temperature reaches the nozzle

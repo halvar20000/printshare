@@ -34,7 +34,7 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 | File | Purpose |
 |---|---|
 | `printshare/fetch.py` | parse links, list model files, download (Printables GraphQL `ModelFiles` + `GetDownloadLink`, Thingiverse API w/ token, direct URL, local path for CLI) |
-| `printshare/profiles.py` | index OrcaSlicer system presets (JSON from the source tag since 2.5, see below) (shared `ProfileLibrary.cached`), flatten `inherits`, `compatible()` presets per machine |
+| `printshare/profiles.py` | index OrcaSlicer system presets (JSON from the source tag since 2.5, see below) (shared `ProfileLibrary.cached`), flatten `inherits` + `include`, `compatible()` presets per machine |
 | `printshare/slicer.py` | build machine/process/filament JSON, run Orca CLI, extract G-code + estimates |
 | `printshare/config.py` | `config.yaml` model, `cosmos` machine preset, bed type, `JobOptions` (per-job material/quality/plate/supports/brim/infill/walls) |
 | `printshare/printers/elegoo.py` | stock CC via pycentauri (upload HTTP :80 `/uploadFile/upload` 1 MB chunks, WS :3030 start/status) |
@@ -1157,6 +1157,12 @@ phone ─link─▶ printshare container (Unraid, port 8484) ─▶ Printables G
 - Testing here: this container is Debian 12 again (glibc 2.36, Orca 2.5 needs 2.38) → Ubuntu 24.04 rootfs + proot in the
   scratchpad (`proot -0` for apt). docker.yml: `publish`/`bridge-publish` only on main, so `gh workflow run docker.yml
   --ref <branch>` builds and runs the integration tests without touching `:latest`.
+- **`include` (fixed in 0.54.1, 2026-11-28):** 2.5 moved the Bambu machine G-code (start/end/layer change/filament change/
+  time-lapse) into `"<printer> template <key>"` presets listed in `include`; 1551 BBL/Prusa filaments include
+  `fdm_filament_template_*` (variant arrays). Orca (PresetBundle.cpp): parent → each include in order → own keys.
+  `ProfileLibrary.resolve` ignored `include` → every Bambu print got fdm_machine_common's generic start code (`G29`,
+  purge line, fixed `M109 S205`, no other nozzle temperature) - Thomas' P1S .53 printed a PETG Benchy at 205 °C as
+  spaghetti (FAILED at layer 182). Diagnosis: read the job's `.gcode.3mf` from the printer over FTPS (read-only).
 
 ## Local Android builds on Tower (2026-10-01)
 - The EAS free queue can take hours → `bash scripts/android-build-local.sh releases/pocketprint3d-0.1.0-<n>.aab`

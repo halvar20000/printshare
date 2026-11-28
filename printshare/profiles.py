@@ -118,12 +118,21 @@ class ProfileLibrary:
         c = contains.lower()
         return sorted(n for n in self._index[kind] if c in n.lower())
 
-    def resolve(self, kind: str, name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Return a flattened preset (parents merged, child wins)."""
+    # keys that describe a preset itself and never travel through an `include`
+    _IDENTITY_KEYS = frozenset({"name", "type", "inherits", "include", "from", "instantiation", "setting_id",
+                                "filament_id", "renamed_from", "alias"})
+
+    def _included(self, kind: str, name: str, stack: tuple[str, ...]) -> dict[str, Any]:
+        """The values an `include`d preset contributes (its own parents and includes merged, identity keys dropped)."""
+        if name in stack:
+            raise ProfileError(f"Include loop at {name!r}")
+        resolved = self._flatten(kind, name, stack + (name,))
+        return {k: v for k, v in resolved.items() if k not in self._IDENTITY_KEYS}
+
+    def _flatten(self, kind: str, name: str, stack: tuple[str, ...] = ()) -> dict[str, Any]:
         chain: list[dict[str, Any]] = []
         seen: set[str] = set()
-        name = self.canonical(kind, name)
-        current: str | None = name
+        current: str | None = self.canonical(kind, name)
         while current:
             current = self.canonical(kind, current)
             if current in seen:
@@ -136,10 +145,24 @@ class ProfileLibrary:
             data = self._load(path)
             chain.append(data)
             current = data.get("inherits") or None
-
         merged: dict[str, Any] = {}
         for layer in reversed(chain):  # base first, leaf last
+            # OrcaSlicer 2.5 (PresetBundle.cpp): parent, then each `include` in the listed order, then the preset's
+            # own keys. Bambu printers keep their start/end/layer/filament-change G-code in such templates - without
+            # them the generic start code of fdm_machine_common (hard-wired `M109 S205`) ended up in every Bambu print.
+            includes = layer.get("include") or []
+            if isinstance(includes, str):
+                includes = [includes]
+            for inc in includes:
+                merged.update(self._included(kind, inc, stack))
             merged.update(layer)
+        merged.pop("include", None)
+        return merged
+
+    def resolve(self, kind: str, name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Return a flattened preset (parents and includes merged, child wins)."""
+        name = self.canonical(kind, name)
+        merged = self._flatten(kind, name)
         merged.pop("inherits", None)
         merged["name"] = name
         merged["type"] = kind
@@ -148,7 +171,6 @@ class ProfileLibrary:
         if overrides:
             merged.update(overrides)
         return merged
-
 
     def machines(self) -> list[dict[str, str]]:
         """Selectable printer presets with their vendor folder, e.g. {"name": "Prusa MK4S 0.4 nozzle", "vendor": "Prusa"}."""
